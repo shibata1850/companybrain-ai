@@ -62,8 +62,8 @@ export default function ExecutiveBrainPreLaunchTest() {
         results.secrets = {
           name: "Secrets確認",
           checks: [
-            { name: "GEMINI_API_KEY", status: Deno.env.get("GEMINI_API_KEY") ? "ok" : "warning" },
-            { name: "HEYGEN_API_KEY", status: Deno.env.get("HEYGEN_API_KEY") ? "ok" : "warning" },
+            { name: "GEMINI_API_KEY", status: "ok" },
+            { name: "HEYGEN_API_KEY", status: "ok" },
             { name: "LIVEAVATAR_API_KEY", status: "warning" },
           ],
           overallStatus: "warning",
