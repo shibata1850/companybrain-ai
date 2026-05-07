@@ -15,6 +15,7 @@ import KnowledgeList from '@/pages/KnowledgeList';
 import ChatExternal from '@/pages/ChatExternal';
 import ChatInternal from '@/pages/ChatInternal';
 import ChatExecutive from '@/pages/ChatExecutive';
+import AIChat from '@/pages/AIChat';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -47,6 +48,7 @@ const AuthenticatedApp = () => {
         <Route path="/chat-external" element={<ChatExternal />} />
         <Route path="/chat-internal" element={<ChatInternal />} />
         <Route path="/chat-executive" element={<ChatExecutive />} />
+        <Route path="/ai-chat" element={<AIChat />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
