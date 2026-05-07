@@ -33,6 +33,7 @@ const navGroups = [
       { icon: Users, label: "社内向けAI", path: "/chat-internal" },
       { icon: Users, label: "社内向けAI（新）", path: "/internal-ai-chat" },
       { icon: Crown, label: "経営者向けAI", path: "/chat-executive" },
+      { icon: Crown, label: "経営者向けAI（新）", path: "/executive-ai-chat" },
     ]
   },
   {
