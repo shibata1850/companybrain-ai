@@ -17,6 +17,44 @@ Deno.serve(async (req) => {
       return Response.json({ error: "VideoProject not found" }, { status: 404 });
     }
 
+    // 利用制限チェック
+    const PLAN_LIMITS = {
+      Light: { monthlyAnswers: 1000, videoMinutes: 0 },
+      Standard: { monthlyAnswers: 5000, videoMinutes: 10 },
+      Professional: { monthlyAnswers: 20000, videoMinutes: 30 },
+      Enterprise: { monthlyAnswers: null, videoMinutes: null },
+    };
+
+    const company = await base44.asServiceRole.entities.ClientCompany.get(project.clientCompanyId);
+    const planName = company?.planName || "Light";
+    const limits = PLAN_LIMITS[planName] || PLAN_LIMITS.Light;
+    const currentMonth = new Date().toISOString().slice(0, 7);
+
+    // Lightプランでは動画生成をブロック
+    if (limits.videoMinutes === 0) {
+      return Response.json({
+        error: "Feature not available",
+        message: "Lightプランでは動画生成機能は利用できません。",
+        limitExceeded: true,
+      }, 403);
+    }
+
+    // 当月の動画生成時間をカウント
+    const monthlyVideos = await base44.asServiceRole.entities.VideoProject.filter({
+      clientCompanyId: project.clientCompanyId,
+    }).then(v => v.filter(x => x.created_date?.startsWith(currentMonth) && x.status === "completed"));
+
+    const totalVideoSeconds = monthlyVideos.reduce((sum, v) => sum + (v.durationSeconds || 0), 0);
+    const totalVideoMinutes = Math.ceil(totalVideoSeconds / 60);
+
+    if (limits.videoMinutes !== null && totalVideoMinutes >= limits.videoMinutes) {
+      return Response.json({
+        error: "Usage limit exceeded",
+        message: `月間動画生成時間の上限（${limits.videoMinutes}分）に達しています。`,
+        limitExceeded: true,
+      }, 429);
+    }
+
     if (!project.videoFileUri || !project.audioFileUri) {
       return Response.json(
         { error: "Both videoFileUri and audioFileUri are required." },

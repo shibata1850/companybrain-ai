@@ -200,11 +200,7 @@ Deno.serve(async (req) => {
       return json({ error: error.message }, 403);
     }
 
-    // 会社情報取得
-    const company = await base44.asServiceRole.entities.ClientCompany.get(clientCompanyId);
-    if (!company) {
-      return json({ error: "ClientCompany not found" }, 404);
-    }
+
 
     // 承認済みナレッジを取得・フィルタリング
     const rawChunks = await base44.asServiceRole.entities.KnowledgeChunk.filter({

@@ -22,7 +22,7 @@ import InternalAIChat from '@/pages/InternalAIChat';
 import ExecutiveAIChat from '@/pages/ExecutiveAIChat';
 import ScriptGenerator from '@/pages/ScriptGenerator';
 import ExecutiveDashboard from '@/pages/ExecutiveDashboard';
-import PricingPlans from '@/pages/PricingPlans';
+import UsageAndBilling from '@/pages/UsageAndBilling';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -62,7 +62,7 @@ const AuthenticatedApp = () => {
         <Route path="/executive-ai-chat" element={<ExecutiveAIChat />} />
         <Route path="/scripts" element={<ScriptGenerator />} />
         <Route path="/executive-dashboard" element={<ExecutiveDashboard />} />
-        <Route path="/pricing-plans" element={<PricingPlans />} />
+        <Route path="/usage-and-billing" element={<UsageAndBilling />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

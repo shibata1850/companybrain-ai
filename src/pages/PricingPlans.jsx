@@ -14,13 +14,16 @@ const PLANS = [
   {
     name: "Light",
     description: "スタートアップ向け",
-    monthlyQueryLimit: 1000,
+    aiAnswerLimitMonthly: 1000,
     knowledgePageLimit: 50,
-    videoGenerationSeconds: 0,
+    videoSecondsLimitMonthly: 0,
+    adminUserLimit: 3,
+    websiteEmbedLimit: 0,
     features: [
       "月間AI回答数 1,000",
       "ナレッジ 50ページ相当",
       "基本的なAI機能",
+      "管理ユーザー数 3",
     ],
     color: "slate",
     priceJpy: "¥99,000/月",
@@ -28,13 +31,17 @@ const PLANS = [
   {
     name: "Standard",
     description: "成長段階向け",
-    monthlyQueryLimit: 5000,
+    aiAnswerLimitMonthly: 5000,
     knowledgePageLimit: 200,
-    videoGenerationSeconds: 600, // 10分
+    videoSecondsLimitMonthly: 600,
+    adminUserLimit: 10,
+    websiteEmbedLimit: 1,
     features: [
       "月間AI回答数 5,000",
       "ナレッジ 200ページ相当",
       "動画生成 10分まで",
+      "管理ユーザー数 10",
+      "Webサイト埋め込み 1個",
       "優先サポート",
     ],
     color: "blue",
@@ -43,13 +50,17 @@ const PLANS = [
   {
     name: "Professional",
     description: "エンタープライズ向け",
-    monthlyQueryLimit: 20000,
+    aiAnswerLimitMonthly: 20000,
     knowledgePageLimit: 1000,
-    videoGenerationSeconds: 1800, // 30分
+    videoSecondsLimitMonthly: 1800,
+    adminUserLimit: 30,
+    websiteEmbedLimit: 3,
     features: [
       "月間AI回答数 20,000",
       "ナレッジ 1,000ページ相当",
       "動画生成 30分まで",
+      "管理ユーザー数 30",
+      "Webサイト埋め込み 3個",
       "専任サポート",
       "カスタムAI設定",
     ],
@@ -59,13 +70,17 @@ const PLANS = [
   {
     name: "Enterprise",
     description: "大規模組織向け",
-    monthlyQueryLimit: null,
+    aiAnswerLimitMonthly: null,
     knowledgePageLimit: null,
-    videoGenerationSeconds: null,
+    videoSecondsLimitMonthly: null,
+    adminUserLimit: null,
+    websiteEmbedLimit: null,
     features: [
       "無制限のAI回答",
       "無制限のナレッジ",
       "無制限の動画生成",
+      "無制限の管理ユーザー",
+      "無制限のWebサイト埋め込み",
       "24/7 サポート",
       "SLA保証",
       "カスタム統合",
@@ -251,6 +266,13 @@ export default function PricingPlans() {
     queryFn: () => base44.entities.KnowledgeSource.filter({ clientCompanyId: CLIENT_ID }),
   });
 
+  const { data: usageRecords = [] } = useQuery({
+    queryKey: ["usageRecords", CLIENT_ID, currentMonth],
+    queryFn: () =>
+      base44.entities.UsageRecord.filter({ clientCompanyId: CLIENT_ID })
+        .then(u => u.filter(x => x.created_date?.startsWith(currentMonth)))
+  });
+
   const { data: company } = useQuery({
     queryKey: ["company", CLIENT_ID],
     queryFn: () => base44.entities.ClientCompany.get(CLIENT_ID),
@@ -260,6 +282,20 @@ export default function PricingPlans() {
   const monthlyQueries = conversations.length;
   const videoGenerationSeconds = videos.reduce((sum, v) => sum + (v.durationSeconds || 0), 0);
   const knowledgeCount = sources.length;
+
+  // UsageRecordから今月の利用を集計
+  const usageByType = {
+    ai_answer: 0,
+    script_generation: 0,
+    tts: 0,
+    lipsync: 0,
+    file_upload: 0,
+  };
+  usageRecords.forEach(record => {
+    if (usageByType.hasOwnProperty(record.usageType)) {
+      usageByType[record.usageType] += record.units || 0;
+    }
+  });
 
   const usage = {
     monthlyQueries,
@@ -329,20 +365,20 @@ export default function PricingPlans() {
 
         {/* 詳細な利用統計 */}
         <div className="space-y-4">
-          <h2 className="text-xl font-bold text-slate-900">詳細な利用状況</h2>
+          <h2 className="text-xl font-bold text-slate-900">詳細な利用状況（今月）</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card className="border-slate-200">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <MessageSquare className="w-4 h-4 text-blue-600" />
-                  今月のAI回答数
+                  AI回答数
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-bold text-slate-900">{monthlyQueries.toLocaleString()}</p>
-                {currentPlan?.monthlyQueryLimit && (
+                {currentPlan?.aiAnswerLimitMonthly && (
                   <p className="text-xs text-slate-500 mt-2">
-                    {currentPlanName} プランの制限: {currentPlan.monthlyQueryLimit.toLocaleString()}
+                    制限: {currentPlan.aiAnswerLimitMonthly.toLocaleString()}
                   </p>
                 )}
               </CardContent>
@@ -352,17 +388,16 @@ export default function PricingPlans() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <Video className="w-4 h-4 text-purple-600" />
-                  動画生成（今月）
+                  動画生成
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-bold text-slate-900">
-                  {Math.floor(videoGenerationSeconds / 60)}:
-                  {String(videoGenerationSeconds % 60).padStart(2, "0")}
+                  {Math.floor(videoGenerationSeconds / 60)}:{String(videoGenerationSeconds % 60).padStart(2, "0")}
                 </p>
-                {currentPlan?.videoGenerationSeconds && currentPlan.videoGenerationSeconds > 0 && (
+                {currentPlan?.videoSecondsLimitMonthly !== undefined && (
                   <p className="text-xs text-slate-500 mt-2">
-                    {currentPlanName} プランの制限: {currentPlan.videoGenerationSeconds}秒
+                    制限: {currentPlan.videoSecondsLimitMonthly}秒
                   </p>
                 )}
               </CardContent>
@@ -372,18 +407,107 @@ export default function PricingPlans() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <FileText className="w-4 h-4 text-amber-600" />
-                  登録ナレッジ数
+                  ナレッジ
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-bold text-slate-900">{knowledgeCount.toLocaleString()}</p>
                 {currentPlan?.knowledgePageLimit && (
                   <p className="text-xs text-slate-500 mt-2">
-                    {currentPlanName} プランの制限: {currentPlan.knowledgePageLimit}ページ
+                    制限: {currentPlan.knowledgePageLimit}ページ
                   </p>
                 )}
               </CardContent>
             </Card>
+          </div>
+        </div>
+
+        {/* プラン詳細比較テーブル */}
+        <div className="space-y-4">
+          <h2 className="text-xl font-bold text-slate-900">全プラン詳細比較</h2>
+          <div className="overflow-x-auto bg-white rounded-xl border border-slate-200">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  <th className="text-left py-3 px-4 font-semibold text-slate-900">機能</th>
+                  {PLANS.map(plan => (
+                    <th
+                      key={plan.name}
+                      className={`text-center py-3 px-4 font-semibold ${
+                        currentPlanName === plan.name ? "bg-cyan-50 text-cyan-900" : "text-slate-900"
+                      }`}
+                    >
+                      {plan.name}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-slate-200">
+                  <td className="py-3 px-4 text-slate-900 font-medium">月間AI回答数</td>
+                  {PLANS.map(plan => (
+                    <td
+                      key={plan.name}
+                      className={`text-center py-3 px-4 ${currentPlanName === plan.name ? "bg-cyan-50" : ""}`}
+                    >
+                      {plan.aiAnswerLimitMonthly ? plan.aiAnswerLimitMonthly.toLocaleString() : "無制限"}
+                    </td>
+                  ))}
+                </tr>
+                <tr className="border-b border-slate-200">
+                  <td className="py-3 px-4 text-slate-900 font-medium">ナレッジページ数</td>
+                  {PLANS.map(plan => (
+                    <td
+                      key={plan.name}
+                      className={`text-center py-3 px-4 ${currentPlanName === plan.name ? "bg-cyan-50" : ""}`}
+                    >
+                      {plan.knowledgePageLimit ? plan.knowledgePageLimit.toLocaleString() : "無制限"}
+                    </td>
+                  ))}
+                </tr>
+                <tr className="border-b border-slate-200">
+                  <td className="py-3 px-4 text-slate-900 font-medium">動画生成（秒）</td>
+                  {PLANS.map(plan => (
+                    <td
+                      key={plan.name}
+                      className={`text-center py-3 px-4 ${currentPlanName === plan.name ? "bg-cyan-50" : ""}`}
+                    >
+                      {plan.videoSecondsLimitMonthly === 0
+                        ? "制限あり"
+                        : plan.videoSecondsLimitMonthly
+                        ? plan.videoSecondsLimitMonthly
+                        : "無制限"}
+                    </td>
+                  ))}
+                </tr>
+                <tr className="border-b border-slate-200">
+                  <td className="py-3 px-4 text-slate-900 font-medium">管理ユーザー数</td>
+                  {PLANS.map(plan => (
+                    <td
+                      key={plan.name}
+                      className={`text-center py-3 px-4 ${currentPlanName === plan.name ? "bg-cyan-50" : ""}`}
+                    >
+                      {plan.adminUserLimit ? plan.adminUserLimit : "無制限"}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="py-3 px-4 text-slate-900 font-medium">Webサイト埋め込み</td>
+                  {PLANS.map(plan => (
+                    <td
+                      key={plan.name}
+                      className={`text-center py-3 px-4 ${currentPlanName === plan.name ? "bg-cyan-50" : ""}`}
+                    >
+                      {plan.websiteEmbedLimit === 0
+                        ? "制限あり"
+                        : plan.websiteEmbedLimit
+                        ? plan.websiteEmbedLimit
+                        : "無制限"}
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
 

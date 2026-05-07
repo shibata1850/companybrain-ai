@@ -48,8 +48,8 @@ const navGroups = [
     label: "管理",
     items: [
       { icon: ClipboardList, label: "回答ログ", path: "/answer-logs" },
-      { icon: BarChart3, label: "KPI/ROI", path: "/kpi" },
-      { icon: CreditCard, label: "料金プラン", path: "/plans" },
+      { icon: BarChart3, label: "経営指標", path: "/executive-dashboard" },
+      { icon: CreditCard, label: "料金プラン・利用状況", path: "/usage-and-billing" },
       { icon: Settings, label: "設定", path: "/settings" },
       { icon: Shield, label: "ユーザー設定", path: "/admin-user-settings" },
     ]
