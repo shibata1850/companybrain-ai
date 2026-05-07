@@ -5,6 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Save, CheckCircle2, Edit3, Volume2, Clock, FileText } from "lucide-react";
 import AudioGenerator from "@/components/script/AudioGenerator";
+import VideoUploader from "@/components/script/VideoUploader";
 
 export default function ScriptResult({ result, savedProject, onSave, onApprove, isSaving, isApproving, onProjectUpdate }) {
   const [editMode, setEditMode] = useState(false);
@@ -138,6 +139,15 @@ export default function ScriptResult({ result, savedProject, onSave, onApprove, 
           <AudioGenerator
             savedProject={savedProject}
             onAudioGenerated={onProjectUpdate}
+          />
+        )}
+
+        {/* 動画素材アップロード（承認後のみ） */}
+        {isApproved && savedProject && (
+          <VideoUploader
+            savedProject={savedProject}
+            onVideoUploaded={onProjectUpdate}
+            onLipsync={() => {/* TODO: リップシンク処理 */}}
           />
         )}
       </CardContent>
