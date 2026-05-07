@@ -21,7 +21,15 @@ import ScriptGenerator from '@/pages/ScriptGenerator';
 import ExecutiveDashboard from '@/pages/ExecutiveDashboard';
 import UsageAndBilling from '@/pages/UsageAndBilling';
 import AnswerLogs from '@/pages/AnswerLogs';
-import ExecutiveBrainDiagnostics from '@/pages/ExecutiveBrainDiagnostics';
+import ExecutiveAvatarManagement from '@/pages/ExecutiveAvatarManagement';
+import AvatarConsentRegistration from '@/pages/AvatarConsentRegistration';
+import AvatarCreationSetup from '@/pages/AvatarCreationSetup';
+import AvatarConsultationRoom from '@/pages/AvatarConsultationRoom';
+import NewEmployeeTraining from '@/pages/NewEmployeeTraining';
+import WorkReviewPage from '@/pages/WorkReviewPage';
+import AvatarContextSync from '@/pages/AvatarContextSync';
+import SessionLogs from '@/pages/SessionLogs';
+import AvatarUsageStats from '@/pages/AvatarUsageStats';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -60,7 +68,15 @@ const AuthenticatedApp = () => {
         <Route path="/executive-dashboard" element={<ExecutiveDashboard />} />
         <Route path="/usage-and-billing" element={<UsageAndBilling />} />
         <Route path="/answer-logs" element={<AnswerLogs />} />
-        <Route path="/executive-brain-diagnostics" element={<ExecutiveBrainDiagnostics />} />
+        <Route path="/avatar-management" element={<ExecutiveAvatarManagement />} />
+        <Route path="/avatar-consent/:avatarId" element={<AvatarConsentRegistration />} />
+        <Route path="/avatar-creation/:avatarId" element={<AvatarCreationSetup />} />
+        <Route path="/avatar-consultation" element={<AvatarConsultationRoom />} />
+        <Route path="/avatar-training" element={<NewEmployeeTraining />} />
+        <Route path="/work-review" element={<WorkReviewPage />} />
+        <Route path="/avatar-context/:avatarId" element={<AvatarContextSync />} />
+        <Route path="/session-logs" element={<SessionLogs />} />
+        <Route path="/avatar-usage" element={<AvatarUsageStats />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
