@@ -63,7 +63,8 @@ export default function PublicAIPreview() {
       setMessages(prev => [...prev, { role: "assistant", ...data }]);
     },
     onError: (err) => {
-      toast({ title: "エラー", description: err.message, variant: "destructive" });
+      const errorMsg = err.response?.data?.message || err.message || "質問の送信に失敗しました";
+      toast({ title: "エラー", description: errorMsg, variant: "destructive" });
     },
   });
 

@@ -285,25 +285,25 @@ Deno.serve(async (req) => {
 
 【会社情報】
 会社名:
-${company.companyName || ""}
+${companyData.companyName || ""}
 
 会社概要:
-${company.companyOverview || ""}
+${companyData.companyOverview || ""}
 
 ミッション:
-${company.mission || ""}
+${companyData.mission || ""}
 
 ビジョン:
-${company.vision || ""}
+${companyData.vision || ""}
 
 価値観:
-${company.values || ""}
+${companyData.values || ""}
 
 ブランドトーン:
-${company.brandTone || "丁寧、誠実、専門的、わかりやすい"}
+${companyData.brandTone || "丁寧、誠実、専門的、わかりやすい"}
 
 主なサービス:
-${company.mainServices || ""}
+${companyData.mainServices || ""}
 
 対象チャネル:
 ${channelLabel}
