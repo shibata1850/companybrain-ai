@@ -27,10 +27,10 @@ Deno.serve(async (req) => {
 
     // 利用制限チェック
     const PLAN_LIMITS = {
-      Light: { monthlyAnswers: 1000, videoMinutes: 0 },
-      Standard: { monthlyAnswers: 5000, videoMinutes: 10 },
-      Professional: { monthlyAnswers: 20000, videoMinutes: 30 },
-      Enterprise: { monthlyAnswers: null, videoMinutes: null },
+      Light: { aiAnswerLimitMonthly: 1000, videoSecondsLimitMonthly: 0 },
+      Standard: { aiAnswerLimitMonthly: 5000, videoSecondsLimitMonthly: 600 },
+      Professional: { aiAnswerLimitMonthly: 20000, videoSecondsLimitMonthly: 1800 },
+      Enterprise: { aiAnswerLimitMonthly: null, videoSecondsLimitMonthly: null },
     };
 
     const planName = company.planName || "Light";
@@ -38,12 +38,12 @@ Deno.serve(async (req) => {
     const currentMonth = new Date().toISOString().slice(0, 7);
 
     // Lightプランでは動画生成をブロック
-    if (limits.videoMinutes === 0) {
+    if (limits.videoSecondsLimitMonthly === 0) {
       return Response.json({
         error: "Feature not available",
         message: "Lightプランでは動画生成機能は利用できません。",
         limitExceeded: true,
-      }, 403);
+      }, { status: 403 });
     }
 
     // 当月のAI回答数チェック（台本生成はAI回答数の上限も確認）
@@ -51,28 +51,27 @@ Deno.serve(async (req) => {
       clientCompanyId,
     }).then(c => c.filter(x => x.created_date?.startsWith(currentMonth)));
 
-    if (limits.monthlyAnswers !== null && monthlyConversations.length >= limits.monthlyAnswers) {
+    if (limits.aiAnswerLimitMonthly !== null && monthlyConversations.length >= limits.aiAnswerLimitMonthly) {
       return Response.json({
         error: "Usage limit exceeded",
-        message: `月間AI回答数の上限（${limits.monthlyAnswers}回答）に達しています。`,
+        message: `月間AI回答数の上限（${limits.aiAnswerLimitMonthly}回答）に達しています。`,
         limitExceeded: true,
-      }, 429);
+      }, { status: 429 });
     }
 
-    // 当月の動画生成時間をカウント
+    // 当月の動画生成秒数をカウント
     const monthlyVideos = await base44.asServiceRole.entities.VideoProject.filter({
       clientCompanyId,
     }).then(v => v.filter(x => x.created_date?.startsWith(currentMonth) && x.status === "completed"));
 
     const totalVideoSeconds = monthlyVideos.reduce((sum, v) => sum + (v.durationSeconds || 0), 0);
-    const totalVideoMinutes = Math.ceil(totalVideoSeconds / 60);
 
-    if (limits.videoMinutes !== null && totalVideoMinutes >= limits.videoMinutes) {
+    if (limits.videoSecondsLimitMonthly !== null && totalVideoSeconds >= limits.videoSecondsLimitMonthly) {
       return Response.json({
         error: "Usage limit exceeded",
-        message: `月間動画生成時間の上限（${limits.videoMinutes}分）に達しています。`,
+        message: `月間動画生成時間の上限（${limits.videoSecondsLimitMonthly}秒）に達しています。`,
         limitExceeded: true,
-      }, 429);
+      }, { status: 429 });
     }
 
     const chunks = await base44.asServiceRole.entities.KnowledgeChunk.filter({
