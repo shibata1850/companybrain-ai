@@ -96,11 +96,11 @@ export default function KnowledgeUpload() {
       json_schema: {
         type: "object",
         properties: {
-          extracted_text: { type: "string", description: "資料の全文テキスト（日本語）" },
-          summary: { type: "string", description: "資料の要約（日本語、200〜400文字）" },
+          document_title: { type: "string" },
+          summary: { type: "string" },
           key_points: {
-            type: "array", items: { type: "string" },
-            description: "主要なポイント（日本語、5〜10項目）"
+            type: "array",
+            items: { type: "string" },
           },
           faq_candidates: {
             type: "array",
@@ -109,18 +109,21 @@ export default function KnowledgeUpload() {
               properties: {
                 question: { type: "string" },
                 answer: { type: "string" },
+                recommended_scope: {
+                  type: "string",
+                  enum: ["public", "internal", "executive", "admin_only"],
+                },
+                source_quote: { type: "string" },
               },
             },
-            description: "FAQ候補（よくある質問と回答）"
           },
-          caution_notes: {
-            type: "array", items: { type: "string" },
-            description: "注意事項・リスク事項"
+          risk_notes: {
+            type: "array",
+            items: { type: "string" },
           },
-          recommended_scope: {
-            type: "string",
-            enum: ["public", "internal", "executive", "admin_only"],
-            description: "AIが判断する推奨公開範囲"
+          tags: {
+            type: "array",
+            items: { type: "string" },
           },
         },
       },
@@ -129,9 +132,17 @@ export default function KnowledgeUpload() {
     if (result.status === "success" && result.output) {
       const out = result.output;
       setExtracted(out);
-      setExtractedText(out.extracted_text || "");
-      if (out.recommended_scope) {
-        setField("audienceScope", out.recommended_scope);
+      // タイトルが未入力ならdocument_titleで補完
+      if (out.document_title && !form.title) {
+        setField("title", out.document_title);
+      }
+      // 抽出タグがあれば追加（重複排除）
+      if (out.tags?.length > 0) {
+        setForm(p => ({
+          ...p,
+          tags: [...new Set([...p.tags, ...out.tags])],
+          title: p.title || out.document_title || p.title,
+        }));
       }
       setStep("review");
       toast({ title: "抽出完了", description: "資料の内容を解析しました。内容を確認して登録してください。" });
@@ -153,16 +164,66 @@ export default function KnowledgeUpload() {
   const removeTag = (tag) => setForm(p => ({ ...p, tags: p.tags.filter(t => t !== tag) }));
 
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.KnowledgeSource.create(data),
-    onSuccess: () => {
+    mutationFn: async (data) => {
+      // 1. KnowledgeSource を作成
+      const source = await base44.entities.KnowledgeSource.create(data);
+
+      // 2. KnowledgeChunk を作成（key_points と faq_candidates から）
+      const chunks = [];
+      const ex = extracted;
+
+      if (ex?.key_points?.length > 0) {
+        ex.key_points.forEach((point, i) => {
+          chunks.push({
+            clientCompanyId: CLIENT_ID,
+            knowledgeSourceId: source.id,
+            title: `ポイント ${i + 1}: ${point.slice(0, 40)}`,
+            chunkText: point,
+            category: data.category,
+            audienceScope: data.audienceScope,
+            tags: data.tags,
+            keywords: [],
+            status: "draft",
+          });
+        });
+      }
+
+      if (ex?.faq_candidates?.length > 0) {
+        ex.faq_candidates.forEach((faq) => {
+          chunks.push({
+            clientCompanyId: CLIENT_ID,
+            knowledgeSourceId: source.id,
+            title: `FAQ: ${faq.question?.slice(0, 50)}`,
+            chunkText: `Q: ${faq.question}\nA: ${faq.answer}`,
+            category: data.category,
+            audienceScope: faq.recommended_scope || data.audienceScope,
+            tags: data.tags,
+            keywords: [],
+            status: "draft",
+          });
+        });
+      }
+
+      if (chunks.length > 0) {
+        await base44.entities.KnowledgeChunk.bulkCreate(chunks);
+      }
+
+      return source;
+    },
+    onSuccess: (source) => {
       queryClient.invalidateQueries({ queryKey: ["knowledgeSources"] });
+      queryClient.invalidateQueries({ queryKey: ["knowledgeChunks"] });
+      const chunkCount = (extracted?.key_points?.length || 0) + (extracted?.faq_candidates?.length || 0);
       setForm(initialForm);
       setFile(null);
       setFileUrl(null);
       setExtracted(null);
       setExtractedText("");
       setStep("upload");
-      toast({ title: "登録完了", description: "ナレッジを下書きとして保存しました。管理者が承認すると、AIが使用できるようになります。" });
+      toast({
+        title: "登録完了",
+        description: `ナレッジを下書きとして保存しました（チャンク ${chunkCount} 件生成）。管理者が承認するとAIが使用できるようになります。`,
+      });
     },
   });
 
