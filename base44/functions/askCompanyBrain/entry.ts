@@ -150,18 +150,18 @@ Deno.serve(async (req) => {
 
     // 利用制限チェック
     const PLAN_LIMITS = {
-      Light: { monthlyAnswers: 1000, videoMinutes: 0 },
-      Standard: { monthlyAnswers: 5000, videoMinutes: 10 },
-      Professional: { monthlyAnswers: 20000, videoMinutes: 30 },
-      Enterprise: { monthlyAnswers: null, videoMinutes: null },
+      Light: { aiAnswerLimitMonthly: 1000, videoSecondsLimitMonthly: 0 },
+      Standard: { aiAnswerLimitMonthly: 5000, videoSecondsLimitMonthly: 600 },
+      Professional: { aiAnswerLimitMonthly: 20000, videoSecondsLimitMonthly: 1800 },
+      Enterprise: { aiAnswerLimitMonthly: null, videoSecondsLimitMonthly: null },
     };
 
-    const company = await base44.asServiceRole.entities.ClientCompany.get(clientCompanyId);
-    if (!company) {
+    const companyData = await base44.asServiceRole.entities.ClientCompany.get(clientCompanyId);
+    if (!companyData) {
       return json({ error: "ClientCompany not found" }, 404);
     }
 
-    const planName = company.planName || "Light";
+    const planName = companyData.planName || "Light";
     const limits = PLAN_LIMITS[planName] || PLAN_LIMITS.Light;
     const currentMonth = new Date().toISOString().slice(0, 7);
 
@@ -170,10 +170,10 @@ Deno.serve(async (req) => {
       clientCompanyId,
     }).then(c => c.filter(x => x.created_date?.startsWith(currentMonth)));
 
-    if (limits.monthlyAnswers !== null && monthlyConversations.length >= limits.monthlyAnswers) {
+    if (limits.aiAnswerLimitMonthly !== null && monthlyConversations.length >= limits.aiAnswerLimitMonthly) {
       return json({
         error: "Usage limit exceeded",
-        message: `月間AI回答数の上限（${limits.monthlyAnswers}回答）に達しています。`,
+        message: `月間AI回答数の上限（${limits.aiAnswerLimitMonthly}回答）に達しています。`,
         limitExceeded: true,
       }, 429);
     }
@@ -191,6 +191,17 @@ Deno.serve(async (req) => {
         return json({ error: "You cannot access another company's data." }, 403);
       }
     }
+
+    // UsageRecord に利用を記録
+    await base44.asServiceRole.entities.UsageRecord.create({
+      clientCompanyId,
+      usageType: "ai_answer",
+      provider: "openai",
+      units: 1,
+      unitName: "queries",
+      estimatedCostUsd: 0,
+      metadata: JSON.stringify({ channel, conversationId: null }),
+    });
 
     // channelごとの参照可能スコープ取得
     let allowedScopes;
