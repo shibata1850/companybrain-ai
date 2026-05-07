@@ -12,9 +12,6 @@ import CompanyProfile from '@/pages/CompanyProfile';
 import Philosophy from '@/pages/Philosophy';
 import KnowledgeUpload from '@/pages/KnowledgeUpload';
 import KnowledgeList from '@/pages/KnowledgeList';
-import ChatExternal from '@/pages/ChatExternal';
-import ChatInternal from '@/pages/ChatInternal';
-import ChatExecutive from '@/pages/ChatExecutive';
 import AIChat from '@/pages/AIChat';
 import AdminUserSettings from '@/pages/AdminUserSettings';
 import PublicAIPreview from '@/pages/PublicAIPreview';
@@ -52,9 +49,6 @@ const AuthenticatedApp = () => {
         <Route path="/philosophy" element={<Philosophy />} />
         <Route path="/knowledge-upload" element={<KnowledgeUpload />} />
         <Route path="/knowledge-list" element={<KnowledgeList />} />
-        <Route path="/chat-external" element={<ChatExternal />} />
-        <Route path="/chat-internal" element={<ChatInternal />} />
-        <Route path="/chat-executive" element={<ChatExecutive />} />
         <Route path="/ai-chat" element={<AIChat />} />
         <Route path="/admin-user-settings" element={<AdminUserSettings />} />
         <Route path="/public-ai-preview" element={<PublicAIPreview />} />
