@@ -18,6 +18,7 @@ import ChatExecutive from '@/pages/ChatExecutive';
 import AIChat from '@/pages/AIChat';
 import AdminUserSettings from '@/pages/AdminUserSettings';
 import PublicAIPreview from '@/pages/PublicAIPreview';
+import InternalAIChat from '@/pages/InternalAIChat';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -53,6 +54,7 @@ const AuthenticatedApp = () => {
         <Route path="/ai-chat" element={<AIChat />} />
         <Route path="/admin-user-settings" element={<AdminUserSettings />} />
         <Route path="/public-ai-preview" element={<PublicAIPreview />} />
+        <Route path="/internal-ai-chat" element={<InternalAIChat />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
