@@ -56,5 +56,31 @@
   "required": [
     "clientCompanyId",
     "policyName"
-  ]
+  ],
+  "rls": {
+    "read": {
+      "roles": [
+        "admin"
+      ],
+      "condition": null
+    },
+    "create": {
+      "roles": [
+        "admin"
+      ],
+      "condition": null
+    },
+    "update": {
+      "roles": [
+        "admin"
+      ],
+      "condition": null
+    },
+    "delete": {
+      "roles": [
+        "admin"
+      ],
+      "condition": null
+    }
+  }
 }
