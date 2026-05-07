@@ -4,53 +4,105 @@ import { base44 } from "@/api/base44Client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
-import { Upload, FileText, Sparkles, Loader2 } from "lucide-react";
+import { Upload, FileText, Sparkles, Loader2, X, CheckCircle2, AlertCircle } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
+import ExtractionPreview from "@/components/knowledge/ExtractionPreview";
 
 const CLIENT_ID = "demo-company-001";
+
+const CATEGORY_OPTIONS = [
+  { value: "company", label: "会社情報" },
+  { value: "service", label: "サービス" },
+  { value: "sales", label: "営業" },
+  { value: "support", label: "サポート" },
+  { value: "internal_rule", label: "社内ルール" },
+  { value: "hr", label: "人事" },
+  { value: "management", label: "経営" },
+  { value: "other", label: "その他" },
+];
+
+const SCOPE_OPTIONS = [
+  { value: "public", label: "公開（社外向け）", color: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
+  { value: "internal", label: "社内向け", color: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
+  { value: "executive", label: "経営者向け", color: "bg-amber-500/10 text-amber-600 border-amber-500/20" },
+  { value: "admin_only", label: "管理者のみ", color: "bg-destructive/10 text-destructive border-destructive/20" },
+];
+
+const RISK_OPTIONS = [
+  { value: "low", label: "低リスク", color: "text-emerald-600" },
+  { value: "medium", label: "中リスク", color: "text-amber-600" },
+  { value: "high", label: "高リスク", color: "text-destructive" },
+];
+
+const SOURCE_TYPE_MAP = {
+  "application/pdf": "pdf",
+  "image/png": "image",
+  "image/jpeg": "image",
+  "image/jpg": "image",
+  "text/csv": "csv",
+  "text/plain": "text",
+};
+
+const initialForm = {
+  title: "",
+  sourceType: "text",
+  category: "company",
+  audienceScope: "internal",
+  riskLevel: "low",
+  tagInput: "",
+  tags: [],
+};
 
 export default function KnowledgeUpload() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({ title: "", type: "text", content: "", scope: "all", tags: "" });
+  const [form, setForm] = useState(initialForm);
   const [file, setFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
+  const [fileUrl, setFileUrl] = useState(null);
   const [extracting, setExtracting] = useState(false);
+  const [extracted, setExtracted] = useState(null);
+  const [extractedText, setExtractedText] = useState("");
+  const [step, setStep] = useState("upload"); // "upload" | "review"
 
-  const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.Knowledge.create({ ...data, clientCompanyId: CLIENT_ID, status: "pending" }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["knowledge"] });
-      setForm({ title: "", type: "text", content: "", scope: "all", tags: "" });
-      setFile(null);
-      toast({ title: "登録完了", description: "ナレッジを登録しました。承認待ち状態です。" });
-    },
-  });
+  const setField = (key, value) => setForm(p => ({ ...p, [key]: value }));
 
   const handleFileSelect = (e) => {
     const f = e.target.files?.[0];
-    if (f) {
-      setFile(f);
-      if (!form.title) setForm(p => ({ ...p, title: f.name }));
-    }
+    if (!f) return;
+    setFile(f);
+    setFileUrl(null);
+    setExtracted(null);
+    setExtractedText("");
+    const detectedType = SOURCE_TYPE_MAP[f.type] || "text";
+    setForm(p => ({
+      ...p,
+      sourceType: detectedType,
+      title: p.title || f.name.replace(/\.[^/.]+$/, ""),
+    }));
   };
 
   const handleExtract = async () => {
     if (!file) return;
     setExtracting(true);
     const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    setFileUrl(file_url);
+
     const result = await base44.integrations.Core.ExtractDataFromUploadedFile({
       file_url,
       json_schema: {
         type: "object",
         properties: {
-          summary: { type: "string", description: "資料の要約（日本語、200文字程度）" },
-          key_points: { type: "array", items: { type: "string" }, description: "主要なポイント（日本語）" },
-          faq: {
+          extracted_text: { type: "string", description: "資料の全文テキスト（日本語）" },
+          summary: { type: "string", description: "資料の要約（日本語、200〜400文字）" },
+          key_points: {
+            type: "array", items: { type: "string" },
+            description: "主要なポイント（日本語、5〜10項目）"
+          },
+          faq_candidates: {
             type: "array",
             items: {
               type: "object",
@@ -59,113 +111,235 @@ export default function KnowledgeUpload() {
                 answer: { type: "string" },
               },
             },
-            description: "FAQ（よくある質問と回答）",
+            description: "FAQ候補（よくある質問と回答）"
+          },
+          caution_notes: {
+            type: "array", items: { type: "string" },
+            description: "注意事項・リスク事項"
+          },
+          recommended_scope: {
+            type: "string",
+            enum: ["public", "internal", "executive", "admin_only"],
+            description: "AIが判断する推奨公開範囲"
           },
         },
       },
     });
+
     if (result.status === "success" && result.output) {
       const out = result.output;
-      setForm(p => ({
-        ...p,
-        content: out.summary + "\n\n【主要ポイント】\n" + (out.key_points || []).map((k, i) => `${i + 1}. ${k}`).join("\n"),
-        fileUrl: file_url,
-      }));
-      if (out.faq) {
-        setForm(p => ({ ...p, extractedFaq: JSON.stringify(out.faq) }));
+      setExtracted(out);
+      setExtractedText(out.extracted_text || "");
+      if (out.recommended_scope) {
+        setField("audienceScope", out.recommended_scope);
       }
-      toast({ title: "抽出完了", description: "資料から情報を抽出しました。" });
+      setStep("review");
+      toast({ title: "抽出完了", description: "資料の内容を解析しました。内容を確認して登録してください。" });
+    } else {
+      toast({ title: "抽出失敗", description: "ファイルの解析に失敗しました。", variant: "destructive" });
     }
     setExtracting(false);
   };
 
-  const handleUploadAndSave = async () => {
-    setUploading(true);
-    let fileUrl = form.fileUrl;
-    if (file && !fileUrl) {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      fileUrl = file_url;
+  const addTag = (e) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      const tag = form.tagInput.trim().replace(/,$/, "");
+      if (tag && !form.tags.includes(tag)) {
+        setForm(p => ({ ...p, tags: [...p.tags, tag], tagInput: "" }));
+      }
     }
-    createMutation.mutate({ ...form, fileUrl });
-    setUploading(false);
   };
+  const removeTag = (tag) => setForm(p => ({ ...p, tags: p.tags.filter(t => t !== tag) }));
+
+  const createMutation = useMutation({
+    mutationFn: (data) => base44.entities.KnowledgeSource.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["knowledgeSources"] });
+      setForm(initialForm);
+      setFile(null);
+      setFileUrl(null);
+      setExtracted(null);
+      setExtractedText("");
+      setStep("upload");
+      toast({ title: "登録完了", description: "ナレッジを下書きとして保存しました。管理者が承認すると、AIが使用できるようになります。" });
+    },
+  });
+
+  const handleSave = () => {
+    createMutation.mutate({
+      clientCompanyId: CLIENT_ID,
+      title: form.title,
+      sourceType: form.sourceType,
+      category: form.category,
+      audienceScope: form.audienceScope,
+      riskLevel: form.riskLevel,
+      tags: form.tags,
+      fileUrl: fileUrl || null,
+      extractedText: extractedText || null,
+      summary: extracted?.summary || null,
+      status: "draft",
+      version: "1.0",
+    });
+  };
+
+  const scopeInfo = SCOPE_OPTIONS.find(s => s.value === form.audienceScope);
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
-      <PageHeader title="ナレッジ資料アップロード" description="PDF、画像、CSV、テキストなどの資料をアップロードし、AIのナレッジとして登録します。" />
+      <PageHeader
+        title="ナレッジ資料アップロード"
+        description="PDF・画像・CSV・テキストをアップロードし、AIがナレッジとして活用できる形式に変換します。"
+      />
 
-      <Card className="p-6 space-y-5 bg-card border-border/50">
-        {/* File Upload Area */}
-        <div className="border-2 border-dashed border-border rounded-xl p-8 text-center">
-          <Upload className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
-          <p className="text-sm text-muted-foreground mb-3">ファイルをドラッグ＆ドロップ、またはクリックして選択</p>
-          <Input type="file" accept=".pdf,.png,.jpg,.jpeg,.csv,.txt" onChange={handleFileSelect} className="max-w-xs mx-auto" />
+      <div className="space-y-5">
+        {/* Step 1: ファイル選択 + メタ情報 */}
+        <Card className="p-6 bg-card border-border/50">
+          <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center font-bold">1</span>
+            ファイルと基本情報
+          </h3>
+
+          {/* Drop zone */}
+          <label className="block border-2 border-dashed border-border rounded-xl p-8 text-center cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors mb-5">
+            <Upload className="w-9 h-9 mx-auto mb-3 text-muted-foreground/40" />
+            <p className="text-sm text-muted-foreground mb-1">クリックしてファイルを選択</p>
+            <p className="text-xs text-muted-foreground/60">PDF・PNG・JPG・CSV・TXT対応</p>
+            <input type="file" accept=".pdf,.png,.jpg,.jpeg,.csv,.txt" onChange={handleFileSelect} className="hidden" />
+          </label>
+
           {file && (
-            <div className="mt-3 flex items-center justify-center gap-2">
-              <FileText className="w-4 h-4 text-primary" />
-              <span className="text-sm">{file.name}</span>
-              <Button size="sm" variant="outline" onClick={handleExtract} disabled={extracting} className="ml-2 gap-1">
-                {extracting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                AI抽出
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20 mb-5">
+              <FileText className="w-5 h-5 text-primary shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{file.name}</p>
+                <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExtract}
+                disabled={extracting}
+                className="gap-1.5 shrink-0"
+              >
+                {extracting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                {extracting ? "解析中..." : "AI解析"}
               </Button>
             </div>
           )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="md:col-span-2 space-y-1.5">
+              <Label className="text-xs">タイトル *</Label>
+              <Input value={form.title} onChange={(e) => setField("title", e.target.value)} placeholder="資料のタイトル" />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">カテゴリ</Label>
+              <Select value={form.category} onValueChange={(v) => setField("category", v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CATEGORY_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">資料タイプ</Label>
+              <Select value={form.sourceType} onValueChange={(v) => setField("sourceType", v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pdf">PDF</SelectItem>
+                  <SelectItem value="image">画像</SelectItem>
+                  <SelectItem value="csv">CSV</SelectItem>
+                  <SelectItem value="text">テキスト</SelectItem>
+                  <SelectItem value="manual">マニュアル</SelectItem>
+                  <SelectItem value="url">URL</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">公開範囲（audienceScope）</Label>
+              <Select value={form.audienceScope} onValueChange={(v) => setField("audienceScope", v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {SCOPE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {scopeInfo && (
+                <Badge variant="outline" className={`text-[10px] mt-1 ${scopeInfo.color}`}>{scopeInfo.label}</Badge>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">リスクレベル</Label>
+              <Select value={form.riskLevel} onValueChange={(v) => setField("riskLevel", v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {RISK_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="md:col-span-2 space-y-1.5">
+              <Label className="text-xs">タグ（Enterまたはカンマで追加）</Label>
+              <Input
+                value={form.tagInput}
+                onChange={(e) => setField("tagInput", e.target.value)}
+                onKeyDown={addTag}
+                placeholder="例: 営業, FAQ, サービス紹介..."
+              />
+              {form.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {form.tags.map(tag => (
+                    <Badge key={tag} variant="secondary" className="gap-1 pr-1">
+                      {tag}
+                      <button onClick={() => removeTag(tag)} className="hover:text-destructive"><X className="w-3 h-3" /></button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
+
+        {/* Step 2: 抽出結果確認 */}
+        {step === "review" && extracted && (
+          <Card className="p-6 bg-card border-border/50">
+            <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center font-bold">2</span>
+              抽出結果の確認
+            </h3>
+            <ExtractionPreview extracted={extracted} />
+          </Card>
+        )}
+
+        {/* ステータス説明 */}
+        <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/40 border border-border/50">
+          <AlertCircle className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+          <div className="text-xs text-muted-foreground leading-relaxed">
+            登録後は <strong>draft（下書き）</strong> 状態になります。管理者がナレッジ一覧から内容を確認し、
+            <strong>approved（承認）</strong> に変更するとAIが回答に使用できるようになります。
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label className="text-xs">タイトル *</Label>
-            <Input value={form.title} onChange={(e) => setForm(p => ({ ...p, title: e.target.value }))} placeholder="資料のタイトル" />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">資料タイプ</Label>
-            <Select value={form.type} onValueChange={(v) => setForm(p => ({ ...p, type: v }))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pdf">PDF</SelectItem>
-                <SelectItem value="image">画像</SelectItem>
-                <SelectItem value="csv">CSV</SelectItem>
-                <SelectItem value="text">テキスト</SelectItem>
-                <SelectItem value="faq">FAQ</SelectItem>
-                <SelectItem value="manual">マニュアル</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">公開範囲</Label>
-            <Select value={form.scope} onValueChange={(v) => setForm(p => ({ ...p, scope: v }))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">すべて</SelectItem>
-                <SelectItem value="external">社外向け</SelectItem>
-                <SelectItem value="internal">社内向け</SelectItem>
-                <SelectItem value="executive">経営者向け</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">タグ（カンマ区切り）</Label>
-            <Input value={form.tags} onChange={(e) => setForm(p => ({ ...p, tags: e.target.value }))} placeholder="営業, FAQ, 製品..." />
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label className="text-xs">内容・抽出テキスト</Label>
-          <Textarea
-            value={form.content}
-            onChange={(e) => setForm(p => ({ ...p, content: e.target.value }))}
-            placeholder="資料の内容をここに入力、またはAI抽出ボタンで自動抽出..."
-            rows={8}
-          />
-        </div>
-
-        <div className="flex justify-end">
-          <Button onClick={handleUploadAndSave} disabled={uploading || createMutation.isPending || !form.title} className="gap-2">
-            {(uploading || createMutation.isPending) && <Loader2 className="w-4 h-4 animate-spin" />}
-            ナレッジとして登録
+        {/* 登録ボタン */}
+        <div className="flex justify-end gap-3">
+          <Button
+            onClick={handleSave}
+            disabled={!form.title || createMutation.isPending}
+            className="gap-2 px-6"
+          >
+            {createMutation.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4" />
+            )}
+            下書きとして登録
           </Button>
         </div>
-      </Card>
+      </div>
     </div>
   );
 }
