@@ -1,0 +1,42 @@
+{
+  "name": "PDCALog",
+  "type": "object",
+  "properties": {
+    "clientCompanyId": {
+      "type": "string",
+      "description": "\u4f01\u696dID"
+    },
+    "month": {
+      "type": "string",
+      "description": "\u5bfe\u8c61\u6708\uff08\u4f8b\uff1a2026-05\uff09"
+    },
+    "plan": {
+      "type": "string",
+      "description": "Plan\uff08\u8a08\u753b\uff09"
+    },
+    "do": {
+      "type": "string",
+      "description": "Do\uff08\u5b9f\u884c\uff09"
+    },
+    "check": {
+      "type": "string",
+      "description": "Check\uff08\u691c\u8a3c\uff09"
+    },
+    "action": {
+      "type": "string",
+      "description": "Action\uff08\u6539\u5584\uff09"
+    },
+    "outcome": {
+      "type": "string",
+      "description": "\u6210\u679c\u30fb\u7d50\u679c"
+    },
+    "nextSteps": {
+      "type": "string",
+      "description": "\u6b21\u306e\u30b9\u30c6\u30c3\u30d7"
+    }
+  },
+  "required": [
+    "clientCompanyId",
+    "month"
+  ]
+}

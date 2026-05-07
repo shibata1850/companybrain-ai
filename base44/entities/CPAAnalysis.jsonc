@@ -1,0 +1,57 @@
+{
+  "name": "CPAAnalysis",
+  "type": "object",
+  "properties": {
+    "clientCompanyId": {
+      "type": "string",
+      "description": "\u4f01\u696dID"
+    },
+    "month": {
+      "type": "string",
+      "description": "\u5bfe\u8c61\u6708\uff08\u4f8b\uff1a2026-05\uff09"
+    },
+    "recruitmentCpaBefore": {
+      "type": "number",
+      "description": "\u5c0e\u5165\u524d\u306e\u63a1\u7528CPA\uff08\u5186\uff09"
+    },
+    "recruitmentCpaAfter": {
+      "type": "number",
+      "description": "\u5c0e\u5165\u5f8c\u306e\u63a1\u7528CPA\uff08\u5186\uff09"
+    },
+    "inquiryCpaBefore": {
+      "type": "number",
+      "description": "\u5c0e\u5165\u524d\u306e\u554f\u3044\u5408\u308f\u305bCPA\uff08\u5186\uff09"
+    },
+    "inquiryCpaAfter": {
+      "type": "number",
+      "description": "\u5c0e\u5165\u5f8c\u306e\u554f\u3044\u5408\u308f\u305bCPA\uff08\u5186\uff09"
+    },
+    "leadCpaBefore": {
+      "type": "number",
+      "description": "\u5c0e\u5165\u524d\u306e\u55b6\u696d\u30ea\u30fc\u30c9CPA\uff08\u5186\uff09"
+    },
+    "leadCpaAfter": {
+      "type": "number",
+      "description": "\u5c0e\u5165\u5f8c\u306e\u55b6\u696d\u30ea\u30fc\u30c9CPA\uff08\u5186\uff09"
+    },
+    "recruitmentSavings": {
+      "type": "number",
+      "default": 0,
+      "description": "\u63a1\u7528CPA\u524a\u6e1b\u984d"
+    },
+    "inquirySavings": {
+      "type": "number",
+      "default": 0,
+      "description": "\u554f\u3044\u5408\u308f\u305bCPA\u524a\u6e1b\u984d"
+    },
+    "leadSavings": {
+      "type": "number",
+      "default": 0,
+      "description": "\u55b6\u696d\u30ea\u30fc\u30c9CPA\u524a\u6e1b\u984d"
+    }
+  },
+  "required": [
+    "clientCompanyId",
+    "month"
+  ]
+}

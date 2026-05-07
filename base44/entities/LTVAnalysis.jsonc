@@ -1,0 +1,39 @@
+{
+  "name": "LTVAnalysis",
+  "type": "object",
+  "properties": {
+    "clientCompanyId": {
+      "type": "string",
+      "description": "\u4f01\u696dID"
+    },
+    "retentionRate": {
+      "type": "number",
+      "description": "\u9867\u5ba2\u7d99\u7d9a\u7387\uff080-1\uff09"
+    },
+    "averageContractMonths": {
+      "type": "number",
+      "description": "\u5e73\u5747\u5951\u7d04\u6708\u6570"
+    },
+    "customerUnitPrice": {
+      "type": "number",
+      "description": "\u9867\u5ba2\u5358\u4fa1\uff08\u5186\uff09"
+    },
+    "ltv": {
+      "type": "number",
+      "default": 0,
+      "description": "LTV\uff08\u9867\u5ba2\u751f\u6daf\u4fa1\u5024\uff09"
+    },
+    "cac": {
+      "type": "number",
+      "description": "\u9867\u5ba2\u7372\u5f97\u30b3\u30b9\u30c8\uff08\u5186\uff09"
+    },
+    "lacRatio": {
+      "type": "number",
+      "default": 0,
+      "description": "LTV/CAC\u6bd4\u7387"
+    }
+  },
+  "required": [
+    "clientCompanyId"
+  ]
+}
