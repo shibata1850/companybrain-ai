@@ -1,0 +1,100 @@
+{
+  "name": "WorkReviewRequest",
+  "type": "object",
+  "properties": {
+    "clientCompanyId": {
+      "type": "string",
+      "description": "\u4f01\u696dID"
+    },
+    "avatarProfileId": {
+      "type": "string",
+      "description": "ExecutiveAvatarProfile ID"
+    },
+    "userId": {
+      "type": "string",
+      "description": "\u7533\u8acb\u30e6\u30fc\u30b6\u30fcID"
+    },
+    "title": {
+      "type": "string",
+      "description": "\u4ed5\u4e8b\u30bf\u30a4\u30c8\u30eb"
+    },
+    "workType": {
+      "type": "string",
+      "enum": [
+        "email",
+        "proposal",
+        "customer_response",
+        "report",
+        "presentation"
+      ],
+      "description": "\u4ed5\u4e8b\u30bf\u30a4\u30d7"
+    },
+    "inputText": {
+      "type": "string",
+      "description": "\u30ec\u30d3\u30e5\u30fc\u5bfe\u8c61\u30c6\u30ad\u30b9\u30c8"
+    },
+    "reviewPurpose": {
+      "type": "string",
+      "description": "\u30ec\u30d3\u30e5\u30fc\u76ee\u7684"
+    },
+    "overallReview": {
+      "type": "string",
+      "description": "\u7dcf\u5408\u8a55\u4fa1\u30fb\u30ec\u30d3\u30e5\u30fc"
+    },
+    "companyPolicyFit": {
+      "type": "number",
+      "description": "\u4f1a\u793e\u65b9\u91dd\u3068\u306e\u9069\u5408\u5ea6\uff080-100\uff09"
+    },
+    "riskPoints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "\u30ea\u30b9\u30af\u70b9"
+    },
+    "improvementAdvice": {
+      "type": "string",
+      "description": "\u6539\u5584\u30a2\u30c9\u30d0\u30a4\u30b9"
+    },
+    "revisedDraft": {
+      "type": "string",
+      "description": "\u4fee\u6b63\u6848"
+    },
+    "decisionCriteriaUsed": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "\u53c2\u7167\u3057\u305f\u5224\u65ad\u57fa\u6e96"
+    },
+    "needHumanReview": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u4eba\u9593\u306b\u3088\u308b\u6700\u7d42\u78ba\u8a8d\u304c\u5fc5\u8981\u304b"
+    },
+    "referencedSources": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "\u53c2\u7167\u3057\u305f\u30ca\u30ec\u30c3\u30b8\u30bd\u30fc\u30b9ID\u4e00\u89a7"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "pending_human_review"
+      ],
+      "default": "completed",
+      "description": "\u30b9\u30c6\u30fc\u30bf\u30b9"
+    }
+  },
+  "required": [
+    "clientCompanyId",
+    "avatarProfileId",
+    "userId",
+    "title",
+    "workType",
+    "inputText"
+  ]
+}

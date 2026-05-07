@@ -1,0 +1,63 @@
+{
+  "name": "AvatarTrainingScenario",
+  "type": "object",
+  "properties": {
+    "clientCompanyId": {
+      "type": "string",
+      "description": "\u4f01\u696dID"
+    },
+    "avatarProfileId": {
+      "type": "string",
+      "description": "ExecutiveAvatarProfile ID"
+    },
+    "title": {
+      "type": "string",
+      "description": "\u30b7\u30ca\u30ea\u30aa\u30bf\u30a4\u30c8\u30eb"
+    },
+    "scenarioType": {
+      "type": "string",
+      "enum": [
+        "roleplay",
+        "training",
+        "decision_making",
+        "customer_service"
+      ],
+      "description": "\u30b7\u30ca\u30ea\u30aa\u30bf\u30a4\u30d7"
+    },
+    "description": {
+      "type": "string",
+      "description": "\u30b7\u30ca\u30ea\u30aa\u8aac\u660e"
+    },
+    "context": {
+      "type": "string",
+      "description": "\u80cc\u666f\u30fb\u72b6\u6cc1\u8a2d\u5b9a"
+    },
+    "learningObjectives": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "\u5b66\u7fd2\u76ee\u6a19"
+    },
+    "evaluationCriteria": {
+      "type": "string",
+      "description": "\u8a55\u4fa1\u57fa\u6e96"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "active",
+        "archived"
+      ],
+      "default": "active",
+      "description": "\u30b9\u30c6\u30fc\u30bf\u30b9"
+    }
+  },
+  "required": [
+    "clientCompanyId",
+    "avatarProfileId",
+    "title",
+    "scenarioType"
+  ]
+}
