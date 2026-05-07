@@ -214,6 +214,7 @@ export default function ScriptGenerator() {
               onApprove={() => approveMutation.mutate()}
               isSaving={saveMutation.isPending}
               isApproving={approveMutation.isPending}
+              onProjectUpdate={(data) => setSavedProject(p => ({ ...p, ...data }))}
             />
           )}
         </div>
