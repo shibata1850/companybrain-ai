@@ -1,0 +1,51 @@
+{
+  "name": "UsageRecord",
+  "type": "object",
+  "properties": {
+    "clientCompanyId": {
+      "type": "string",
+      "description": "\u4f01\u696dID"
+    },
+    "usageType": {
+      "type": "string",
+      "enum": [
+        "ai_answer",
+        "script_generation",
+        "tts",
+        "lipsync",
+        "file_upload"
+      ],
+      "description": "\u5229\u7528\u7a2e\u5225"
+    },
+    "provider": {
+      "type": "string",
+      "enum": [
+        "openai",
+        "heygen",
+        "base44",
+        "other"
+      ],
+      "description": "\u30d7\u30ed\u30d0\u30a4\u30c0\u30fc"
+    },
+    "units": {
+      "type": "number",
+      "description": "\u4f7f\u7528\u91cf"
+    },
+    "unitName": {
+      "type": "string",
+      "description": "\u5358\u4f4d\u540d\uff08\u4f8b: tokens, seconds\uff09"
+    },
+    "estimatedCostUsd": {
+      "type": "number",
+      "description": "\u63a8\u5b9a\u30b3\u30b9\u30c8\uff08USD\uff09"
+    },
+    "metadata": {
+      "type": "string",
+      "description": "\u30e1\u30bf\u30c7\u30fc\u30bf\uff08JSON\u6587\u5b57\u5217\uff09"
+    }
+  },
+  "required": [
+    "clientCompanyId",
+    "usageType"
+  ]
+}

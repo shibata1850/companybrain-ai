@@ -1,0 +1,68 @@
+{
+  "name": "ConversationLog",
+  "type": "object",
+  "properties": {
+    "clientCompanyId": {
+      "type": "string",
+      "description": "\u4f01\u696dID"
+    },
+    "userId": {
+      "type": "string",
+      "description": "\u30e6\u30fc\u30b6\u30fcID"
+    },
+    "channel": {
+      "type": "string",
+      "enum": [
+        "public",
+        "internal",
+        "executive",
+        "admin_test"
+      ],
+      "description": "\u30c1\u30e3\u30f3\u30cd\u30eb"
+    },
+    "question": {
+      "type": "string",
+      "description": "\u8cea\u554f"
+    },
+    "answer": {
+      "type": "string",
+      "description": "\u56de\u7b54"
+    },
+    "usedSources": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "\u53c2\u7167\u30bd\u30fc\u30b9ID\u4e00\u89a7"
+    },
+    "confidence": {
+      "type": "number",
+      "description": "\u4fe1\u983c\u30b9\u30b3\u30a2\uff080\u301c1\uff09"
+    },
+    "needHumanReview": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u4eba\u9593\u30ec\u30d3\u30e5\u30fc\u8981\u5426"
+    },
+    "feedback": {
+      "type": "string",
+      "enum": [
+        "good",
+        "bad",
+        "needs_improvement",
+        "none"
+      ],
+      "default": "none",
+      "description": "\u30d5\u30a3\u30fc\u30c9\u30d0\u30c3\u30af"
+    },
+    "feedbackComment": {
+      "type": "string",
+      "description": "\u30d5\u30a3\u30fc\u30c9\u30d0\u30c3\u30af\u30b3\u30e1\u30f3\u30c8"
+    }
+  },
+  "required": [
+    "clientCompanyId",
+    "question",
+    "answer"
+  ]
+}

@@ -1,0 +1,112 @@
+{
+  "name": "KnowledgeSource",
+  "type": "object",
+  "properties": {
+    "clientCompanyId": {
+      "type": "string",
+      "description": "\u4f01\u696dID"
+    },
+    "title": {
+      "type": "string",
+      "description": "\u30bf\u30a4\u30c8\u30eb"
+    },
+    "sourceType": {
+      "type": "string",
+      "enum": [
+        "pdf",
+        "image",
+        "csv",
+        "text",
+        "manual",
+        "url"
+      ],
+      "description": "\u30bd\u30fc\u30b9\u30bf\u30a4\u30d7"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "company",
+        "service",
+        "sales",
+        "support",
+        "internal_rule",
+        "hr",
+        "management",
+        "other"
+      ],
+      "description": "\u30ab\u30c6\u30b4\u30ea"
+    },
+    "audienceScope": {
+      "type": "string",
+      "enum": [
+        "public",
+        "internal",
+        "executive",
+        "admin_only"
+      ],
+      "default": "internal",
+      "description": "\u516c\u958b\u7bc4\u56f2"
+    },
+    "fileUrl": {
+      "type": "string",
+      "description": "\u30d5\u30a1\u30a4\u30ebURL\uff08\u516c\u958b\uff09"
+    },
+    "fileUri": {
+      "type": "string",
+      "description": "\u30d5\u30a1\u30a4\u30ebURI\uff08\u30d7\u30e9\u30a4\u30d9\u30fc\u30c8\uff09"
+    },
+    "extractedText": {
+      "type": "string",
+      "description": "\u62bd\u51fa\u30c6\u30ad\u30b9\u30c8"
+    },
+    "summary": {
+      "type": "string",
+      "description": "\u8981\u7d04"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "\u30bf\u30b0"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "reviewing",
+        "approved",
+        "archived"
+      ],
+      "default": "draft",
+      "description": "\u30b9\u30c6\u30fc\u30bf\u30b9"
+    },
+    "version": {
+      "type": "string",
+      "description": "\u30d0\u30fc\u30b8\u30e7\u30f3"
+    },
+    "approvedBy": {
+      "type": "string",
+      "description": "\u627f\u8a8d\u8005"
+    },
+    "approvedAt": {
+      "type": "string",
+      "format": "date",
+      "description": "\u627f\u8a8d\u65e5"
+    },
+    "riskLevel": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "default": "low",
+      "description": "\u30ea\u30b9\u30af\u30ec\u30d9\u30eb"
+    }
+  },
+  "required": [
+    "clientCompanyId",
+    "title"
+  ]
+}
