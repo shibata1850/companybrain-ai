@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Building2, Heart, FileText, FolderOpen,
   MessageSquare, Globe, Users, Crown, FileVideo, Film,
   BarChart3, CreditCard, Settings, ChevronLeft, ChevronRight,
-  Brain, ScrollText, ClipboardList
+  Brain, ScrollText, ClipboardList, Shield
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -48,6 +48,7 @@ const navGroups = [
       { icon: BarChart3, label: "KPI/ROI", path: "/kpi" },
       { icon: CreditCard, label: "料金プラン", path: "/plans" },
       { icon: Settings, label: "設定", path: "/settings" },
+      { icon: Shield, label: "ユーザー設定", path: "/admin-user-settings" },
     ]
   }
 ];

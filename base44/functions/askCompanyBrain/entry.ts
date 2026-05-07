@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
     const role = String(user.businessRole || user.role || "viewer");
     const userCompanyId = String(user.clientCompanyId || "");
 
-    // テナント分離：softdoing_admin または platform admin以外は自社データのみ
+    // テナント分離：softdoing_admin または Base44 admin以外は自社データのみ
     const isGlobalAdmin = role === "softdoing_admin" || user.role === "admin";
     if (!isGlobalAdmin) {
       if (!userCompanyId) {

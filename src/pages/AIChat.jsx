@@ -39,7 +39,7 @@ export default function AIChat() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const scrollRef = useRef(null);
-  const [mode, setMode] = useState("internal");
+  const [mode, setMode] = useState("internal"); // デフォルト: 社内向け
   const [category, setCategory] = useState("all");
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([]);
