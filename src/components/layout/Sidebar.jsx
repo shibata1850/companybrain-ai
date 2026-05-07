@@ -29,6 +29,7 @@ const navGroups = [
     items: [
       { icon: Brain, label: "AIチャット（統合）", path: "/ai-chat" },
       { icon: Globe, label: "社外向けAI", path: "/chat-external" },
+      { icon: Globe, label: "社外向けプレビュー", path: "/public-ai-preview" },
       { icon: Users, label: "社内向けAI", path: "/chat-internal" },
       { icon: Crown, label: "経営者向けAI", path: "/chat-executive" },
     ]
