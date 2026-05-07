@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { Save, CheckCircle2, Edit3, Volume2, Clock, FileText } from "lucide-react";
 import AudioGenerator from "@/components/script/AudioGenerator";
 import VideoUploader from "@/components/script/VideoUploader";
-import LipsyncGenerator from "@/components/script/LipsyncGenerator";
 
 export default function ScriptResult({ result, savedProject, onSave, onApprove, isSaving, isApproving, onProjectUpdate }) {
   const [editMode, setEditMode] = useState(false);
@@ -143,22 +142,12 @@ export default function ScriptResult({ result, savedProject, onSave, onApprove, 
           />
         )}
 
-        {/* 動画素材アップロード（承認済み音声あり） */}
-        {isApproved && savedProject?.status === "audio_ready" && (
+        {/* 動画素材アップロード（承認後のみ） */}
+        {isApproved && savedProject && (
           <VideoUploader
             savedProject={savedProject}
             onVideoUploaded={onProjectUpdate}
-          />
-        )}
-
-        {/* リップシンク生成（条件：approved + audio_ready + 両ファイルあり） */}
-        {isApproved &&
-          (savedProject?.status === "audio_ready" || savedProject?.status === "processing" || savedProject?.status === "completed") &&
-          savedProject?.audioFileUri &&
-          savedProject?.videoFileUri && (
-          <LipsyncGenerator
-            savedProject={savedProject}
-            onLipsyncStarted={onProjectUpdate}
+            onProjectUpdate={onProjectUpdate}
           />
         )}
       </CardContent>
