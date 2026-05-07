@@ -26,18 +26,22 @@ Deno.serve(async (req) => {
 
     // プラン制限チェック
     const PLAN_LIMITS = {
-      Light: { videoSecondsLimitMonthly: 0 },
-      Standard: { videoSecondsLimitMonthly: 600 },
-      Professional: { videoSecondsLimitMonthly: 1800 },
-      Enterprise: { videoSecondsLimitMonthly: null },
+      Light: { lipsyncSecondsLimitMonthly: 0 },
+      Standard: { lipsyncSecondsLimitMonthly: 600 },
+      Professional: { lipsyncSecondsLimitMonthly: 1800 },
+      Enterprise: { lipsyncSecondsLimitMonthly: null },
     };
 
     const company = await base44.asServiceRole.entities.ClientCompany.get(project.clientCompanyId);
     const planName = company?.planName || "Light";
     const limits = PLAN_LIMITS[planName] || PLAN_LIMITS.Light;
 
-    // Light プランで動画生成をブロック
+    // Light プランでリップシンク生成をブロック
     if (planName === "Light") {
+      await base44.asServiceRole.entities.VideoProject.update(videoProjectId, {
+        status: "failed",
+        errorMessage: "動画生成上限を超過しています",
+      });
       return Response.json({
         error: "Video generation is not available in Light plan",
         message: "動画生成機能はLight プランでは利用できません。上位プランへのアップグレードをお願いします。",
@@ -45,18 +49,24 @@ Deno.serve(async (req) => {
       }, { status: 403 });
     }
 
-    // 当月の動画生成秒数をチェック
-    if (limits.videoSecondsLimitMonthly !== null) {
-      const currentMonth = new Date().toISOString().slice(0, 7);
-      const videos = await base44.asServiceRole.entities.VideoProject.filter({
+    // 当月の動画生成秒数（リップシンク）をチェック
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    if (limits.lipsyncSecondsLimitMonthly !== null) {
+      const lipsyncProjects = await base44.asServiceRole.entities.VideoProject.filter({
         clientCompanyId: project.clientCompanyId,
-      }).then(v => v.filter(x => x.created_date?.startsWith(currentMonth) && x.durationSeconds));
+      }).then(v => v.filter(x => x.created_date?.startsWith(currentMonth) && x.lipsyncMode && x.durationSeconds));
 
-      const videoSeconds = videos.reduce((sum, v) => sum + (v.durationSeconds || 0), 0);
-      if (videoSeconds >= limits.videoSecondsLimitMonthly) {
+      const totalLipsyncSeconds = lipsyncProjects.reduce((sum, v) => sum + (v.durationSeconds || 0), 0);
+      const requestedSeconds = project.durationSeconds || 0;
+
+      if (totalLipsyncSeconds + requestedSeconds > limits.lipsyncSecondsLimitMonthly) {
+        await base44.asServiceRole.entities.VideoProject.update(videoProjectId, {
+          status: "failed",
+          errorMessage: "動画生成上限を超過しています",
+        });
         return Response.json({
           error: "Video generation limit exceeded",
-          message: `月間動画生成時間の上限（${limits.videoSecondsLimitMonthly}秒）に達しています。`,
+          message: `月間動画生成時間の上限（${limits.lipsyncSecondsLimitMonthly}秒）を超過します。`,
           limitExceeded: true,
         }, { status: 429 });
       }

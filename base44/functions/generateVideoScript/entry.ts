@@ -59,19 +59,42 @@ Deno.serve(async (req) => {
       }, { status: 429 });
     }
 
+    // 台本生成の利用制限チェック
+    const scriptLimits = {
+     Light: { scriptGenerationMonthly: null },
+     Standard: { scriptGenerationMonthly: 20 },
+     Professional: { scriptGenerationMonthly: 50 },
+     Enterprise: { scriptGenerationMonthly: null },
+    };
+
+    const scriptLimit = scriptLimits[planName]?.scriptGenerationMonthly;
+    if (scriptLimit !== null) {
+     const monthlyScripts = await base44.asServiceRole.entities.VideoProject.filter({
+       clientCompanyId,
+     }).then(v => v.filter(x => x.created_date?.startsWith(currentMonth) && x.scriptStatus === "approved"));
+
+     if (monthlyScripts.length >= scriptLimit) {
+       return Response.json({
+         error: "Usage limit exceeded",
+         message: `月間台本生成数の上限（${scriptLimit}回）に達しています。`,
+         limitExceeded: true,
+       }, { status: 429 });
+     }
+    }
+
     // 当月の動画生成秒数をカウント
     const monthlyVideos = await base44.asServiceRole.entities.VideoProject.filter({
-      clientCompanyId,
+     clientCompanyId,
     }).then(v => v.filter(x => x.created_date?.startsWith(currentMonth) && x.status === "completed"));
 
     const totalVideoSeconds = monthlyVideos.reduce((sum, v) => sum + (v.durationSeconds || 0), 0);
 
     if (limits.videoSecondsLimitMonthly !== null && totalVideoSeconds >= limits.videoSecondsLimitMonthly) {
-      return Response.json({
-        error: "Usage limit exceeded",
-        message: `月間動画生成時間の上限（${limits.videoSecondsLimitMonthly}秒）に達しています。`,
-        limitExceeded: true,
-      }, { status: 429 });
+     return Response.json({
+       error: "Usage limit exceeded",
+       message: `月間動画生成時間の上限（${limits.videoSecondsLimitMonthly}秒）に達しています。`,
+       limitExceeded: true,
+     }, { status: 429 });
     }
 
     const chunks = await base44.asServiceRole.entities.KnowledgeChunk.filter({
@@ -174,18 +197,33 @@ ${speakingStyle}
     const parsed = JSON.parse(outputText);
 
     const videoProject = await base44.asServiceRole.entities.VideoProject.create({
-      clientCompanyId,
-      title: parsed.title,
-      purpose,
-      script: parsed.script,
-      scriptStatus: "draft",
-      status: "script_ready",
-      durationSeconds: parsed.estimatedDurationSeconds
+     clientCompanyId,
+     title: parsed.title,
+     purpose,
+     script: parsed.script,
+     scriptStatus: "draft",
+     status: "script_ready",
+     durationSeconds: parsed.estimatedDurationSeconds
+    });
+
+    // UsageRecord に保存
+    await base44.asServiceRole.entities.UsageRecord.create({
+     clientCompanyId,
+     usageType: "script_generation",
+     provider: "gemini",
+     units: 1,
+     unitName: "script",
+     estimatedCostUsd: 0,
+     metadata: JSON.stringify({
+       videoProjectId: videoProject.id,
+       purpose,
+       targetAudience,
+     }),
     });
 
     return Response.json({
-      videoProjectId: videoProject.id,
-      ...parsed
+     videoProjectId: videoProject.id,
+     ...parsed
     });
 
   } catch (error) {
