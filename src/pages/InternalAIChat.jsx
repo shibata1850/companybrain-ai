@@ -7,6 +7,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
+} from "@/components/ui/dialog";
+import {
   Brain, Send, Loader2, RotateCcw, User,
   ThumbsUp, ThumbsDown, BookmarkPlus, AlertCircle
 } from "lucide-react";
@@ -28,6 +31,14 @@ const CATEGORIES = [
 
 const ALLOWED_ROLES = ["softdoing_admin", "client_admin", "editor", "employee"];
 
+const BAD_FEEDBACK_REASONS = [
+  { value: "incomplete", label: "不完全な回答" },
+  { value: "inaccurate", label: "不正確な情報" },
+  { value: "not_relevant", label: "質問と関連がない" },
+  { value: "unclear", label: "わかりにくい表現" },
+  { value: "other", label: "その他" },
+];
+
 export default function InternalAIChat() {
   const { toast } = useToast();
   const scrollRef = useRef(null);
@@ -36,6 +47,9 @@ export default function InternalAIChat() {
   const [category, setCategory] = useState("");
   const [user, setUser] = useState(null);
   const [accessDenied, setAccessDenied] = useState(false);
+  const [feedbackDialog, setFeedbackDialog] = useState({ open: false, logId: null });
+  const [selectedReason, setSelectedReason] = useState("");
+  const [feedbackComment, setFeedbackComment] = useState("");
 
   useEffect(() => {
     base44.auth.me().then((u) => {
@@ -70,12 +84,18 @@ export default function InternalAIChat() {
   });
 
   const feedbackMutation = useMutation({
-    mutationFn: ({ logId, feedback }) =>
-      base44.entities.ConversationLog.update(logId, { feedback }),
+    mutationFn: ({ logId, feedback, reason, comment }) =>
+      base44.entities.ConversationLog.update(logId, {
+        feedback,
+        feedbackComment: comment ? `${reason ? `[${reason}] ` : ""}${comment}` : "",
+      }),
     onSuccess: (_, { logId, feedback }) => {
       setMessages(prev =>
         prev.map(m => m.conversationLogId === logId ? { ...m, feedback } : m)
       );
+      setFeedbackDialog({ open: false, logId: null });
+      setSelectedReason("");
+      setFeedbackComment("");
       toast({ title: feedback === "good" ? "👍 フィードバック送信" : "📝 フィードバック送信" });
     },
   });
@@ -130,6 +150,17 @@ export default function InternalAIChat() {
       </div>
     );
   }
+
+  // Bad評価ダイアログ
+  const handleSubmitBadFeedback = () => {
+    if (!feedbackDialog.logId) return;
+    feedbackMutation.mutate({
+      logId: feedbackDialog.logId,
+      feedback: "needs_improvement",
+      reason: selectedReason,
+      comment: feedbackComment,
+    });
+  };
 
   return (
     <div className="p-6 max-w-4xl mx-auto flex flex-col gap-5 h-[calc(100vh-2rem)]">
@@ -225,7 +256,7 @@ export default function InternalAIChat() {
                       <Button
                         size="sm" variant="outline"
                         className={`h-7 text-xs gap-1 ${msg.feedback === "needs_improvement" ? "border-amber-500/40 text-amber-600 bg-amber-500/5" : ""}`}
-                        onClick={() => feedbackMutation.mutate({ logId: msg.conversationLogId, feedback: "needs_improvement" })}
+                        onClick={() => setFeedbackDialog({ open: true, logId: msg.conversationLogId })}
                         disabled={msg.feedback === "needs_improvement"}
                       >
                         <ThumbsDown className="w-3 h-3" /> 改善が必要
@@ -295,6 +326,70 @@ export default function InternalAIChat() {
           </Button>
         </div>
       </div>
+
+      {/* Bad評価ダイアログ */}
+      <Dialog open={feedbackDialog.open} onOpenChange={(open) => {
+        if (!open) {
+          setFeedbackDialog({ open: false, logId: null });
+          setSelectedReason("");
+          setFeedbackComment("");
+        }
+      }}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>改善が必要な理由を教えてください</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">理由を選択</label>
+              <div className="space-y-2">
+                {BAD_FEEDBACK_REASONS.map(reason => (
+                  <button
+                    key={reason.value}
+                    onClick={() => setSelectedReason(selectedReason === reason.value ? "" : reason.value)}
+                    className={`w-full text-left px-3 py-2 rounded-lg border transition-all text-sm ${
+                      selectedReason === reason.value
+                        ? "bg-amber-500/10 border-amber-500/40 text-amber-700"
+                        : "bg-muted/30 border-border hover:bg-muted/50"
+                    }`}
+                  >
+                    {reason.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">詳細（任意）</label>
+              <Textarea
+                value={feedbackComment}
+                onChange={(e) => setFeedbackComment(e.target.value)}
+                placeholder="改善案やご意見をお聞かせください..."
+                rows={3}
+                className="text-sm resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setFeedbackDialog({ open: false, logId: null });
+                setSelectedReason("");
+                setFeedbackComment("");
+              }}
+            >
+              キャンセル
+            </Button>
+            <Button
+              onClick={handleSubmitBadFeedback}
+              disabled={feedbackMutation.isPending || !selectedReason}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {feedbackMutation.isPending ? "送信中..." : "送信"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
