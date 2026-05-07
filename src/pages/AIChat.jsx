@@ -25,7 +25,7 @@ const MODES = [
 ];
 
 const CATEGORIES = [
-  { value: "", label: "カテゴリ指定なし" },
+  { value: "all", label: "カテゴリ指定なし" },
   { value: "company", label: "会社情報" },
   { value: "service", label: "サービス" },
   { value: "sales", label: "営業" },
@@ -40,7 +40,7 @@ export default function AIChat() {
   const queryClient = useQueryClient();
   const scrollRef = useRef(null);
   const [mode, setMode] = useState("internal");
-  const [category, setCategory] = useState("");
+  const [category, setCategory] = useState("all");
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([]);
   const [editingLogId, setEditingLogId] = useState(null);
@@ -63,7 +63,7 @@ export default function AIChat() {
         question,
         channel: mode,
         clientCompanyId: CLIENT_ID,
-        category: category || undefined,
+        category: category === "all" ? undefined : category,
       });
       return res.data;
     },
