@@ -122,6 +122,7 @@ Deno.serve(async (req) => {
       status: "processing",
     });
 
+    // UsageRecordに記録
     await base44.asServiceRole.entities.UsageRecord.create({
       clientCompanyId: project.clientCompanyId,
       usageType: "lipsync",
