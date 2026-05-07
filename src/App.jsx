@@ -21,6 +21,7 @@ import ScriptGenerator from '@/pages/ScriptGenerator';
 import ExecutiveDashboard from '@/pages/ExecutiveDashboard';
 import UsageAndBilling from '@/pages/UsageAndBilling';
 import AnswerLogs from '@/pages/AnswerLogs';
+import ExecutiveBrainDiagnostics from '@/pages/ExecutiveBrainDiagnostics';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -59,6 +60,7 @@ const AuthenticatedApp = () => {
         <Route path="/executive-dashboard" element={<ExecutiveDashboard />} />
         <Route path="/usage-and-billing" element={<UsageAndBilling />} />
         <Route path="/answer-logs" element={<AnswerLogs />} />
+        <Route path="/executive-brain-diagnostics" element={<ExecutiveBrainDiagnostics />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

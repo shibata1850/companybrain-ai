@@ -1,0 +1,68 @@
+{
+  "name": "AvatarConsentAuditLog",
+  "type": "object",
+  "properties": {
+    "clientCompanyId": {
+      "type": "string",
+      "description": "\u4f01\u696dID"
+    },
+    "avatarProfileId": {
+      "type": "string",
+      "description": "ExecutiveAvatarProfile ID"
+    },
+    "personName": {
+      "type": "string",
+      "description": "\u672c\u4eba\u540d"
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "approved",
+        "rejected",
+        "revoked"
+      ],
+      "description": "\u51e6\u7406\u5185\u5bb9"
+    },
+    "actionBy": {
+      "type": "string",
+      "description": "\u51e6\u7406\u8005\u30e1\u30fc\u30eb"
+    },
+    "actionByRole": {
+      "type": "string",
+      "enum": [
+        "client_admin",
+        "softdoing_admin"
+      ],
+      "description": "\u51e6\u7406\u8005\u30ed\u30fc\u30eb"
+    },
+    "reason": {
+      "type": "string",
+      "description": "\u7406\u7531\u30fb\u30b3\u30e1\u30f3\u30c8"
+    },
+    "consentFileUri": {
+      "type": "string",
+      "description": "\u540c\u610f\u66f8\u30d5\u30a1\u30a4\u30ebURI\uff08\u627f\u8a8d\u6642\uff09"
+    },
+    "sourceVideoUri": {
+      "type": "string",
+      "description": "\u7d20\u6750\u52d5\u753bURI\uff08\u627f\u8a8d\u6642\uff09"
+    },
+    "sourceAudioUri": {
+      "type": "string",
+      "description": "\u7d20\u6750\u97f3\u58f0URI\uff08\u627f\u8a8d\u6642\uff09"
+    },
+    "previousStatus": {
+      "type": "string",
+      "description": "\u5909\u66f4\u524d\u306econsentStatus"
+    },
+    "newStatus": {
+      "type": "string",
+      "description": "\u5909\u66f4\u5f8c\u306econsentStatus"
+    }
+  },
+  "required": [
+    "clientCompanyId",
+    "avatarProfileId",
+    "action"
+  ]
+}

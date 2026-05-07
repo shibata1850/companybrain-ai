@@ -1,5 +1,13 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.25";
 
+function logDebug(level, message, context = {}) {
+  const timestamp = new Date().toISOString();
+  const safe = { ...context };
+  delete safe.apiKey;
+  delete safe.secretKey;
+  console.log(`[${level}] ${message}`, JSON.stringify(safe));
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -9,31 +17,16 @@ Deno.serve(async (req) => {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { clientCompanyId, avatarProfileId } = await req.json();
+    logDebug("INFO", "debugExecutiveBrainIntegration started", {
+      userId: user.id,
+      businessRole: user.businessRole,
+      userRole: user.role,
+    });
 
-    const loggedIn = true;
+    const { clientCompanyId } = await req.json();
+
     const userRole = user.role || "user";
     const businessRole = user.businessRole || (userRole === "admin" ? "softdoing_admin" : "viewer");
-
-    // 会社確認
-    let clientCompanyFound = false;
-    let avatarProfileFound = false;
-    let consentStatus = null;
-    let avatarStatus = null;
-
-    if (clientCompanyId) {
-      const company = await base44.asServiceRole.entities.ClientCompany.get(clientCompanyId);
-      clientCompanyFound = !!company;
-
-      if (avatarProfileId) {
-        const profile = await base44.asServiceRole.entities.ExecutiveAvatarProfile.get(avatarProfileId);
-        avatarProfileFound = !!profile;
-        if (profile) {
-          consentStatus = profile.consentStatus;
-          avatarStatus = profile.status;
-        }
-      }
-    }
 
     // APIキー確認
     const geminiKey = Deno.env.get("GEMINI_API_KEY");
@@ -45,35 +38,92 @@ Deno.serve(async (req) => {
     const hasHeygenKey = !!heygenKey;
     const hasLiveAvatarKey = !!liveAvatarKey;
 
-    // LiveAvatar IDチェック
-    let liveAvatarAvatarIdExists = false;
-    let liveAvatarVoiceIdExists = false;
-    let liveAvatarContextIdExists = false;
+    logDebug("DEBUG", "API key status", {
+      hasGeminiKey,
+      hasHeygenKey,
+      hasLiveAvatarKey,
+    });
 
-    if (avatarProfileFound && avatarProfileId) {
-      const profile = await base44.asServiceRole.entities.ExecutiveAvatarProfile.get(avatarProfileId);
-      liveAvatarAvatarIdExists = !!profile?.liveAvatarAvatarId;
-      liveAvatarVoiceIdExists = !!profile?.liveAvatarVoiceId;
-      liveAvatarContextIdExists = !!profile?.liveAvatarContextId;
+    // 会社確認
+    let company = null;
+    let companyExists = false;
+    let companyName = null;
+
+    if (clientCompanyId) {
+      company = await base44.asServiceRole.entities.ClientCompany.get(clientCompanyId);
+      companyExists = !!company;
+      companyName = company?.companyName || null;
+      logDebug("DEBUG", "Company check", { clientCompanyId, companyExists });
     }
 
-    // 簡易テスト
-    let geminiTestOk = false;
-    let heygenTestOk = false;
-    let liveAvatarTestOk = false;
+    // 最初のアバタープロファイル取得
+    let avatar = null;
+    let avatarExists = false;
+    let avatarName = null;
+    let consentStatus = null;
+    let avatarStatus = null;
+    let hasHeygenAvatarId = false;
+    let hasHeygenVoiceId = false;
+    let hasLiveAvatarAvatarId = false;
+    let hasLiveAvatarVoiceId = false;
+    let hasLiveAvatarContextId = false;
+
+    if (companyExists) {
+      const avatars = await base44.asServiceRole.entities.ExecutiveAvatarProfile.filter({
+        clientCompanyId,
+      });
+      if (avatars.length > 0) {
+        avatar = avatars[0];
+        avatarExists = true;
+        avatarName = avatar.avatarName;
+        consentStatus = avatar.consentStatus;
+        avatarStatus = avatar.status;
+        hasHeygenAvatarId = !!avatar.heygenAvatarId;
+        hasHeygenVoiceId = !!avatar.heygenVoiceId;
+        hasLiveAvatarAvatarId = !!avatar.liveAvatarAvatarId;
+        hasLiveAvatarVoiceId = !!avatar.liveAvatarVoiceId;
+        hasLiveAvatarContextId = !!avatar.liveAvatarContextId;
+
+        logDebug("DEBUG", "Avatar check", {
+          avatarExists,
+          avatarName,
+          consentStatus,
+          avatarStatus,
+          hasHeygenAvatarId,
+          hasLiveAvatarContextId,
+        });
+      }
+    }
+
+    // 接続テスト
+    let geminiConnected = false;
+    let geminiStatusCode = null;
+    let heygenConnected = false;
+    let heygenStatusCode = null;
+    let liveAvatarConnected = false;
+    let liveAvatarStatusCode = null;
 
     if (hasGeminiKey) {
       try {
-        const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + geminiKey, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: "test" }] }],
-          }),
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ role: "user", parts: [{ text: "test" }] }],
+            }),
+          }
+        );
+        geminiConnected = res.ok || res.status === 400;
+        geminiStatusCode = res.status;
+        logDebug("DEBUG", "Gemini API test", {
+          connected: geminiConnected,
+          status: geminiStatusCode,
         });
-        geminiTestOk = res.ok || res.status === 400; // 400でも接続OK
-      } catch (_e) {
-        geminiTestOk = false;
+      } catch (e) {
+        logDebug("WARN", "Gemini API test failed", { error: e.message });
+        geminiConnected = false;
       }
     }
 
@@ -82,9 +132,15 @@ Deno.serve(async (req) => {
         const res = await fetch("https://api.heygen.com/v1/avatars", {
           headers: { "X-Api-Key": heygenKey },
         });
-        heygenTestOk = res.ok;
-      } catch (_e) {
-        heygenTestOk = false;
+        heygenConnected = res.ok;
+        heygenStatusCode = res.status;
+        logDebug("DEBUG", "HeyGen API test", {
+          connected: heygenConnected,
+          status: heygenStatusCode,
+        });
+      } catch (e) {
+        logDebug("WARN", "HeyGen API test failed", { error: e.message });
+        heygenConnected = false;
       }
     }
 
@@ -93,34 +149,85 @@ Deno.serve(async (req) => {
         const res = await fetch("https://api.liveavatar.com/health", {
           headers: { "X-API-KEY": liveAvatarKey },
         });
-        liveAvatarTestOk = res.ok;
-      } catch (_e) {
-        liveAvatarTestOk = false;
+        liveAvatarConnected = res.ok;
+        liveAvatarStatusCode = res.status;
+        logDebug("DEBUG", "LiveAvatar API test", {
+          connected: liveAvatarConnected,
+          status: liveAvatarStatusCode,
+        });
+      } catch (e) {
+        logDebug("WARN", "LiveAvatar API test failed", { error: e.message });
+        liveAvatarConnected = false;
       }
     }
 
-    return Response.json({
-      loggedIn,
-      userRole,
+    // 推奨アクション
+    let recommendedAction = null;
+    if (!hasGeminiKey) {
+      recommendedAction = "missing_gemini_key";
+    } else if (!hasHeygenKey) {
+      recommendedAction = "missing_heygen_key";
+    } else if (!companyExists) {
+      recommendedAction = "company_not_found";
+    } else if (!avatarExists) {
+      recommendedAction = "avatar_not_found";
+    } else if (consentStatus !== "approved") {
+      recommendedAction = "consent_not_approved";
+    } else if (avatarStatus !== "active") {
+      recommendedAction = "avatar_not_active";
+    } else if (!hasHeygenAvatarId && !hasLiveAvatarAvatarId) {
+      recommendedAction = "missing_avatar_ids";
+    }
+
+    logDebug("INFO", "Diagnostics completed", {
+      userId: user.id,
       businessRole,
-      userClientCompanyId: user.clientCompanyId || null,
+      clientCompanyId,
+      companyExists,
+      avatarExists,
+      avatarStatus,
+      consentStatus,
+      recommendedAction,
+      hasGeminiKey,
+      hasHeygenKey,
+      hasLiveAvatarKey,
+      geminiConnected,
+      heygenConnected,
+      liveAvatarConnected,
+    });
+
+    return Response.json({
+      userId: user.id,
+      businessRole,
+      userRole,
       hasGeminiKey,
       geminiModel: hasGeminiKey ? geminiModel : null,
       hasHeygenKey,
       hasLiveAvatarKey,
-      clientCompanyFound,
-      avatarProfileFound,
+      geminiConnected,
+      geminiStatusCode,
+      heygenConnected,
+      heygenStatusCode,
+      liveAvatarConnected,
+      liveAvatarStatusCode,
+      companyExists,
+      companyName,
+      avatarExists,
+      avatarName,
       consentStatus,
       avatarStatus,
-      liveAvatarAvatarIdExists,
-      liveAvatarVoiceIdExists,
-      liveAvatarContextIdExists,
-      geminiTestOk,
-      heygenTestOk,
-      liveAvatarTestOk,
-      message: "Diagnostics completed",
+      hasHeygenAvatarId,
+      hasHeygenVoiceId,
+      hasLiveAvatarAvatarId,
+      hasLiveAvatarVoiceId,
+      hasLiveAvatarContextId,
+      recommendedAction,
     });
   } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    logDebug("ERROR", "Unexpected error", { message: error.message });
+    return Response.json({
+      error: error.message,
+      errorType: "unexpected_error",
+    }, { status: 500 });
   }
 });

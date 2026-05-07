@@ -1,5 +1,13 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.25";
 
+function logDebug(level, message, context = {}) {
+  const safe = { ...context };
+  delete safe.token;
+  delete safe.apiKey;
+  delete safe.secretKey;
+  console.log(`[${level}] ${message}`, JSON.stringify(safe));
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -8,6 +16,10 @@ Deno.serve(async (req) => {
     if (!user) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    logDebug("INFO", "startExecutiveAvatarSession started", {
+      userId: user.id,
+    });
 
     const { clientCompanyId, avatarProfileId, purpose, scenarioId, mode = "FULL" } = await req.json();
 
@@ -29,39 +41,66 @@ Deno.serve(async (req) => {
     // プロファイル取得
     const profile = await base44.asServiceRole.entities.ExecutiveAvatarProfile.get(avatarProfileId);
     if (!profile) {
-      return Response.json({ error: "ExecutiveAvatarProfile not found" }, { status: 404 });
+      logDebug("ERROR", "Avatar profile not found", { avatarProfileId });
+      return Response.json({
+        error: "Avatar not found",
+        errorType: "avatar_not_found",
+        message: "ExecutiveAvatarProfile が見つかりません。",
+      }, { status: 404 });
     }
 
+    logDebug("DEBUG", "Avatar profile loaded", {
+      avatarProfileId,
+      avatarName: profile.avatarName,
+      consentStatus: profile.consentStatus,
+      avatarStatus: profile.status,
+    });
+
     if (profile.consentStatus !== "approved") {
+      logDebug("WARN", "Consent not approved", { avatarProfileId, consentStatus: profile.consentStatus });
       return Response.json({
-        error: "Consent required",
-        message: "consentStatus = approved である必要があります。",
+        error: "Consent not approved",
+        errorType: "consent_not_approved",
+        message: "本人同意が承認されていないため、このアバターは利用できません。",
       }, { status: 403 });
     }
 
     if (profile.status !== "active") {
+      logDebug("WARN", "Avatar not active", { avatarProfileId, avatarStatus: profile.status });
       return Response.json({
         error: "Avatar not active",
-        message: "アバターがまだアクティブになっていません。registerAvatarProviderIds で ID を登録してください。",
+        errorType: "avatar_not_active",
+        message: "このアバターは現在有効化されていません。",
       }, { status: 400 });
     }
 
     // 必須ID確認
-    if (!profile.liveAvatarAvatarId || !profile.liveAvatarVoiceId || !profile.liveAvatarContextId) {
+    const hasHeygenIds = !!profile.heygenAvatarId && !!profile.heygenVoiceId;
+    const hasLiveAvatarIds = !!profile.liveAvatarAvatarId && !!profile.liveAvatarVoiceId && !!profile.liveAvatarContextId;
+
+    if (!hasHeygenIds && !hasLiveAvatarIds) {
+      logDebug("ERROR", "Missing all provider IDs", { avatarProfileId });
       return Response.json({
-        error: "Missing avatar IDs",
-        message: "LiveAvatar Avatar ID, Voice ID, Context ID が揃っていません。",
+        error: "Missing provider IDs",
+        errorType: "missing_avatar_ids",
+        message: "avatar_id、voice_id、context_id が不足しています。アバターID設定画面で登録してください。",
       }, { status: 400 });
     }
 
     const liveAvatarKey = Deno.env.get("LIVEAVATAR_API_KEY");
-    const heygenKey = Deno.env.get("HEYGEN_API_KEY");
+    const geminiKey = Deno.env.get("GEMINI_API_KEY");
 
     // LiveAvatar セッション作成試行
     let sessionData = null;
     let provider = null;
+    let fallbackReason = null;
 
-    if (liveAvatarKey) {
+    if (liveAvatarKey && hasLiveAvatarIds) {
+      logDebug("DEBUG", "Attempting LiveAvatar session", {
+        avatarProfileId,
+        avatarId: profile.liveAvatarAvatarId ? "***" : undefined,
+      });
+
       try {
         const laRes = await fetch("https://api.liveavatar.com/sessions", {
           method: "POST",
@@ -80,25 +119,53 @@ Deno.serve(async (req) => {
         if (laRes.ok) {
           sessionData = await laRes.json();
           provider = "liveavatar";
-        } else if (laRes.status === 401 || laRes.status === 403) {
-          // 認証失敗：HeyGenフォールバック または TEXT_FALLBACK
+          logDebug("INFO", "LiveAvatar session created successfully", {
+            avatarProfileId,
+            sessionId: sessionData.session_id || sessionData.id,
+          });
+        } else {
+          logDebug("WARN", "LiveAvatar session failed", {
+            avatarProfileId,
+            statusCode: laRes.status,
+          });
+          fallbackReason = `liveavatar_api_error_${laRes.status}`;
           provider = "text_fallback";
         }
-      } catch (_e) {
+      } catch (e) {
+        logDebug("WARN", "LiveAvatar session error", {
+          avatarProfileId,
+          error: e.message,
+        });
+        fallbackReason = "liveavatar_connection_failed";
         provider = "text_fallback";
       }
-    } else if (heygenKey) {
-      // LiveAvatar未設定の場合もフォールバック
-      provider = "text_fallback";
     } else {
+      if (!liveAvatarKey) {
+        logDebug("DEBUG", "LiveAvatar key not set, using TEXT_FALLBACK", {
+          avatarProfileId,
+        });
+      }
+      fallbackReason = "liveavatar_not_configured";
+      provider = "text_fallback";
+    }
+
+    // Gemini RAG 確認
+    if (!geminiKey && provider === "text_fallback") {
+      logDebug("ERROR", "No Gemini key for fallback", { avatarProfileId });
       return Response.json({
-        error: "No API configured",
-        message: "LiveAvatar または HeyGen API キーが設定されていません。",
+        error: "Missing Gemini API",
+        errorType: "missing_gemini_key",
+        message: "テキストモードに必要な GEMINI_API_KEY が設定されていません。",
       }, { status: 500 });
     }
 
     // フォールバック: TEXT_FALLBACK モード（Gemini + CompanyBrain RAG）
-    if (!sessionData || provider === "text_fallback") {
+    if (provider === "text_fallback") {
+      logDebug("INFO", "Creating TEXT_FALLBACK session", {
+        avatarProfileId,
+        fallbackReason,
+      });
+
       const session = await base44.asServiceRole.entities.AvatarConversationSession.create({
         clientCompanyId,
         avatarProfileId,
@@ -110,11 +177,34 @@ Deno.serve(async (req) => {
         status: "active",
       });
 
+      // UsageRecord に記録
+      await base44.asServiceRole.entities.UsageRecord.create({
+        clientCompanyId,
+        usageType: "avatar_session",
+        provider: "gemini_text",
+        units: 1,
+        unitName: "session",
+        estimatedCostUsd: 0,
+        metadata: JSON.stringify({
+          sessionId: session.id,
+          avatarProfileId,
+          mode: "TEXT_FALLBACK",
+          fallbackReason,
+        }),
+      });
+
       return Response.json({
         success: true,
-        session,
-        message: "リアルタイムアバター接続は未設定です。テキスト相談モードで起動しました。",
+        session: {
+          id: session.id,
+          mode: session.mode,
+          provider: session.provider,
+        },
+        message: fallbackReason
+          ? "リアルタイムアバター接続に失敗しました。テキスト相談モードで起動しました。"
+          : "テキスト相談モードで起動しました。",
         fallback: true,
+        fallbackReason,
       });
     }
 
@@ -134,6 +224,27 @@ Deno.serve(async (req) => {
       status: "active",
     });
 
+    // UsageRecord に記録
+    await base44.asServiceRole.entities.UsageRecord.create({
+      clientCompanyId,
+      usageType: "avatar_session",
+      provider: "liveavatar",
+      units: 1,
+      unitName: "session",
+      estimatedCostUsd: 0,
+      metadata: JSON.stringify({
+        sessionId: session.id,
+        avatarProfileId,
+        mode,
+      }),
+    });
+
+    logDebug("INFO", "ExecutiveAvatar session started successfully", {
+      sessionId: session.id,
+      avatarProfileId,
+      mode,
+    });
+
     return Response.json({
       success: true,
       session: {
@@ -148,6 +259,12 @@ Deno.serve(async (req) => {
       message: "ExecutiveAvatarセッションが開始されました。",
     });
   } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    logDebug("ERROR", "Unexpected error", {
+      error: error.message,
+    });
+    return Response.json({
+      error: error.message,
+      errorType: "unexpected_error",
+    }, { status: 500 });
   }
 });
