@@ -69,7 +69,6 @@ export default function Sidebar() {
         {!collapsed && (
           <div className="overflow-hidden">
             <p className="text-sm font-bold text-sidebar-foreground tracking-tight leading-tight">CompanyBrain AI</p>
-            <p className="text-[10px] text-sidebar-foreground/50 leading-tight">SOFTDOING株式会社</p>
           </div>
         )}
       </div>
@@ -106,6 +105,19 @@ export default function Sidebar() {
           </div>
         ))}
       </nav>
+
+      {/* Powered by */}
+      {!collapsed && (
+        <div className="px-5 py-4 border-t border-sidebar-border">
+          <p className="text-[10px] text-sidebar-foreground/30 mb-1.5 tracking-wide">Powered by</p>
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 rounded bg-gradient-to-br from-primary to-accent flex items-center justify-center shrink-0">
+              <span className="text-[8px] font-black text-white leading-none">SD</span>
+            </div>
+            <span className="text-[11px] font-semibold text-sidebar-foreground/50 tracking-tight">SOFTDOING株式会社</span>
+          </div>
+        </div>
+      )}
 
       {/* Collapse toggle */}
       <button
