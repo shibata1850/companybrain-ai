@@ -1,0 +1,71 @@
+{
+  "name": "Knowledge",
+  "type": "object",
+  "properties": {
+    "clientCompanyId": {
+      "type": "string",
+      "description": "\u4f01\u696d\u8b58\u5225ID"
+    },
+    "title": {
+      "type": "string",
+      "description": "\u8cc7\u6599\u30bf\u30a4\u30c8\u30eb"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "pdf",
+        "image",
+        "csv",
+        "text",
+        "faq",
+        "manual"
+      ],
+      "description": "\u8cc7\u6599\u30bf\u30a4\u30d7"
+    },
+    "content": {
+      "type": "string",
+      "description": "\u62bd\u51fa\u30c6\u30ad\u30b9\u30c8\u30fb\u5185\u5bb9"
+    },
+    "summary": {
+      "type": "string",
+      "description": "\u8981\u7d04"
+    },
+    "fileUrl": {
+      "type": "string",
+      "description": "\u30d5\u30a1\u30a4\u30ebURL"
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "external",
+        "internal",
+        "executive",
+        "all"
+      ],
+      "default": "all",
+      "description": "\u516c\u958b\u7bc4\u56f2"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "approved",
+        "rejected"
+      ],
+      "default": "pending",
+      "description": "\u627f\u8a8d\u72b6\u614b"
+    },
+    "tags": {
+      "type": "string",
+      "description": "\u30bf\u30b0\uff08\u30ab\u30f3\u30de\u533a\u5207\u308a\uff09"
+    },
+    "extractedFaq": {
+      "type": "string",
+      "description": "\u62bd\u51faFAQ\uff08JSON\u5f62\u5f0f\uff09"
+    }
+  },
+  "required": [
+    "title",
+    "clientCompanyId"
+  ]
+}

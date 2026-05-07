@@ -1,0 +1,49 @@
+{
+  "name": "UsagePlan",
+  "type": "object",
+  "properties": {
+    "clientCompanyId": {
+      "type": "string",
+      "description": "\u4f01\u696d\u8b58\u5225ID"
+    },
+    "planName": {
+      "type": "string",
+      "enum": [
+        "free",
+        "starter",
+        "professional",
+        "enterprise"
+      ],
+      "default": "free",
+      "description": "\u30d7\u30e9\u30f3\u540d"
+    },
+    "monthlyQueries": {
+      "type": "number",
+      "default": 0,
+      "description": "\u6708\u9593\u30af\u30a8\u30ea\u6570"
+    },
+    "monthlyQueryLimit": {
+      "type": "number",
+      "default": 100,
+      "description": "\u6708\u9593\u30af\u30a8\u30ea\u4e0a\u9650"
+    },
+    "monthlyVideos": {
+      "type": "number",
+      "default": 0,
+      "description": "\u6708\u9593\u52d5\u753b\u751f\u6210\u6570"
+    },
+    "monthlyVideoLimit": {
+      "type": "number",
+      "default": 5,
+      "description": "\u6708\u9593\u52d5\u753b\u4e0a\u9650"
+    },
+    "billingCycleStart": {
+      "type": "string",
+      "format": "date",
+      "description": "\u8acb\u6c42\u30b5\u30a4\u30af\u30eb\u958b\u59cb\u65e5"
+    }
+  },
+  "required": [
+    "clientCompanyId"
+  ]
+}

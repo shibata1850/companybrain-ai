@@ -1,0 +1,44 @@
+{
+  "name": "Video",
+  "type": "object",
+  "properties": {
+    "clientCompanyId": {
+      "type": "string",
+      "description": "\u4f01\u696d\u8b58\u5225ID"
+    },
+    "title": {
+      "type": "string",
+      "description": "\u52d5\u753b\u30bf\u30a4\u30c8\u30eb"
+    },
+    "scriptId": {
+      "type": "string",
+      "description": "\u5143\u53f0\u672cID"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "generating",
+        "completed",
+        "failed"
+      ],
+      "default": "generating",
+      "description": "\u751f\u6210\u30b9\u30c6\u30fc\u30bf\u30b9"
+    },
+    "videoUrl": {
+      "type": "string",
+      "description": "\u52d5\u753bURL"
+    },
+    "thumbnailUrl": {
+      "type": "string",
+      "description": "\u30b5\u30e0\u30cd\u30a4\u30ebURL"
+    },
+    "duration": {
+      "type": "string",
+      "description": "\u52d5\u753b\u306e\u9577\u3055"
+    }
+  },
+  "required": [
+    "title",
+    "clientCompanyId"
+  ]
+}
