@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Building2, Heart, FileText, FolderOpen,
   MessageSquare, Globe, Users, Crown, FileVideo, Film,
   BarChart3, CreditCard, Settings, ChevronLeft, ChevronRight,
-  Brain, ScrollText, ClipboardList, Shield
+  Brain, ScrollText, ClipboardList, Shield, Zap
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -42,24 +42,20 @@ const navGroups = [
     ]
   },
   {
-    label: "ExecutiveBrain Avatar",
-    items: [
-      { icon: Brain, label: "アバター管理", path: "/avatar-management" },
-      { icon: Crown, label: "アバター相談室", path: "/avatar-consultation" },
-      { icon: Users, label: "新人研修", path: "/avatar-training" },
-      { icon: FileText, label: "仕事レビュー", path: "/work-review" },
-      { icon: ScrollText, label: "セッションログ", path: "/session-logs" },
-      { icon: BarChart3, label: "利用状況", path: "/avatar-usage" },
-    ]
-  },
-  {
     label: "管理",
     items: [
       { icon: ClipboardList, label: "回答ログ", path: "/answer-logs" },
       { icon: BarChart3, label: "経営指標", path: "/executive-dashboard" },
       { icon: CreditCard, label: "料金プラン・利用状況", path: "/usage-and-billing" },
+      { icon: Zap, label: "ExecutiveBrain診断", path: "/executive-brain-diagnostics" },
       { icon: Settings, label: "設定", path: "/settings" },
       { icon: Shield, label: "ユーザー設定", path: "/admin-user-settings" },
+    ]
+  },
+  {
+    label: "デモ・営業",
+    items: [
+      { icon: Brain, label: "ExecutiveBrainデモ", path: "/executive-brain-demo" },
     ]
   }
 ];

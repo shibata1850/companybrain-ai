@@ -30,6 +30,8 @@ import WorkReviewPage from '@/pages/WorkReviewPage';
 import AvatarContextSync from '@/pages/AvatarContextSync';
 import SessionLogs from '@/pages/SessionLogs';
 import AvatarUsageStats from '@/pages/AvatarUsageStats';
+import ExecutiveBrainDemo from '@/pages/ExecutiveBrainDemo';
+import ExecutiveBrainPreLaunchTest from '@/pages/ExecutiveBrainPreLaunchTest';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -77,6 +79,8 @@ const AuthenticatedApp = () => {
         <Route path="/avatar-context/:avatarId" element={<AvatarContextSync />} />
         <Route path="/session-logs" element={<SessionLogs />} />
         <Route path="/avatar-usage" element={<AvatarUsageStats />} />
+        <Route path="/executive-brain-demo" element={<ExecutiveBrainDemo />} />
+        <Route path="/executive-brain-pre-launch-test" element={<ExecutiveBrainPreLaunchTest />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
