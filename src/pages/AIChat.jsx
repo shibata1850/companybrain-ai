@@ -15,7 +15,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import PageHeader from "@/components/shared/PageHeader";
 
-const CLIENT_ID = "demo-company-001";
+const CLIENT_ID = "69fc3d9af68187d823c1a41b";
 
 const MODES = [
   { value: "public",     label: "社外向けAI",   color: "bg-blue-500/10 text-blue-600 border-blue-500/30" },
