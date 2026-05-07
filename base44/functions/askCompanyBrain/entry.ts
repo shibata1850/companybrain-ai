@@ -4,6 +4,22 @@ function json(data, status = 200) {
   return Response.json(data, { status });
 }
 
+function resolveBusinessRole(user) {
+  const businessRole = String(user.businessRole || "").trim();
+
+  if (businessRole) {
+    return businessRole;
+  }
+
+  const base44Role = String(user.role || "").toLowerCase().trim();
+
+  if (base44Role === "admin") {
+    return "softdoing_admin";
+  }
+
+  return "viewer";
+}
+
 function normalizeText(value) {
   return String(value || "")
     .toLowerCase()
@@ -132,7 +148,7 @@ Deno.serve(async (req) => {
       return json({ error: "Invalid channel" }, 400);
     }
 
-    const role = String(user.businessRole || user.role || "viewer");
+    const role = resolveBusinessRole(user);
     const userCompanyId = String(user.clientCompanyId || "");
 
     // テナント分離：softdoing_admin または Base44 admin以外は自社データのみ
