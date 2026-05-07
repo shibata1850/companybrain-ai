@@ -148,6 +148,36 @@ Deno.serve(async (req) => {
       return json({ error: "Invalid channel" }, 400);
     }
 
+    // 利用制限チェック
+    const PLAN_LIMITS = {
+      Light: { monthlyAnswers: 1000, videoMinutes: 0 },
+      Standard: { monthlyAnswers: 5000, videoMinutes: 10 },
+      Professional: { monthlyAnswers: 20000, videoMinutes: 30 },
+      Enterprise: { monthlyAnswers: null, videoMinutes: null },
+    };
+
+    const company = await base44.asServiceRole.entities.ClientCompany.get(clientCompanyId);
+    if (!company) {
+      return json({ error: "ClientCompany not found" }, 404);
+    }
+
+    const planName = company.planName || "Light";
+    const limits = PLAN_LIMITS[planName] || PLAN_LIMITS.Light;
+    const currentMonth = new Date().toISOString().slice(0, 7);
+
+    // 当月のAI回答数をカウント
+    const monthlyConversations = await base44.asServiceRole.entities.ConversationLog.filter({
+      clientCompanyId,
+    }).then(c => c.filter(x => x.created_date?.startsWith(currentMonth)));
+
+    if (limits.monthlyAnswers !== null && monthlyConversations.length >= limits.monthlyAnswers) {
+      return json({
+        error: "Usage limit exceeded",
+        message: `月間AI回答数の上限（${limits.monthlyAnswers}回答）に達しています。`,
+        limitExceeded: true,
+      }, 429);
+    }
+
     const role = resolveBusinessRole(user);
     const userCompanyId = String(user.clientCompanyId || "");
 
