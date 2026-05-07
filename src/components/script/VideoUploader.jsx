@@ -1,43 +1,50 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
-import { Film, Upload, Loader2, Play, RefreshCw, Clapperboard } from "lucide-react";
+import { Upload, Loader2, Play, Video, CheckCircle2 } from "lucide-react";
 
-const ACCEPTED = ".mp4,.mov,.webm";
+const ACCEPT = ".mp4,.mov,.webm";
 
-export default function VideoUploader({ savedProject, onVideoUploaded, onLipsync }) {
+export default function VideoUploader({ savedProject, onVideoUploaded }) {
   const { toast } = useToast();
   const fileRef = useRef(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [uploading, setUploading] = useState(false);
 
-  const hasAudio = savedProject?.status === "audio_ready" || savedProject?.audioFileUri;
-  const hasVideo = !!savedProject?.videoFileUri;
-  const canLipsync = hasAudio && hasVideo;
+  // 既存のvideoFileUriがあれば署名付きURLを取得
+  useEffect(() => {
+    if (savedProject?.videoFileUri && !previewUrl) {
+      base44.integrations.Core.CreateFileSignedUrl({ file_uri: savedProject.videoFileUri })
+        .then(({ signed_url }) => setPreviewUrl(signed_url))
+        .catch(() => {});
+    }
+  }, [savedProject?.videoFileUri]);
 
   const uploadMutation = useMutation({
     mutationFn: async (file) => {
-      // 1. Upload private file
-      const uploadRes = await base44.integrations.Core.UploadPrivateFile({ file });
-      const fileUri = uploadRes.file_uri;
-
-      // 2. Create signed URL for preview
-      const signedRes = await base44.integrations.Core.CreateFileSignedUrl({ file_uri: fileUri, expires_in: 3600 });
-
-      // 3. Update VideoProject
-      await base44.entities.VideoProject.update(savedProject.id, { videoFileUri: fileUri });
-
-      return { fileUri, signedUrl: signedRes.signed_url };
+      setUploading(true);
+      // 1. プライベートアップロード
+      const { file_uri } = await base44.integrations.Core.UploadPrivateFile({ file });
+      // 2. VideoProject更新
+      const updated = await base44.entities.VideoProject.update(savedProject.id, {
+        videoFileUri: file_uri,
+      });
+      // 3. 署名付きURL取得
+      const { signed_url } = await base44.integrations.Core.CreateFileSignedUrl({ file_uri });
+      return { updated, signed_url, file_uri };
     },
-    onSuccess: ({ signedUrl, fileUri }) => {
-      setPreviewUrl(signedUrl);
-      onVideoUploaded?.({ videoFileUri: fileUri });
-      toast({ title: "アップロード完了", description: "動画素材を保存しました。" });
+    onSuccess: ({ updated, signed_url }) => {
+      setPreviewUrl(signed_url);
+      setUploading(false);
+      onVideoUploaded?.(updated);
+      toast({ title: "動画アップロード完了", description: "動画ファイルを保存しました。" });
     },
     onError: (err) => {
+      setUploading(false);
       toast({ title: "エラー", description: err.message, variant: "destructive" });
     },
   });
@@ -48,49 +55,34 @@ export default function VideoUploader({ savedProject, onVideoUploaded, onLipsync
     uploadMutation.mutate(file);
   };
 
-  const handlePreview = async () => {
-    if (!savedProject?.videoFileUri) return;
-    const signedRes = await base44.integrations.Core.CreateFileSignedUrl({
-      file_uri: savedProject.videoFileUri,
-      expires_in: 3600,
-    });
-    setPreviewUrl(signedRes.signed_url);
-  };
+  const isUploaded = !!savedProject?.videoFileUri;
 
   return (
     <Card className="border-violet-500/20 bg-violet-500/5">
       <CardContent className="p-4 space-y-4">
         <div className="flex items-center gap-2">
-          <Film className="w-4 h-4 text-violet-600" />
+          <Video className="w-4 h-4 text-violet-600" />
           <p className="text-sm font-semibold text-violet-700">動画素材アップロード</p>
-          {hasVideo && (
-            <Badge variant="outline" className="text-[10px] border-violet-500/30 text-violet-600 ml-auto">
-              アップロード済み
+          {isUploaded && (
+            <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-600 ml-auto gap-1">
+              <CheckCircle2 className="w-2.5 h-2.5" /> アップロード済み
             </Badge>
           )}
         </div>
 
         <p className="text-xs text-muted-foreground">
-          自撮り動画またはアバター用動画をアップロードしてください。（MP4 / MOV / WebM）
+          自撮り動画またはアバター用素材（mp4 / mov / webm）をアップロードしてください。
         </p>
 
-        {/* 動画プレビュー */}
-        {(previewUrl || hasVideo) && (
+        {/* プレビュー */}
+        {previewUrl && (
           <div className="space-y-1.5">
-            {previewUrl ? (
-              <video
-                controls
-                className="w-full rounded-lg border border-border/50 max-h-48 bg-black"
-                src={previewUrl}
-              />
-            ) : (
-              <button
-                className="w-full flex items-center justify-center gap-2 p-4 rounded-lg border border-dashed border-violet-500/30 text-violet-600 text-xs hover:bg-violet-500/5 transition-colors"
-                onClick={handlePreview}
-              >
-                <Play className="w-4 h-4" /> 動画をプレビュー
-              </button>
-            )}
+            <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+              <Play className="w-3 h-3" /> 動画プレビュー
+            </p>
+            <video controls className="w-full rounded-lg max-h-48 bg-black" src={previewUrl}>
+              お使いのブラウザは動画再生に対応していません。
+            </video>
           </div>
         )}
 
@@ -98,33 +90,20 @@ export default function VideoUploader({ savedProject, onVideoUploaded, onLipsync
         <input
           ref={fileRef}
           type="file"
-          accept={ACCEPTED}
+          accept={ACCEPT}
           className="hidden"
           onChange={handleFileChange}
         />
         <Button
-          variant="outline"
-          className="w-full gap-2 border-violet-500/30 text-violet-700 hover:bg-violet-500/10"
+          className="w-full gap-2 bg-violet-600 hover:bg-violet-700 text-white"
           onClick={() => fileRef.current?.click()}
-          disabled={uploadMutation.isPending}
+          disabled={uploading || uploadMutation.isPending}
         >
-          {uploadMutation.isPending
+          {uploading || uploadMutation.isPending
             ? <><Loader2 className="w-4 h-4 animate-spin" /> アップロード中...</>
-            : hasVideo
-              ? <><RefreshCw className="w-4 h-4" /> 動画を差し替える</>
-              : <><Upload className="w-4 h-4" /> 動画素材をアップロード</>
+            : <><Upload className="w-4 h-4" /> {isUploaded ? "動画を差し替える" : "動画をアップロード"}</>
           }
         </Button>
-
-        {/* リップシンク生成ボタン */}
-        {canLipsync && (
-          <Button
-            className="w-full gap-2 bg-violet-600 hover:bg-violet-700 text-white"
-            onClick={onLipsync}
-          >
-            <Clapperboard className="w-4 h-4" /> リップシンク生成
-          </Button>
-        )}
       </CardContent>
     </Card>
   );
