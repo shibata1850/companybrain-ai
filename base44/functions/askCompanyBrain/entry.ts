@@ -135,8 +135,9 @@ Deno.serve(async (req) => {
     const role = String(user.businessRole || user.role || "viewer");
     const userCompanyId = String(user.clientCompanyId || "");
 
-    // テナント分離：softdoing_admin以外は自社データのみ
-    if (role !== "softdoing_admin") {
+    // テナント分離：softdoing_admin または platform admin以外は自社データのみ
+    const isGlobalAdmin = role === "softdoing_admin" || user.role === "admin";
+    if (!isGlobalAdmin) {
       if (!userCompanyId) {
         return json({ error: "User clientCompanyId is missing" }, 403);
       }
