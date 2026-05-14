@@ -12,13 +12,14 @@ const navGroups = [
   {
     label: "概要",
     items: [
-      { icon: LayoutDashboard, label: "ダッシュボード", path: "/" },
+      { icon: Brain, label: "Brain Studio", path: "/" },
+      { icon: LayoutDashboard, label: "ダッシュボード", path: "/dashboard" },
     ]
   },
   {
     label: "Brain Builder",
     items: [
-      { icon: Brain, label: "Brain 作成", path: "/brain-builder" },
+      { icon: Brain, label: "Brain 一覧・登録", path: "/brain-builder" },
     ]
   },
   {
