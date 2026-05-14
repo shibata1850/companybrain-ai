@@ -14,8 +14,7 @@ import {
   ArrowLeft, ShieldCheck, Upload, Video, Mic, FileText,
   Check, AlertCircle, X, Loader2, ArrowRight
 } from "lucide-react";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const ASSET_META = {
   video: { label: "本人動画", icon: Video, mime: "video/*", description: "顔・口元が見える 30秒以上の動画。HeyGen Digital Twin 等のアバター作成に使用します。" },
@@ -80,6 +79,7 @@ function AssetUploadCard({ assetType, existing, onUpload, isUploading }) {
 }
 
 export default function BrainSourceConsentUpload() {
+  const CLIENT_ID = useClientCompanyId();
   const { personId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();

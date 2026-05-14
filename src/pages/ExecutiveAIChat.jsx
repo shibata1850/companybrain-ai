@@ -12,8 +12,7 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import PageHeader from "@/components/shared/PageHeader";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const ALLOWED_ROLES = ["softdoing_admin", "client_admin", "executive"];
 
@@ -85,6 +84,7 @@ function ExecutiveAnswerCard({ answer }) {
 }
 
 export default function ExecutiveAIChat() {
+  const CLIENT_ID = useClientCompanyId();
   const { toast } = useToast();
   const scrollRef = useRef(null);
   const [input, setInput] = useState("");

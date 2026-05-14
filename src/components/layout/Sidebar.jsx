@@ -2,9 +2,9 @@ import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Building2, Heart, FileText, FolderOpen,
-  MessageSquare, Globe, Users, Crown, FileVideo, Film,
-  BarChart3, CreditCard, Settings, ChevronLeft, ChevronRight,
-  Brain, ScrollText, ClipboardList, Shield
+  Globe, Users, Crown,
+  BarChart3, CreditCard, ChevronLeft, ChevronRight,
+  Brain, ScrollText, ClipboardList, Shield, Activity
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -43,8 +43,6 @@ const navGroups = [
     label: "動画生成",
     items: [
       { icon: ScrollText, label: "台本生成", path: "/scripts" },
-      { icon: Film, label: "動画スタジオ", path: "/video-studio" },
-      { icon: FileVideo, label: "生成動画一覧", path: "/videos" },
     ]
   },
   {
@@ -64,8 +62,9 @@ const navGroups = [
       { icon: ClipboardList, label: "回答ログ", path: "/answer-logs" },
       { icon: BarChart3, label: "経営指標", path: "/executive-dashboard" },
       { icon: CreditCard, label: "料金プラン・利用状況", path: "/usage-and-billing" },
+      { icon: CreditCard, label: "料金プラン比較", path: "/pricing-plans" },
       { icon: Brain, label: "ExecutiveBrain公開前テスト", path: "/executive-brain-pre-launch-test" },
-      { icon: Settings, label: "設定", path: "/settings" },
+      { icon: Activity, label: "ExecutiveBrain診断", path: "/executive-brain-diagnostics" },
       { icon: Shield, label: "ユーザー設定", path: "/admin-user-settings" },
     ]
   }

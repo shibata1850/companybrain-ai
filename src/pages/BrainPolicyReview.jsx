@@ -13,8 +13,7 @@ import {
   ArrowLeft, ClipboardCheck, Check, X,
   ShieldCheck, FileCheck2
 } from "lucide-react";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const CATEGORY_LABEL = {
   decisionPolicy: "判断基準",
@@ -157,6 +156,7 @@ function CandidateCard({ candidate, transcript, onApprove, onReject, processing,
 }
 
 export default function BrainPolicyReview() {
+  const CLIENT_ID = useClientCompanyId();
   const { personId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();

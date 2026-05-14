@@ -11,8 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import { Loader2, Save, Zap, Stethoscope, MessageSquare } from "lucide-react";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const CREATION_MODES = [
   {
@@ -38,6 +37,7 @@ const CREATION_MODES = [
 ];
 
 export default function AvatarCreationSetup() {
+  const CLIENT_ID = useClientCompanyId();
   const { avatarId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();

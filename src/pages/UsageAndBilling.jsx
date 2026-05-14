@@ -5,8 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Check, Lock } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const PLAN_LIMITS = {
   Light: {
@@ -75,6 +74,7 @@ function UsageBar({ current, limit, label }) {
 }
 
 export default function UsageAndBilling() {
+  const CLIENT_ID = useClientCompanyId();
   const currentMonth = new Date().toISOString().slice(0, 7);
 
   const { data: company } = useQuery({

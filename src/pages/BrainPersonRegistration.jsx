@@ -11,8 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
 import { Brain, ArrowLeft, Save, ShieldCheck } from "lucide-react";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const STRENGTH_PRESETS = [
   "判断基準", "価格交渉", "クレーム対応", "人材育成", "品質管理",
@@ -33,6 +32,7 @@ const ROLE_OPTIONS = [
 ];
 
 export default function BrainPersonRegistration() {
+  const CLIENT_ID = useClientCompanyId();
   const { personId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();

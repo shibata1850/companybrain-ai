@@ -32,6 +32,8 @@ import SessionLogs from '@/pages/SessionLogs';
 import AvatarUsageStats from '@/pages/AvatarUsageStats';
 import ExecutiveBrainDemo from '@/pages/ExecutiveBrainDemo';
 import ExecutiveBrainPreLaunchTest from '@/pages/ExecutiveBrainPreLaunchTest';
+import ExecutiveBrainDiagnostics from '@/pages/ExecutiveBrainDiagnostics';
+import PricingPlans from '@/pages/PricingPlans';
 // Brain Builder (Phase 1)
 import BrainBuilderHome from '@/pages/BrainBuilderHome';
 import BrainPersonRegistration from '@/pages/BrainPersonRegistration';
@@ -88,6 +90,8 @@ const AuthenticatedApp = () => {
         <Route path="/avatar-usage" element={<AvatarUsageStats />} />
         <Route path="/executive-brain-demo" element={<ExecutiveBrainDemo />} />
         <Route path="/executive-brain-pre-launch-test" element={<ExecutiveBrainPreLaunchTest />} />
+        <Route path="/executive-brain-diagnostics" element={<ExecutiveBrainDiagnostics />} />
+        <Route path="/pricing-plans" element={<PricingPlans />} />
         {/* Brain Builder (Phase 1) */}
         <Route path="/brain-builder" element={<BrainBuilderHome />} />
         <Route path="/brain-builder/persons/new" element={<BrainPersonRegistration />} />

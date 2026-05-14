@@ -5,8 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, AlertCircle } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const PLAN_LIMITS = {
   Light: {
@@ -36,6 +35,7 @@ const PLAN_LIMITS = {
 };
 
 export default function AvatarUsageStats() {
+  const CLIENT_ID = useClientCompanyId();
   const { data: company } = useQuery({
     queryKey: ["company", CLIENT_ID],
     queryFn: () => base44.entities.ClientCompany.get(CLIENT_ID),

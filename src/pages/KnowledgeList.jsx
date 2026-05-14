@@ -9,8 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 import { CheckCircle, XCircle, Search, FileText, Globe, Users, Crown, Layers } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
-
-const CLIENT_ID = "demo-company-001";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const statusMap = {
   pending: { label: "承認待ち", className: "bg-amber-500/10 text-amber-600 border-amber-500/20" },
@@ -26,6 +25,7 @@ const scopeMap = {
 };
 
 export default function KnowledgeList() {
+  const CLIENT_ID = useClientCompanyId();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");

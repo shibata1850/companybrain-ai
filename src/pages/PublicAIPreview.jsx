@@ -11,10 +11,10 @@ import {
   MessageSquare, AlertCircle, RotateCcw, User, ChevronDown, ChevronUp
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 export default function PublicAIPreview() {
+  const CLIENT_ID = useClientCompanyId();
   const { toast } = useToast();
   const scrollRef = useRef(null);
   const [input, setInput] = useState("");

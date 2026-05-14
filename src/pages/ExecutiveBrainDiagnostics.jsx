@@ -10,8 +10,7 @@ import {
   RefreshCw, ChevronDown, ChevronUp
 } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const StatusIcon = ({ status }) => {
   if (status === "ok") return <CheckCircle2 className="w-5 h-5 text-emerald-500" />;
@@ -34,6 +33,7 @@ const StatusBadge = ({ status }) => {
 };
 
 export default function ExecutiveBrainDiagnostics() {
+  const CLIENT_ID = useClientCompanyId();
   const { toast } = useToast();
   const [expandedSection, setExpandedSection] = useState(null);
 

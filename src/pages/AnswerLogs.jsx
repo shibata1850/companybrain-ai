@@ -10,8 +10,7 @@ import {
 } from "@/components/ui/select";
 import { ClipboardList, Search, X, Download } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const CHANNELS = [
   { value: "all", label: "全チャネル" },
@@ -36,6 +35,7 @@ const channelColors = {
 };
 
 export default function AnswerLogs() {
+  const CLIENT_ID = useClientCompanyId();
   const [keyword, setKeyword] = useState("");
   const [selectedChannel, setSelectedChannel] = useState("all");
   const [dateFrom, setDateFrom] = useState("");

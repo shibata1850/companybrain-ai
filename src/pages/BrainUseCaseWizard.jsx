@@ -10,8 +10,7 @@ import {
   GraduationCap, Briefcase, Users, Crown, Repeat, HardHat,
   ScrollText, FileSearch, UserPlus, Compass, AlertCircle
 } from "lucide-react";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const USE_CASE_DEFS = [
   { type: "new_employee_training", label: "新人研修", icon: GraduationCap, color: "from-cyan-500 to-blue-600", description: "新人がアバターに「どう判断する？」を聞ける研修体験を作ります。" },
@@ -27,6 +26,7 @@ const USE_CASE_DEFS = [
 ];
 
 export default function BrainUseCaseWizard() {
+  const CLIENT_ID = useClientCompanyId();
   const { personId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();

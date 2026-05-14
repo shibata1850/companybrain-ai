@@ -11,8 +11,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Upload, FileText, Sparkles, Loader2, X, CheckCircle2, AlertCircle } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
 import ExtractionPreview from "@/components/knowledge/ExtractionPreview";
-
-const CLIENT_ID = "demo-company-001";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const CATEGORY_OPTIONS = [
   { value: "company", label: "会社情報" },
@@ -58,6 +57,7 @@ const initialForm = {
 };
 
 export default function KnowledgeUpload() {
+  const CLIENT_ID = useClientCompanyId();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [form, setForm] = useState(initialForm);

@@ -10,8 +10,7 @@ import {
   Brain, Plus, UserCircle2, ShieldCheck, Sparkles,
   MessageCircle, ClipboardCheck, ArrowRight, AlertCircle
 } from "lucide-react";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const STEPS = [
   { key: "person", label: "人物登録", icon: UserCircle2 },
@@ -136,6 +135,7 @@ function PersonCard({ person, allConsents, allUseCases, allSessions, allCandidat
 }
 
 export default function BrainBuilderHome() {
+  const CLIENT_ID = useClientCompanyId();
   const { data: persons = [], isLoading } = useQuery({
     queryKey: ["brain-persons", CLIENT_ID],
     queryFn: () => base44.entities.BrainPerson.filter({ clientCompanyId: CLIENT_ID }),

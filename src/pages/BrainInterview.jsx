@@ -10,8 +10,7 @@ import {
   ArrowLeft, MessageCircle, Sparkles, AlertCircle,
   CheckCircle2, Loader2, ArrowRight, Brain
 } from "lucide-react";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const QUESTION_TEMPLATES = {
   new_employee_training: [
@@ -91,6 +90,7 @@ ${person.valuesNote || "未指定"}
 }
 
 export default function BrainInterview() {
+  const CLIENT_ID = useClientCompanyId();
   const { personId, sessionId: paramSessionId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();

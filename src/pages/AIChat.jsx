@@ -14,8 +14,7 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import PageHeader from "@/components/shared/PageHeader";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const MODES = [
   { value: "public",     label: "社外向けAI",   color: "bg-blue-500/10 text-blue-600 border-blue-500/30" },
@@ -36,6 +35,7 @@ const CATEGORIES = [
 ];
 
 export default function AIChat() {
+  const CLIENT_ID = useClientCompanyId();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const scrollRef = useRef(null);

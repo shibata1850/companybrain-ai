@@ -12,8 +12,7 @@ import {
   Edit3, Save, X, CheckCircle2, Clock, BarChart3, MessageSquare
 } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 function KPICard({ label, value, unit = "", icon: IconComponent }) {
   return (
@@ -28,6 +27,7 @@ function KPICard({ label, value, unit = "", icon: IconComponent }) {
 }
 
 export default function ExecutiveDashboard() {
+  const CLIENT_ID = useClientCompanyId();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const currentMonth = new Date().toISOString().slice(0, 7);

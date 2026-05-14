@@ -9,8 +9,7 @@ import {
   AlertCircle, CheckCircle2, Play, Zap, Users, FileText,
   Brain, ArrowRight, Loader2, ChevronDown, ChevronUp, ExternalLink,
 } from "lucide-react";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const DemoStep = ({ number, title, description, isActive, isCompleted, onClick, children }) => {
   const isExpanded = isActive && children;
@@ -57,6 +56,7 @@ const DemoStep = ({ number, title, description, isActive, isCompleted, onClick, 
 };
 
 export default function ExecutiveBrainDemo() {
+  const CLIENT_ID = useClientCompanyId();
   const { toast } = useToast();
   const [activeStep, setActiveStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState([]);

@@ -11,8 +11,7 @@ import {
   Activity, Archive, MoreVertical, Loader2
 } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const statusColors = {
   draft: "bg-gray-100 text-gray-700",
@@ -28,6 +27,7 @@ const consentColors = {
 };
 
 export default function ExecutiveAvatarManagement() {
+  const CLIENT_ID = useClientCompanyId();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showDialog, setShowDialog] = useState(false);
