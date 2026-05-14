@@ -1,22 +1,19 @@
 import React, { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/lib/api";
 import { useClientCompanyId } from "@/lib/useClientCompanyId";
-import { useAuth } from "@/lib/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
 import { Upload, Brain, Loader2, Check, Video } from "lucide-react";
 
 /**
  * BrainEntryUpload — Brain がまだ無いユーザーが最初に見る真っ白な画面。
- * 動画ドロップ → BrainPerson + BrainSourceAsset を自動生成 → Studio に遷移。
- * 余計な UI を一切置かない（Sidebar も無い）。動画アップロードという 1 アクションだけ。
+ * 動画ドロップ → /api/brain-persons + /api/brain-assets で BrainPerson + 動画素材を生成。
  */
 export default function BrainEntryUpload() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const clientCompanyId = useClientCompanyId();
-  const { user } = useAuth();
   const { toast } = useToast();
 
   const inputRef = useRef(null);
@@ -44,49 +41,33 @@ export default function BrainEntryUpload() {
     }
 
     try {
-      // 1. Upload video
-      setPhase("uploading");
-      setProgressMessage("動画をアップロード中...");
-      const uploadRes = await base44.integrations.Core.UploadPrivateFile({ file });
-      const fileUri = uploadRes?.file_uri || uploadRes?.fileUri;
-      if (!fileUri) throw new Error("アップロード結果に file_uri が含まれていません。");
-
-      // 2. Create BrainPerson (placeholder name — user can edit later)
+      // 1. Create BrainPerson (placeholder name)
       setPhase("creating");
       setProgressMessage("Brain Person を作成中...");
       const placeholderName = file.name.replace(/\.[^/.]+$/, "") || "Untitled Brain";
-      const person = await base44.entities.BrainPerson.create({
-        clientCompanyId,
-        fullName: placeholderName,
-        roleTitle: "",
+      const person = await api.createBrainPerson({
+        client_company_id: clientCompanyId,
+        full_name: placeholderName,
         status: "draft",
-        internalUseAllowed: true,
-        externalUseAllowed: false,
+        internal_use_allowed: true,
+        external_use_allowed: false,
         notes: "BrainEntryUpload から自動作成されました。詳細は Studio 内で編集できます。",
       });
 
-      // 3. Save the uploaded video as BrainSourceAsset
-      setProgressMessage("素材を登録中...");
-      await base44.entities.BrainSourceAsset.create({
-        clientCompanyId,
+      // 2. Upload video as BrainSourceAsset
+      setPhase("uploading");
+      setProgressMessage("動画をアップロード中...");
+      await api.uploadBrainAsset({
         brainPersonId: person.id,
         assetType: "video",
-        fileUri,
-        originalFileName: file.name,
-        sizeBytes: file.size,
-        mimeType: file.type,
-        uploadedBy: user?.id || "",
-        uploadedAt: new Date().toISOString(),
-        notes: "BrainEntryUpload で最初にアップロードされた素材",
+        file,
       });
 
-      // 4. Done — invalidate cache and transition to studio
+      // 3. Done — invalidate cache and transition to studio
       setPhase("done");
       setProgressMessage("Brain が誕生しました。Studio を開いています...");
       await queryClient.invalidateQueries({ queryKey: ["brain-persons"] });
       await queryClient.invalidateQueries({ queryKey: ["brain-persons-check"] });
-
-      // 短い余韻 → Studio へ
       setTimeout(() => navigate("/", { replace: true }), 1200);
     } catch (err) {
       console.error("[BrainEntryUpload] Failed:", err);
@@ -111,21 +92,16 @@ export default function BrainEntryUpload() {
 
   return (
     <div className="fixed inset-0 bg-white flex flex-col items-center justify-center overflow-hidden">
-      {/* ロゴ（控えめに画面上部） */}
       <div className="absolute top-8 left-1/2 -translate-x-1/2 flex items-center gap-2 text-slate-400">
         <Brain className="w-4 h-4" />
         <span className="text-xs tracking-[0.3em] uppercase">CompanyBrain AI</span>
       </div>
 
-      {/* メインのドロップゾーン */}
       <div className="w-full max-w-3xl px-6">
         {phase === "idle" && (
           <div
             onClick={() => inputRef.current?.click()}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setIsDragging(true);
-            }}
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={onDrop}
             className={`relative cursor-pointer rounded-3xl border-2 border-dashed transition-all duration-300 ${
@@ -168,7 +144,6 @@ export default function BrainEntryUpload() {
           </div>
         )}
 
-        {/* アップロード進行中の表示 */}
         {isBusy && (
           <div className="rounded-3xl border-2 border-slate-200 bg-white" style={{ aspectRatio: "16 / 9" }}>
             <div className="h-full flex flex-col items-center justify-center px-8 text-center">
@@ -191,7 +166,6 @@ export default function BrainEntryUpload() {
         )}
       </div>
 
-      {/* フッター（控えめ） */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-[11px] text-slate-400 tracking-wide">
         本人同意の確認は次のステップで行います。AI アバターは本人そのものではありません。
       </div>
