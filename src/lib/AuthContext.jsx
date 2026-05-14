@@ -1,72 +1,59 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
-import { api } from '@/lib/api';
+import { api, getAccessToken, setAccessToken } from '@/lib/api';
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [session, setSession] = useState(null);
-  const [user, setUser] = useState(null);          // 拡張ユーザー (api.me() の結果)
+  const [user, setUser] = useState(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
-  const [isLoadingPublicSettings, setIsLoadingPublicSettings] = useState(false); // 互換性のため残置
+  const [isLoadingPublicSettings, setIsLoadingPublicSettings] = useState(false); // 互換
   const [authError, setAuthError] = useState(null);
 
-  const refreshUserProfile = async () => {
+  const refresh = async () => {
+    const token = getAccessToken();
+    if (!token) {
+      setUser(null);
+      setIsLoadingAuth(false);
+      return;
+    }
     try {
       const me = await api.me();
       setUser(me);
       setAuthError(null);
     } catch (err) {
-      console.warn('[auth] me() failed:', err);
-      // user_profile が無いケース → エラーではなく未登録扱い
+      console.warn('[auth] me() failed', err);
       if (err?.status === 401) {
-        setAuthError({ type: 'auth_required', message: 'Authentication required' });
-      } else {
+        setAccessToken(null);
         setUser(null);
-        setAuthError({ type: 'user_not_registered', message: err?.message || 'User profile not found' });
+        setAuthError({ type: 'auth_required', message: 'ログインしてください' });
+      } else {
+        setAuthError({ type: 'unknown', message: err?.message || 'unknown' });
       }
+    } finally {
+      setIsLoadingAuth(false);
     }
   };
 
-  useEffect(() => {
-    // 初回ロード: 現在のセッションを取得
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data?.session || null);
-      if (data?.session) {
-        refreshUserProfile().finally(() => setIsLoadingAuth(false));
-      } else {
-        setIsLoadingAuth(false);
-      }
-    });
-    // セッション変化を監視
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s);
-      if (s) {
-        refreshUserProfile();
-      } else {
-        setUser(null);
-      }
-    });
-    return () => sub.subscription.unsubscribe();
-  }, []);
+  useEffect(() => { refresh(); }, []);
 
   const loginWithEmail = async ({ email, password }) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    const res = await api.login({ email, password });
+    setAccessToken(res.accessToken);
+    await refresh();
   };
 
-  const signupWithEmail = async ({ email, password }) => {
-    const { error } = await supabase.auth.signUp({ email, password });
-    if (error) throw error;
+  const signupWithEmail = async ({ email, password, displayName }) => {
+    const res = await api.register({ email, password, displayName });
+    setAccessToken(res.accessToken);
+    await refresh();
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
+    setAccessToken(null);
     setUser(null);
   };
 
   const navigateToLogin = () => {
-    // 現実装ではログイン画面に強制遷移
     if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
       window.location.href = '/login';
     }
@@ -74,9 +61,9 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={{
-      session,
       user,
-      isAuthenticated: !!session,
+      session: user ? { access_token: getAccessToken() } : null,
+      isAuthenticated: !!user,
       isLoadingAuth,
       isLoadingPublicSettings,
       authError,
@@ -84,7 +71,7 @@ export const AuthProvider = ({ children }) => {
       signupWithEmail,
       logout,
       navigateToLogin,
-      refreshUserProfile,
+      refreshUserProfile: refresh,
     }}>
       {children}
     </AuthContext.Provider>

@@ -1,39 +1,30 @@
 import { Hono } from 'hono';
 import { requireAuth, jsonError } from '../lib/auth-middleware.js';
-import { supabaseAdmin, assertTenantAccess } from '../lib/supabase.js';
+import { db, shapeBrainPerson, fromJsonArr } from '../lib/db.js';
+import { assertTenantAccess } from '../lib/context.js';
 import { generateText } from '../lib/gemini.js';
 
 const router = new Hono();
 router.use('*', requireAuth);
 
 /**
- * POST /api/chat — アバターと会話する
+ * POST /api/chat
  * body: { brainPersonId, message }
- * 返値: { answer }
- *
- * 動作:
- *  1. brain_person を取得 (tenant 検証)
- *  2. その人の話し方・価値観・強み分野を system prompt に注入
- *  3. 承認済み knowledge_chunks をスコープ付きで参照に追加
- *  4. Gemini で回答生成
  */
 router.post('/', async (c) => {
   const ctx = c.get('ctx');
-  const body = await c.req.json();
-  const { brainPersonId, message } = body;
-
+  const { brainPersonId, message } = await c.req.json();
   if (!brainPersonId || !message) {
     return jsonError(c, 400, 'invalid_request', 'brainPersonId と message が必要です。');
   }
 
-  const { data: person, error: pErr } = await supabaseAdmin
-    .from('brain_persons').select('*').eq('id', brainPersonId).maybeSingle();
-  if (pErr) return jsonError(c, 500, 'db_error', pErr.message);
-  if (!person) return jsonError(c, 404, 'not_found', 'BrainPerson が見つかりません。');
-  const t = assertTenantAccess(ctx, person.client_company_id);
+  const personRow = db.prepare('SELECT * FROM brain_persons WHERE id = ?').get(brainPersonId);
+  if (!personRow) return jsonError(c, 404, 'not_found', 'BrainPerson が見つかりません。');
+  const t = assertTenantAccess(ctx, personRow.client_company_id);
   if (!t.ok) return jsonError(c, t.code, t.errorType, t.message);
+  const person = shapeBrainPerson(personRow);
 
-  // 承認済み knowledge_chunks（internal までは社員ユーザー、executive はその role のみ、admin_only は softdoing_admin のみ）
+  // ロールに応じた audience_scope
   const role = ctx.businessRole;
   const allowedScopes = (() => {
     if (role === 'softdoing_admin') return ['public','internal','executive','admin_only'];
@@ -42,14 +33,16 @@ router.post('/', async (c) => {
     return ['public'];
   })();
 
-  const { data: knowledge } = await supabaseAdmin
-    .from('knowledge_chunks').select('*')
-    .eq('client_company_id', person.client_company_id)
-    .eq('status', 'approved')
-    .in('audience_scope', allowedScopes)
-    .limit(12);
+  const placeholders = allowedScopes.map(() => '?').join(',');
+  const knowledge = db.prepare(
+    `SELECT title, chunk_text, category, audience_scope
+     FROM knowledge_chunks
+     WHERE client_company_id = ? AND status = 'approved'
+       AND audience_scope IN (${placeholders})
+     ORDER BY approved_at DESC LIMIT 12`
+  ).all(person.client_company_id, ...allowedScopes);
 
-  const sourcesText = (knowledge || []).map((k, i) =>
+  const sourcesText = knowledge.map((k, i) =>
     `【Source ${i + 1}】(${k.category || ''} / ${k.audience_scope})\nタイトル: ${k.title}\n内容: ${k.chunk_text}`
   ).join('\n\n');
 
