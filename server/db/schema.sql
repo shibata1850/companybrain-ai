@@ -64,6 +64,8 @@ CREATE TABLE IF NOT EXISTS brain_persons (
   status               TEXT NOT NULL DEFAULT 'draft'
                        CHECK (status IN ('draft','active','archived')),
   notes                TEXT,
+  heygen_avatar_id     TEXT,                          -- HeyGen Live Avatar ID
+  heygen_voice_id      TEXT,                          -- HeyGen Voice ID
   created_by           TEXT REFERENCES users(id) ON DELETE SET NULL,
   created_at           TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at           TEXT NOT NULL DEFAULT (datetime('now'))

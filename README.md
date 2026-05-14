@@ -14,6 +14,7 @@
 - **Auth**: 自前 JWT + bcrypt（メール + パスワード）
 - **Storage**: **ローカルファイルシステム** (`uploads/`)
 - **AI**: Google Gemini (server-side のみ、API キー必要)
+- **Live Avatar**: HeyGen Interactive Avatar SDK（API キー必要、未設定時はアップロード動画ループ再生にフォールバック）
 
 ## クイックスタート（3 ステップ）
 

@@ -22,13 +22,29 @@ db.exec('PRAGMA journal_mode = WAL');
 db.exec('PRAGMA foreign_keys = ON');
 
 /**
+ * 既存テーブルに ALTER TABLE で列を追加する（冪等）
+ */
+function addColumnIfMissing(table, column, definition) {
+  try {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+    if (cols.some((c) => c.name === column)) return;
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    console.log(`[db] added column ${table}.${column}`);
+  } catch (err) {
+    // table が存在しない場合は CREATE TABLE で対応するので無視
+    if (!/no such table/i.test(err.message)) {
+      console.warn(`[db] addColumnIfMissing(${table}.${column}) failed:`, err.message);
+    }
+  }
+}
+
+/**
  * スキーマを適用する（冪等）
  */
 export function migrate() {
   const schemaPath = path.join(__dirname, '..', 'db', 'schema.sql');
   const sql = fs.readFileSync(schemaPath, 'utf-8');
-  // node:sqlite は PRAGMA も含む大きな SQL の exec ができるが、ステートメント分割が必要なケースがある
-  // 簡易に statement 単位で分割実行
+  // ステートメント単位で分割実行
   const statements = sql.split(/;\s*$/m).map((s) => s.trim()).filter(Boolean);
   for (const stmt of statements) {
     try {
@@ -38,6 +54,11 @@ export function migrate() {
       throw err;
     }
   }
+
+  // 既存 DB への後付けマイグレーション
+  addColumnIfMissing('brain_persons', 'heygen_avatar_id', 'TEXT');
+  addColumnIfMissing('brain_persons', 'heygen_voice_id', 'TEXT');
+
   console.log(`[db] migrated schema at ${dbPath}`);
 }
 
