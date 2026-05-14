@@ -1,26 +1,68 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.25";
 
+function jsonError(errorType, message, status = 500, detail) {
+  const body = { errorType, message, error: message };
+  if (detail !== undefined) body.detail = detail;
+  return Response.json(body, { status });
+}
+
+function resolveBusinessRole(user) {
+  const businessRole = String(user?.businessRole || "").trim();
+  if (businessRole) return businessRole;
+  const base44Role = String(user?.role || "").toLowerCase().trim();
+  if (base44Role === "admin") return "softdoing_admin";
+  return "viewer";
+}
+
+function isGlobalAdmin(user) {
+  const role = resolveBusinessRole(user);
+  return role === "softdoing_admin" || String(user?.role || "").toLowerCase() === "admin";
+}
+
+function assertTenantAccess(user, clientCompanyId) {
+  if (isGlobalAdmin(user)) return { allowed: true };
+  const userCompanyId = String(user?.clientCompanyId || "");
+  if (!userCompanyId) {
+    return { allowed: false, errorType: "missing_user_company", message: "User clientCompanyId is missing" };
+  }
+  if (userCompanyId !== String(clientCompanyId || "")) {
+    return { allowed: false, errorType: "tenant_mismatch", message: "You cannot access another company's data." };
+  }
+  return { allowed: true };
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
 
     if (!user) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
+      return jsonError("unauthorized", "認証が必要です。ログインしてください。", 401);
     }
 
     const { videoProjectId, mode = "speed" } = await req.json();
 
-    const project = await base44.asServiceRole.entities.VideoProject.get(videoProjectId);
+    if (!videoProjectId) {
+      return jsonError("invalid_request", "videoProjectId is required", 400);
+    }
 
+    // VideoProject はテナントを判定するためにまず取得
+    const project = await base44.asServiceRole.entities.VideoProject.get(videoProjectId);
     if (!project) {
-      return Response.json({ error: "VideoProject not found" }, { status: 404 });
+      return jsonError("video_project_not_found", "VideoProject が見つかりません。", 404);
+    }
+
+    // テナント分離: project.clientCompanyId と user.clientCompanyId を照合
+    const tenant = assertTenantAccess(user, project.clientCompanyId);
+    if (!tenant.allowed) {
+      return jsonError(tenant.errorType, tenant.message, 403);
     }
 
     if (!project.videoFileUri || !project.audioFileUri) {
-      return Response.json(
-        { error: "Both videoFileUri and audioFileUri are required." },
-        { status: 400 }
+      return jsonError(
+        "missing_media",
+        "videoFileUri と audioFileUri の両方が必要です。",
+        400
       );
     }
 
@@ -44,11 +86,12 @@ Deno.serve(async (req) => {
         status: "failed",
         errorMessage: "動画生成上限を超過しています",
       });
-      return Response.json({
-        error: "Feature not available",
-        message: "リップシンク生成はLightプランでは利用できません。上位プランへのアップグレードをお願いします。",
-        limitExceeded: true,
-      }, { status: 403 });
+      return jsonError(
+        "plan_not_allowed",
+        "リップシンク生成はLightプランでは利用できません。上位プランへのアップグレードをお願いします。",
+        403,
+        { planName, limitExceeded: true }
+      );
     }
 
     // 当月の使用秒数をカウント
@@ -67,11 +110,12 @@ Deno.serve(async (req) => {
         status: "failed",
         errorMessage: "動画生成上限を超過しています",
       });
-      return Response.json({
-        error: "Usage limit exceeded",
-        message: `月間リップシンク生成上限（${monthlyLimit}秒）を超過します。`,
-        limitExceeded: true,
-      }, { status: 429 });
+      return jsonError(
+        "usage_limit_exceeded",
+        `月間リップシンク生成上限（${monthlyLimit}秒）を超過します。`,
+        429,
+        { planName, used: totalUsedSeconds, requested: requestedSeconds, limit: monthlyLimit }
+      );
     }
 
     const { signed_url: videoUrl } = await base44.asServiceRole.integrations.Core.CreateFileSignedUrl({
@@ -87,7 +131,7 @@ Deno.serve(async (req) => {
     const heygenApiKey = Deno.env.get("HEYGEN_API_KEY");
 
     if (!heygenApiKey) {
-      return Response.json({ error: "HEYGEN_API_KEY is not set" }, { status: 500 });
+      return jsonError("missing_heygen_key", "HEYGEN_API_KEY is not set", 500);
     }
 
     const heygenRes = await fetch("https://api.heygen.com/v3/lipsyncs", {
@@ -112,7 +156,7 @@ Deno.serve(async (req) => {
         status: "failed",
         errorMessage: errorText,
       });
-      return Response.json({ error: "HeyGen error", detail: errorText }, { status: 500 });
+      return jsonError("heygen_api_error", "HeyGen APIの呼び出しに失敗しました。", 502, { status: heygenRes.status, detail: errorText });
     }
 
     const data = await heygenRes.json();
@@ -137,6 +181,7 @@ Deno.serve(async (req) => {
 
     return Response.json({ heygenJobId: jobId, raw: data });
   } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    console.error("[createHeygenLipsync] Unexpected error:", error?.message, error?.stack);
+    return jsonError("unexpected_error", error?.message || "Unexpected error", 500, { stack: error?.stack || null });
   }
 });

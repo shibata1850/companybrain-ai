@@ -10,8 +10,7 @@ import {
   Shield, Zap, Lock, Database, BarChart3, Eye
 } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const StatusIcon = ({ status }) => {
   if (status === "ok") return <CheckCircle className="w-4 h-4 text-green-600" />;
@@ -26,6 +25,7 @@ const StatusBadge = ({ status }) => {
 };
 
 export default function ExecutiveBrainPreLaunchTest() {
+  const CLIENT_ID = useClientCompanyId();
   const { toast } = useToast();
   const [expandedItem, setExpandedItem] = useState(null);
   const [testResults, setTestResults] = useState(null);

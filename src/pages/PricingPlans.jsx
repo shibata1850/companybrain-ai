@@ -7,8 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import { Check, AlertTriangle, TrendingUp, FileText, Video, MessageSquare, Zap } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const PLANS = [
   {
@@ -242,6 +241,7 @@ function PlanCard({ plan, isCurrentPlan, usage }) {
 }
 
 export default function PricingPlans() {
+  const CLIENT_ID = useClientCompanyId();
   const { toast } = useToast();
 
   // 今月のデータ取得

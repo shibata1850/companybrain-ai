@@ -12,8 +12,7 @@ import {
   BookOpen, CheckCircle2, MessageSquare, Video, AlertTriangle,
   BarChart3, TrendingUp, Clock, Users
 } from "lucide-react";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 function StatCard({ label, value, icon: Icon, subvalue, trend }) {
   return (
@@ -36,6 +35,7 @@ function StatCard({ label, value, icon: Icon, subvalue, trend }) {
 }
 
 export default function Dashboard() {
+  const CLIENT_ID = useClientCompanyId();
   const { data: company } = useQuery({
     queryKey: ["company", CLIENT_ID],
     queryFn: () => base44.entities.ClientCompany.get(CLIENT_ID),

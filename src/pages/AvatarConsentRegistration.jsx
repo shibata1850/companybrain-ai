@@ -9,10 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { Upload, Save, Check, X, AlertCircle, Loader2 } from "lucide-react";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 export default function AvatarConsentRegistration() {
+  const CLIENT_ID = useClientCompanyId();
   const { avatarId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();

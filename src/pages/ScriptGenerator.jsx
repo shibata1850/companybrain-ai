@@ -10,8 +10,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Sparkles, Loader2, Save, CheckCircle2, Edit3, Volume2, FileText } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
 import ScriptResult from "@/components/script/ScriptResult";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const PURPOSES = [
   { value: "company_intro", label: "会社紹介" },
@@ -70,6 +69,7 @@ function OptionGroup({ label, options, value, onChange }) {
 }
 
 export default function ScriptGenerator() {
+  const CLIENT_ID = useClientCompanyId();
   const { toast } = useToast();
   const [form, setForm] = useState({
     purpose: "company_intro",

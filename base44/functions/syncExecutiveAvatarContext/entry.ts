@@ -1,5 +1,48 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.25";
 
+function jsonError(errorType, message, status = 500, detail) {
+  const body = { errorType, message, error: message };
+  if (detail !== undefined) body.detail = detail;
+  return Response.json(body, { status });
+}
+
+function resolveBusinessRole(user) {
+  const businessRole = String(user?.businessRole || "").trim();
+  if (businessRole) return businessRole;
+  const base44Role = String(user?.role || "").toLowerCase().trim();
+  if (base44Role === "admin") return "softdoing_admin";
+  return "viewer";
+}
+
+function isGlobalAdmin(user) {
+  const role = resolveBusinessRole(user);
+  return role === "softdoing_admin" || String(user?.role || "").toLowerCase() === "admin";
+}
+
+function assertTenantAccess(user, clientCompanyId) {
+  if (isGlobalAdmin(user)) return { allowed: true };
+  const userCompanyId = String(user?.clientCompanyId || "");
+  if (!userCompanyId) {
+    return { allowed: false, errorType: "missing_user_company", message: "User clientCompanyId is missing" };
+  }
+  if (userCompanyId !== String(clientCompanyId || "")) {
+    return { allowed: false, errorType: "tenant_mismatch", message: "You cannot access another company's data." };
+  }
+  return { allowed: true };
+}
+
+function knowledgeScopesForAudience(audienceScope, isAdmin) {
+  const base = {
+    public_demo: ["public"],
+    internal: ["public", "internal"],
+    training: ["public", "internal"],
+    executive: ["public", "internal", "executive"],
+  };
+  const scopes = [...(base[audienceScope] || ["public"])];
+  if (isAdmin) scopes.push("admin_only");
+  return scopes;
+}
+
 function normalizeText(value) {
   return String(value || "").trim();
 }
@@ -10,28 +53,43 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
 
     if (!user) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
+      return jsonError("unauthorized", "認証が必要です。ログインしてください。", 401);
     }
 
     const { clientCompanyId, avatarProfileId } = await req.json();
 
+    if (!clientCompanyId) return jsonError("invalid_request", "clientCompanyId is required", 400);
+    if (!avatarProfileId) return jsonError("invalid_request", "avatarProfileId is required", 400);
+
+    // テナント分離: asServiceRole を使う前に必ずチェック
+    const tenant = assertTenantAccess(user, clientCompanyId);
+    if (!tenant.allowed) {
+      return jsonError(tenant.errorType, tenant.message, 403);
+    }
+
     // プロファイル取得
     const profile = await base44.asServiceRole.entities.ExecutiveAvatarProfile.get(avatarProfileId);
     if (!profile) {
-      return Response.json({ error: "ExecutiveAvatarProfile not found" }, { status: 404 });
+      return jsonError("avatar_not_found", "ExecutiveAvatarProfile が見つかりません。", 404);
+    }
+
+    // アバターのテナント整合確認（avatarProfileId 経由のクロステナント防止）
+    if (!isGlobalAdmin(user) && String(profile.clientCompanyId || "") !== String(clientCompanyId)) {
+      return jsonError("tenant_mismatch", "このアバターは別の会社に属しています。", 403);
     }
 
     if (profile.consentStatus !== "approved") {
-      return Response.json({
-        error: "Consent required",
-        message: "consentStatus = approved である必要があります。",
-      }, { status: 403 });
+      return jsonError(
+        "consent_not_approved",
+        "consentStatus = approved である必要があります。",
+        403
+      );
     }
 
     // 会社情報取得
     const company = await base44.asServiceRole.entities.ClientCompany.get(clientCompanyId);
     if (!company) {
-      return Response.json({ error: "ClientCompany not found" }, { status: 404 });
+      return jsonError("company_not_found", "ClientCompany が見つかりません。", 404);
     }
 
     // AnswerPolicy取得
@@ -47,15 +105,8 @@ Deno.serve(async (req) => {
       status: "approved",
     });
 
-    // audienceScope でフィルタリング
-    const allowedScopes = {
-      public_demo: ["public"],
-      internal: ["public", "internal"],
-      training: ["public", "internal"],
-      executive: ["public", "internal", "executive"],
-    };
-
-    const scopesToUse = allowedScopes[profile.audienceScope] || ["public"];
+    // audienceScope でフィルタリング（admin_only は softdoing_admin のみ）
+    const scopesToUse = knowledgeScopesForAudience(profile.audienceScope, isGlobalAdmin(user));
     const filteredChunks = allChunks.filter(c => scopesToUse.includes(c.audienceScope));
 
     // Context Promptを整形
@@ -117,10 +168,7 @@ ${filteredChunks.map((c, i) => `${i + 1}. ${c.title}: ${c.chunkText}`).join("\n"
     const geminiModel = Deno.env.get("GEMINI_MODEL") || "gemini-2.0-flash";
 
     if (!geminiKey) {
-      return Response.json({
-        error: "Gemini API key not configured",
-        message: "GEMINI_API_KEY が設定されていません。",
-      }, { status: 500 });
+      return jsonError("missing_gemini_key", "GEMINI_API_KEY が設定されていません。", 500);
     }
 
     const geminiRes = await fetch(
@@ -150,11 +198,7 @@ ${filteredChunks.map((c, i) => `${i + 1}. ${c.title}: ${c.chunkText}`).join("\n"
 
     if (!geminiRes.ok) {
       const detail = await geminiRes.text();
-      return Response.json({
-        error: "Gemini API error",
-        message: "Context Promptの整形に失敗しました。",
-        detail,
-      }, { status: 500 });
+      return jsonError("gemini_api_error", "Context Promptの整形に失敗しました。", 502, { status: geminiRes.status, detail });
     }
 
     const geminiData = await geminiRes.json();
@@ -162,7 +206,6 @@ ${filteredChunks.map((c, i) => `${i + 1}. ${c.title}: ${c.chunkText}`).join("\n"
 
     // LiveAvatar API で Context を作成/更新
     const liveAvatarKey = Deno.env.get("LIVEAVATAR_API_KEY");
-    const heygenKey = Deno.env.get("HEYGEN_API_KEY");
 
     let contextId = profile.liveAvatarContextId;
     let liveAvatarUsed = false;
@@ -197,9 +240,6 @@ ${filteredChunks.map((c, i) => `${i + 1}. ${c.title}: ${c.chunkText}`).join("\n"
       }
     }
 
-    // LiveAvatar失敗時はHeyGenを試す（オプション）
-    // ここではLiveAvatarのみサポート
-
     // プロファイル更新
     if (liveAvatarUsed && contextId) {
       await base44.asServiceRole.entities.ExecutiveAvatarProfile.update(avatarProfileId, {
@@ -226,6 +266,7 @@ ${filteredChunks.map((c, i) => `${i + 1}. ${c.title}: ${c.chunkText}`).join("\n"
         : "Geminiでのみ整形されました。LiveAvatarへの同期に失敗しましたが、Context Promptは生成されています。",
     });
   } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    console.error("[syncExecutiveAvatarContext] Unexpected error:", error?.message, error?.stack);
+    return jsonError("unexpected_error", error?.message || "Unexpected error", 500, { stack: error?.stack || null });
   }
 });

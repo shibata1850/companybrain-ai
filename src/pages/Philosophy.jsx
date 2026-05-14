@@ -12,8 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { useToast } from "@/components/ui/use-toast";
 import { Plus, Heart, Pencil, Trash2, Target, Eye, Compass, Scale, BookOpen } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
-
-const CLIENT_ID = "demo-company-001";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const categoryMap = {
   mission: { label: "ミッション", icon: Target, color: "text-blue-500 bg-blue-500/10" },
@@ -25,6 +24,7 @@ const categoryMap = {
 };
 
 export default function Philosophy() {
+  const CLIENT_ID = useClientCompanyId();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);

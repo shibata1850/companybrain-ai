@@ -10,11 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/components/ui/use-toast";
 import { Save, Building2, Upload } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
-
-const CLIENT_ID = "demo-company-001";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const initialForm = {
-  clientCompanyId: CLIENT_ID,
+  clientCompanyId: "",
   companyName: "",
   industry: "",
   description: "",
@@ -30,10 +29,17 @@ const initialForm = {
 };
 
 export default function CompanyProfile() {
+  const CLIENT_ID = useClientCompanyId();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [form, setForm] = useState(initialForm);
+  const [form, setForm] = useState({ ...initialForm, clientCompanyId: CLIENT_ID || "" });
   const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    if (CLIENT_ID) {
+      setForm((prev) => ({ ...prev, clientCompanyId: prev.clientCompanyId || CLIENT_ID }));
+    }
+  }, [CLIENT_ID]);
 
   const { data: profiles = [], isLoading } = useQuery({
     queryKey: ["companyProfile"],

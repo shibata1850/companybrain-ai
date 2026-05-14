@@ -8,13 +8,44 @@ function logDebug(level, message, context = {}) {
   console.log(`[${level}] ${message}`, JSON.stringify(safe));
 }
 
+function jsonError(errorType, message, status = 500, detail) {
+  const body = { errorType, message, error: message };
+  if (detail !== undefined) body.detail = detail;
+  return Response.json(body, { status });
+}
+
+function resolveBusinessRole(user) {
+  const businessRole = String(user?.businessRole || "").trim();
+  if (businessRole) return businessRole;
+  const base44Role = String(user?.role || "").toLowerCase().trim();
+  if (base44Role === "admin") return "softdoing_admin";
+  return "viewer";
+}
+
+function isGlobalAdmin(user) {
+  const role = resolveBusinessRole(user);
+  return role === "softdoing_admin" || String(user?.role || "").toLowerCase() === "admin";
+}
+
+function assertTenantAccess(user, clientCompanyId) {
+  if (isGlobalAdmin(user)) return { allowed: true };
+  const userCompanyId = String(user?.clientCompanyId || "");
+  if (!userCompanyId) {
+    return { allowed: false, errorType: "missing_user_company", message: "User clientCompanyId is missing" };
+  }
+  if (userCompanyId !== String(clientCompanyId || "")) {
+    return { allowed: false, errorType: "tenant_mismatch", message: "You cannot access another company's data." };
+  }
+  return { allowed: true };
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
 
     if (!user) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
+      return jsonError("unauthorized", "認証が必要です。ログインしてください。", 401);
     }
 
     logDebug("INFO", "startExecutiveAvatarSession started", {
@@ -22,6 +53,15 @@ Deno.serve(async (req) => {
     });
 
     const { clientCompanyId, avatarProfileId, purpose, scenarioId, mode = "FULL" } = await req.json();
+
+    if (!clientCompanyId) return jsonError("invalid_request", "clientCompanyId is required", 400);
+    if (!avatarProfileId) return jsonError("invalid_request", "avatarProfileId is required", 400);
+
+    // テナント分離: asServiceRole を使う前に必ずチェック
+    const tenant = assertTenantAccess(user, clientCompanyId);
+    if (!tenant.allowed) {
+      return jsonError(tenant.errorType, tenant.message, 403);
+    }
 
     // プラン制限確認
     const limitCheck = await base44.asServiceRole.functions.invoke("checkExecutiveAvatarUsageLimit", {
@@ -32,21 +72,24 @@ Deno.serve(async (req) => {
     });
 
     if (!limitCheck.allowed) {
-      return Response.json({
-        error: "Usage limit exceeded",
-        message: limitCheck.message,
-      }, { status: 429 });
+      return jsonError("usage_limit_exceeded", limitCheck.message || "利用上限を超過しました。", 429, limitCheck);
     }
 
     // プロファイル取得
     const profile = await base44.asServiceRole.entities.ExecutiveAvatarProfile.get(avatarProfileId);
     if (!profile) {
       logDebug("ERROR", "Avatar profile not found", { avatarProfileId });
-      return Response.json({
-        error: "Avatar not found",
-        errorType: "avatar_not_found",
-        message: "ExecutiveAvatarProfile が見つかりません。",
-      }, { status: 404 });
+      return jsonError("avatar_not_found", "ExecutiveAvatarProfile が見つかりません。", 404);
+    }
+
+    // アバターのテナント整合確認（avatarProfileId 経由のクロステナント防止）
+    if (!isGlobalAdmin(user) && String(profile.clientCompanyId || "") !== String(clientCompanyId)) {
+      logDebug("WARN", "Avatar belongs to different tenant", {
+        avatarProfileId,
+        avatarCompanyId: profile.clientCompanyId,
+        requestCompanyId: clientCompanyId,
+      });
+      return jsonError("tenant_mismatch", "このアバターは別の会社に属しています。", 403);
     }
 
     logDebug("DEBUG", "Avatar profile loaded", {
@@ -58,20 +101,16 @@ Deno.serve(async (req) => {
 
     if (profile.consentStatus !== "approved") {
       logDebug("WARN", "Consent not approved", { avatarProfileId, consentStatus: profile.consentStatus });
-      return Response.json({
-        error: "Consent not approved",
-        errorType: "consent_not_approved",
-        message: "本人同意が承認されていないため、このアバターは利用できません。",
-      }, { status: 403 });
+      return jsonError(
+        "consent_not_approved",
+        "本人同意が承認されていないため、このアバターは利用できません。",
+        403
+      );
     }
 
     if (profile.status !== "active") {
       logDebug("WARN", "Avatar not active", { avatarProfileId, avatarStatus: profile.status });
-      return Response.json({
-        error: "Avatar not active",
-        errorType: "avatar_not_active",
-        message: "このアバターは現在有効化されていません。",
-      }, { status: 400 });
+      return jsonError("avatar_not_active", "このアバターは現在有効化されていません。", 400);
     }
 
     // 必須ID確認
@@ -80,11 +119,11 @@ Deno.serve(async (req) => {
 
     if (!hasHeygenIds && !hasLiveAvatarIds) {
       logDebug("ERROR", "Missing all provider IDs", { avatarProfileId });
-      return Response.json({
-        error: "Missing provider IDs",
-        errorType: "missing_avatar_ids",
-        message: "avatar_id、voice_id、context_id が不足しています。アバターID設定画面で登録してください。",
-      }, { status: 400 });
+      return jsonError(
+        "missing_avatar_ids",
+        "avatar_id、voice_id、context_id が不足しています。アバターID設定画面で登録してください。",
+        400
+      );
     }
 
     const liveAvatarKey = Deno.env.get("LIVEAVATAR_API_KEY");
@@ -152,11 +191,11 @@ Deno.serve(async (req) => {
     // Gemini RAG 確認
     if (!geminiKey && provider === "text_fallback") {
       logDebug("ERROR", "No Gemini key for fallback", { avatarProfileId });
-      return Response.json({
-        error: "Missing Gemini API",
-        errorType: "missing_gemini_key",
-        message: "テキストモードに必要な GEMINI_API_KEY が設定されていません。",
-      }, { status: 500 });
+      return jsonError(
+        "missing_gemini_key",
+        "テキストモードに必要な GEMINI_API_KEY が設定されていません。",
+        500
+      );
     }
 
     // フォールバック: TEXT_FALLBACK モード（Gemini + CompanyBrain RAG）
@@ -262,9 +301,6 @@ Deno.serve(async (req) => {
     logDebug("ERROR", "Unexpected error", {
       error: error.message,
     });
-    return Response.json({
-      error: error.message,
-      errorType: "unexpected_error",
-    }, { status: 500 });
+    return jsonError("unexpected_error", error?.message || "Unexpected error", 500, { stack: error?.stack || null });
   }
 });

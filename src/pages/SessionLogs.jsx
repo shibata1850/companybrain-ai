@@ -10,10 +10,10 @@ import {
 } from "@/components/ui/select";
 import { ChevronDown, ChevronUp, Search, Award } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 export default function SessionLogs() {
+  const CLIENT_ID = useClientCompanyId();
   const [keyword, setKeyword] = useState("");
   const [purposeFilter, setPurposeFilter] = useState("all");
   const [expandedId, setExpandedId] = useState(null);

@@ -1,0 +1,60 @@
+{
+  "name": "BrainPerson",
+  "type": "object",
+  "properties": {
+    "clientCompanyId": {
+      "type": "string",
+      "description": "企業ID"
+    },
+    "fullName": {
+      "type": "string",
+      "description": "氏名"
+    },
+    "roleTitle": {
+      "type": "string",
+      "description": "役職（例：代表取締役、営業部長、ベテラン職人）"
+    },
+    "department": {
+      "type": "string",
+      "description": "所属部門"
+    },
+    "expertiseDomain": {
+      "type": "string",
+      "description": "担当領域・専門分野"
+    },
+    "strengthFields": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "判断が得意な分野（例：価格交渉、人材育成、品質管理）"
+    },
+    "speakingStyle": {
+      "type": "string",
+      "description": "話し方の特徴"
+    },
+    "valuesNote": {
+      "type": "string",
+      "description": "価値観・大切にしていること"
+    },
+    "internalUseAllowed": {
+      "type": "boolean",
+      "default": true,
+      "description": "社内利用を許可"
+    },
+    "externalUseAllowed": {
+      "type": "boolean",
+      "default": false,
+      "description": "社外利用を許可"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "active", "archived"],
+      "default": "draft",
+      "description": "Brain Person ステータス"
+    },
+    "notes": {
+      "type": "string",
+      "description": "備考"
+    }
+  },
+  "required": ["clientCompanyId", "fullName"]
+}

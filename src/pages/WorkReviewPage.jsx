@@ -13,8 +13,7 @@ import {
 import { AlertCircle, Send, Loader2, Check, AlertTriangle } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
 import ReactMarkdown from "react-markdown";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const WORK_TYPES = [
   { value: "email", label: "メール" },
@@ -25,6 +24,7 @@ const WORK_TYPES = [
 ];
 
 export default function WorkReviewPage() {
+  const CLIENT_ID = useClientCompanyId();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [formData, setFormData] = useState({

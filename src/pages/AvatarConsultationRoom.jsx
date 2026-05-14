@@ -12,8 +12,7 @@ import {
 import { AlertCircle, Send, Loader2, RotateCcw, User, Brain } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
 import ReactMarkdown from "react-markdown";
-
-const CLIENT_ID = "69fc3d9af68187d823c1a41b";
+import { useClientCompanyId } from "@/lib/useClientCompanyId";
 
 const PURPOSES = [
   { value: "consultation", label: "仕事相談" },
@@ -24,6 +23,7 @@ const PURPOSES = [
 ];
 
 export default function AvatarConsultationRoom() {
+  const CLIENT_ID = useClientCompanyId();
   const { toast } = useToast();
   const scrollRef = useRef(null);
   const [selectedAvatarId, setSelectedAvatarId] = useState("");
