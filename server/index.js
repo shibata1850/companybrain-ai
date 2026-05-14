@@ -1,23 +1,33 @@
 /**
- * Hono backend for CompanyBrain AI (Claude Code stack)
- * 起動: `npm run server:dev`
+ * CompanyBrain AI — Local-only backend
+ * - SQLite (better-sqlite3) for DB
+ * - JWT + bcrypt for auth
+ * - Local filesystem for storage
+ * - Gemini API as the only external dependency
+ *
+ * 起動: `npm run server:dev` (file watch) または `npm run server:start`
  */
 import 'dotenv/config';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
 
+import { migrate } from './lib/db.js';
 import authRouter from './routes/auth.js';
 import brainPersonsRouter from './routes/brain-persons.js';
 import brainAssetsRouter from './routes/brain-assets.js';
 import chatRouter from './routes/chat.js';
 import brainInterviewsRouter from './routes/brain-interviews.js';
 import brainPoliciesRouter from './routes/brain-policies.js';
+import filesRouter from './routes/files.js';
+
+// 起動前にスキーマを適用
+migrate();
 
 const app = new Hono();
 
 app.use('*', cors({
-  origin: (origin) => origin || '*', // dev: 全許可。本番は厳格化。
+  origin: (origin) => origin || '*',
   credentials: true,
 }));
 
@@ -29,6 +39,7 @@ app.route('/api/brain-assets', brainAssetsRouter);
 app.route('/api/chat', chatRouter);
 app.route('/api/brain-interviews', brainInterviewsRouter);
 app.route('/api/brain-policies', brainPoliciesRouter);
+app.route('/api/files', filesRouter);
 
 app.notFound((c) => c.json({ errorType: 'not_found', message: 'API endpoint not found', error: 'API endpoint not found' }, 404));
 app.onError((err, c) => {

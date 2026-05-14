@@ -1,21 +1,25 @@
 /**
  * Frontend API client — Hono バックエンドへの fetch ラッパー。
- * 認証は Supabase Auth の access_token を Authorization ヘッダで付与。
+ * 認証は localStorage の access_token を Authorization ヘッダで付与。
  */
-import { supabase } from './supabaseClient';
-
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
+const TOKEN_KEY = 'companybrain_access_token';
 
-async function authHeader() {
-  const { data } = await supabase.auth.getSession();
-  const token = data?.session?.access_token;
-  return token ? { Authorization: `Bearer ${token}` } : {};
+export function getAccessToken() {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(TOKEN_KEY);
+}
+export function setAccessToken(token) {
+  if (typeof window === 'undefined') return;
+  if (token) window.localStorage.setItem(TOKEN_KEY, token);
+  else window.localStorage.removeItem(TOKEN_KEY);
 }
 
 async function request(path, options = {}) {
+  const token = getAccessToken();
   const headers = {
     ...(options.body && !(options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
-    ...(await authHeader()),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(options.headers || {}),
   };
   const res = await fetch(`${API_BASE}${path}`, {
@@ -40,6 +44,10 @@ async function request(path, options = {}) {
 
 export const api = {
   // 認証
+  register: ({ email, password, displayName }) =>
+    request('/auth/register', { method: 'POST', body: { email, password, displayName } }),
+  login: ({ email, password }) =>
+    request('/auth/login', { method: 'POST', body: { email, password } }),
   me: () => request('/auth/me'),
 
   // Brain Persons
@@ -58,8 +66,7 @@ export const api = {
     form.set('file', file);
     return request('/brain-assets', { method: 'POST', body: form });
   },
-  getAssetSignedUrl: (assetId) =>
-    request(`/brain-assets/${assetId}/signed-url`),
+  getAssetSignedUrl: (assetId) => request(`/brain-assets/${assetId}/signed-url`),
 
   // Chat
   chat: ({ brainPersonId, message }) =>

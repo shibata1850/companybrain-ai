@@ -1,8 +1,7 @@
-import { getUserFromToken } from './supabase.js';
+import { getUserCtxFromToken } from './context.js';
 
 /**
- * Hono middleware: Authorization: Bearer <access_token> から user/profile を取得
- * c.set('ctx', { id, email, profile, clientCompanyId, businessRole })
+ * Hono middleware: Authorization: Bearer <JWT> から ctx を取得
  */
 export async function requireAuth(c, next) {
   const authHeader = c.req.header('Authorization') || '';
@@ -10,7 +9,7 @@ export async function requireAuth(c, next) {
   if (!token) {
     return c.json({ errorType: 'unauthorized', message: '認証が必要です。', error: '認証が必要です。' }, 401);
   }
-  const ctx = await getUserFromToken(token);
+  const ctx = await getUserCtxFromToken(token);
   if (!ctx) {
     return c.json({ errorType: 'unauthorized', message: '認証トークンが無効です。', error: '認証トークンが無効です。' }, 401);
   }
@@ -18,9 +17,6 @@ export async function requireAuth(c, next) {
   await next();
 }
 
-/**
- * 構造化エラーレスポンスのヘルパー
- */
 export function jsonError(c, status, errorType, message, detail) {
   const body = { errorType, message, error: message };
   if (detail !== undefined) body.detail = detail;

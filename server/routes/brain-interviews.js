@@ -1,94 +1,81 @@
 import { Hono } from 'hono';
+import crypto from 'node:crypto';
 import { requireAuth, jsonError } from '../lib/auth-middleware.js';
-import { supabaseAdmin, assertTenantAccess, isGlobalAdmin } from '../lib/supabase.js';
+import { db, tx, shapeInterview, shapeBrainPerson, toJsonArr } from '../lib/db.js';
+import { assertTenantAccess, isGlobalAdmin } from '../lib/context.js';
 import { generateText, generateJson } from '../lib/gemini.js';
 
 const router = new Hono();
 router.use('*', requireAuth);
 
-// GET /api/brain-interviews?brainPersonId=xxx
-router.get('/', async (c) => {
+router.get('/', (c) => {
   const ctx = c.get('ctx');
   const brainPersonId = c.req.query('brainPersonId');
   if (!brainPersonId) return jsonError(c, 400, 'invalid_request', 'brainPersonId が必要です。');
-
-  const { data: person } = await supabaseAdmin
-    .from('brain_persons').select('client_company_id').eq('id', brainPersonId).maybeSingle();
+  const person = db.prepare('SELECT client_company_id FROM brain_persons WHERE id = ?').get(brainPersonId);
   if (!person) return jsonError(c, 404, 'not_found', 'BrainPerson が見つかりません。');
   const t = assertTenantAccess(ctx, person.client_company_id);
   if (!t.ok) return jsonError(c, t.code, t.errorType, t.message);
 
-  const { data, error } = await supabaseAdmin
-    .from('brain_interview_sessions').select('*')
-    .eq('brain_person_id', brainPersonId)
-    .order('started_at', { ascending: false });
-  if (error) return jsonError(c, 500, 'db_error', error.message);
-  return c.json(data || []);
+  const rows = db.prepare('SELECT * FROM brain_interview_sessions WHERE brain_person_id = ? ORDER BY started_at DESC')
+    .all(brainPersonId);
+  return c.json(rows.map(shapeInterview));
 });
 
-// GET /api/brain-interviews/:id
-router.get('/:id', async (c) => {
+router.get('/:id', (c) => {
   const ctx = c.get('ctx');
   const id = c.req.param('id');
-  const { data, error } = await supabaseAdmin
-    .from('brain_interview_sessions').select('*').eq('id', id).maybeSingle();
-  if (error) return jsonError(c, 500, 'db_error', error.message);
-  if (!data) return jsonError(c, 404, 'not_found', 'セッションが見つかりません。');
-  const t = assertTenantAccess(ctx, data.client_company_id);
+  const row = db.prepare('SELECT * FROM brain_interview_sessions WHERE id = ?').get(id);
+  if (!row) return jsonError(c, 404, 'not_found', 'セッションが見つかりません。');
+  const t = assertTenantAccess(ctx, row.client_company_id);
   if (!t.ok) return jsonError(c, t.code, t.errorType, t.message);
-  return c.json(data);
+  return c.json(shapeInterview(row));
 });
 
-// POST /api/brain-interviews — 新規セッション開始
-// body: { brainPersonId, useCaseType?, title? }
 router.post('/', async (c) => {
   const ctx = c.get('ctx');
-  const body = await c.req.json();
-  const { brainPersonId, useCaseType, title } = body;
+  const { brainPersonId, useCaseType, title } = await c.req.json();
   if (!brainPersonId) return jsonError(c, 400, 'invalid_request', 'brainPersonId が必要です。');
 
-  const { data: person } = await supabaseAdmin
-    .from('brain_persons').select('client_company_id, full_name').eq('id', brainPersonId).maybeSingle();
-  if (!person) return jsonError(c, 404, 'not_found', 'BrainPerson が見つかりません。');
-  const t = assertTenantAccess(ctx, person.client_company_id);
+  const personRow = db.prepare('SELECT * FROM brain_persons WHERE id = ?').get(brainPersonId);
+  if (!personRow) return jsonError(c, 404, 'not_found', 'BrainPerson が見つかりません。');
+  const t = assertTenantAccess(ctx, personRow.client_company_id);
   if (!t.ok) return jsonError(c, t.code, t.errorType, t.message);
 
-  const { data, error } = await supabaseAdmin.from('brain_interview_sessions').insert({
-    client_company_id: person.client_company_id,
-    brain_person_id: brainPersonId,
-    use_case_type: useCaseType || null,
-    mode: 'text_chat',
-    status: 'in_progress',
-    title: title || `${person.full_name} - ${new Date().toLocaleDateString('ja-JP')}`,
-    transcript: [],
-    interviewer_user_id: ctx.id,
-  }).select().single();
-  if (error) return jsonError(c, 500, 'db_error', error.message);
-  return c.json(data, 201);
+  const id = crypto.randomUUID();
+  db.prepare(`
+    INSERT INTO brain_interview_sessions
+      (id, client_company_id, brain_person_id, use_case_type, mode, status, title, interviewer_user_id)
+    VALUES (?, ?, ?, ?, 'text_chat', 'in_progress', ?, ?)
+  `).run(
+    id,
+    personRow.client_company_id,
+    brainPersonId,
+    useCaseType || null,
+    title || `${personRow.full_name} - ${new Date().toLocaleDateString('ja-JP')}`,
+    ctx.id
+  );
+  const row = db.prepare('SELECT * FROM brain_interview_sessions WHERE id = ?').get(id);
+  return c.json(shapeInterview(row), 201);
 });
 
-// POST /api/brain-interviews/:id/turn — 1 ターン進める
-// body: { userMessage }
-// 返値: { assistantMessage, session }
 router.post('/:id/turn', async (c) => {
   const ctx = c.get('ctx');
   const id = c.req.param('id');
   const { userMessage } = await c.req.json();
   if (!userMessage?.trim()) return jsonError(c, 400, 'invalid_request', 'userMessage が必要です。');
 
-  const { data: session, error: sErr } = await supabaseAdmin
-    .from('brain_interview_sessions').select('*').eq('id', id).maybeSingle();
-  if (sErr) return jsonError(c, 500, 'db_error', sErr.message);
-  if (!session) return jsonError(c, 404, 'not_found', 'セッションが見つかりません。');
-  const t = assertTenantAccess(ctx, session.client_company_id);
+  const sessionRow = db.prepare('SELECT * FROM brain_interview_sessions WHERE id = ?').get(id);
+  if (!sessionRow) return jsonError(c, 404, 'not_found', 'セッションが見つかりません。');
+  const t = assertTenantAccess(ctx, sessionRow.client_company_id);
   if (!t.ok) return jsonError(c, t.code, t.errorType, t.message);
-
-  if (session.status !== 'in_progress') {
+  if (sessionRow.status !== 'in_progress') {
     return jsonError(c, 400, 'invalid_state', 'このセッションは既に終了しています。');
   }
 
-  const { data: person } = await supabaseAdmin
-    .from('brain_persons').select('*').eq('id', session.brain_person_id).maybeSingle();
+  const session = shapeInterview(sessionRow);
+  const personRow = db.prepare('SELECT * FROM brain_persons WHERE id = ?').get(session.brain_person_id);
+  const person = shapeBrainPerson(personRow);
 
   const systemPrompt = `
 あなたは「${person.full_name}」さんの会社の脳みそを育てるためのインタビュアー AI です。
@@ -102,10 +89,8 @@ router.post('/:id/turn', async (c) => {
 - 答えにくい場合は具体例を例示して聞き直す。
 - 短くまとめた共感や要約も加える。
 - 自然な日本語、本文のみ（JSON ではない）。
-- 最後に「もう少し聞きたいことはありますか？」と促すこともある。
 `.trim();
 
-  // 過去の transcript を文脈として渡す
   const history = (session.transcript || [])
     .map((m) => `${m.role === 'user' ? 'インタビュイー' : 'インタビュアー'}: ${m.text}`)
     .join('\n');
@@ -123,42 +108,32 @@ router.post('/:id/turn', async (c) => {
     { role: 'user', text: userMessage, ts: Date.now() },
     { role: 'assistant', text: answer, ts: Date.now() },
   ];
+  const turnCount = newTranscript.filter((m) => m.role === 'assistant').length;
 
-  const { data: updated, error: uErr } = await supabaseAdmin
-    .from('brain_interview_sessions')
-    .update({
-      transcript: newTranscript,
-      turn_count: newTranscript.filter((m) => m.role === 'assistant').length,
-    })
-    .eq('id', id).select().single();
-  if (uErr) return jsonError(c, 500, 'db_error', uErr.message);
-
-  return c.json({ assistantMessage: answer, session: updated });
+  db.prepare('UPDATE brain_interview_sessions SET transcript = ?, turn_count = ? WHERE id = ?')
+    .run(toJsonArr(newTranscript), turnCount, id);
+  const updatedRow = db.prepare('SELECT * FROM brain_interview_sessions WHERE id = ?').get(id);
+  return c.json({ assistantMessage: answer, session: shapeInterview(updatedRow) });
 });
 
-// POST /api/brain-interviews/:id/complete — セッション終了 + Gemini で方針候補を抽出
 router.post('/:id/complete', async (c) => {
   const ctx = c.get('ctx');
   const id = c.req.param('id');
 
-  const { data: session } = await supabaseAdmin
-    .from('brain_interview_sessions').select('*').eq('id', id).maybeSingle();
-  if (!session) return jsonError(c, 404, 'not_found', 'セッションが見つかりません。');
-  const t = assertTenantAccess(ctx, session.client_company_id);
+  const sessionRow = db.prepare('SELECT * FROM brain_interview_sessions WHERE id = ?').get(id);
+  if (!sessionRow) return jsonError(c, 404, 'not_found', 'セッションが見つかりません。');
+  const t = assertTenantAccess(ctx, sessionRow.client_company_id);
   if (!t.ok) return jsonError(c, t.code, t.errorType, t.message);
 
+  const session = shapeInterview(sessionRow);
   if (!session.transcript || session.transcript.length === 0) {
     return jsonError(c, 400, 'empty_transcript', '対話履歴が空です。');
   }
+  const personRow = db.prepare('SELECT * FROM brain_persons WHERE id = ?').get(session.brain_person_id);
+  const person = shapeBrainPerson(personRow);
 
-  const { data: person } = await supabaseAdmin
-    .from('brain_persons').select('*').eq('id', session.brain_person_id).maybeSingle();
-
-  // mark as completed + extracting
-  await supabaseAdmin.from('brain_interview_sessions').update({
-    status: 'completed',
-    completed_at: new Date().toISOString(),
-  }).eq('id', id);
+  // mark completed
+  db.prepare(`UPDATE brain_interview_sessions SET status = 'completed', completed_at = datetime('now') WHERE id = ?`).run(id);
 
   const transcriptText = (session.transcript || [])
     .map((m, i) => `【${i}】${m.role === 'user' ? 'Q' : 'A'}: ${m.text}`)
@@ -225,9 +200,8 @@ ${transcriptText}
   try {
     parsed = await generateJson({ systemPrompt, userPrompt, responseSchema: schema });
   } catch (err) {
-    await supabaseAdmin.from('brain_interview_sessions').update({
-      extraction_status: 'failed', extraction_error: err.message,
-    }).eq('id', id);
+    db.prepare(`UPDATE brain_interview_sessions SET extraction_status = 'failed', extraction_error = ? WHERE id = ?`)
+      .run(err.message, id);
     return jsonError(c, 502, 'gemini_error', err.message);
   }
 
@@ -236,35 +210,41 @@ ${transcriptText}
     'escalationRules','forbiddenActions','trainingFAQ','workReviewCriteria','decisionExamples'
   ]);
 
-  const created = [];
-  for (const c0 of (parsed.candidates || [])) {
-    if (!VALID_CATEGORIES.has(c0.category) || !c0.draftText) continue;
-    let scope = c0.suggestedAudienceScope || 'internal';
-    if (!['public','internal','executive','admin_only'].includes(scope)) scope = 'internal';
-    if (scope === 'admin_only' && !isGlobalAdmin(ctx)) scope = 'executive';
+  const inserted = [];
+  const insert = db.prepare(`
+    INSERT INTO brain_policy_candidates
+      (id, client_company_id, brain_person_id, brain_interview_session_id,
+       category, title, draft_text, source_turn_indexes,
+       suggested_audience_scope, suggested_tags, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
+  `);
 
-    const { data: row, error } = await supabaseAdmin.from('brain_policy_candidates').insert({
-      client_company_id: session.client_company_id,
-      brain_person_id: session.brain_person_id,
-      brain_interview_session_id: id,
-      category: c0.category,
-      title: (c0.title || '').slice(0, 80),
-      draft_text: c0.draftText,
-      source_turn_indexes: Array.isArray(c0.sourceTurnIndexes) ? c0.sourceTurnIndexes.filter(Number.isInteger) : [],
-      suggested_audience_scope: scope,
-      suggested_tags: Array.isArray(c0.suggestedTags) ? c0.suggestedTags.slice(0, 10) : [],
-      status: 'draft',
-    }).select().single();
-    if (!error && row) created.push(row);
-  }
+  tx(() => {
+    for (const c0 of (parsed.candidates || [])) {
+      if (!VALID_CATEGORIES.has(c0.category) || !c0.draftText) continue;
+      let scope = c0.suggestedAudienceScope || 'internal';
+      if (!['public','internal','executive','admin_only'].includes(scope)) scope = 'internal';
+      if (scope === 'admin_only' && !isGlobalAdmin(ctx)) scope = 'executive';
+      const candidateId = crypto.randomUUID();
+      insert.run(
+        candidateId,
+        session.client_company_id,
+        session.brain_person_id,
+        id,
+        c0.category,
+        (c0.title || '').slice(0, 80),
+        c0.draftText,
+        toJsonArr(Array.isArray(c0.sourceTurnIndexes) ? c0.sourceTurnIndexes.filter(Number.isInteger) : []),
+        scope,
+        toJsonArr(Array.isArray(c0.suggestedTags) ? c0.suggestedTags.slice(0, 10) : []),
+      );
+      inserted.push(candidateId);
+    }
+  });
 
-  await supabaseAdmin.from('brain_interview_sessions').update({
-    extracted_at: new Date().toISOString(),
-    extraction_status: 'completed',
-    extraction_error: null,
-  }).eq('id', id);
+  db.prepare(`UPDATE brain_interview_sessions SET extracted_at = datetime('now'), extraction_status = 'completed', extraction_error = NULL WHERE id = ?`).run(id);
 
-  return c.json({ candidatesCreated: created.length, candidates: created });
+  return c.json({ candidatesCreated: inserted.length, candidateIds: inserted });
 });
 
 export default router;
