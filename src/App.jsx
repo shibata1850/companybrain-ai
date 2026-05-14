@@ -32,6 +32,13 @@ import SessionLogs from '@/pages/SessionLogs';
 import AvatarUsageStats from '@/pages/AvatarUsageStats';
 import ExecutiveBrainDemo from '@/pages/ExecutiveBrainDemo';
 import ExecutiveBrainPreLaunchTest from '@/pages/ExecutiveBrainPreLaunchTest';
+// Brain Builder (Phase 1)
+import BrainBuilderHome from '@/pages/BrainBuilderHome';
+import BrainPersonRegistration from '@/pages/BrainPersonRegistration';
+import BrainSourceConsentUpload from '@/pages/BrainSourceConsentUpload';
+import BrainUseCaseWizard from '@/pages/BrainUseCaseWizard';
+import BrainInterview from '@/pages/BrainInterview';
+import BrainPolicyReview from '@/pages/BrainPolicyReview';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -81,6 +88,15 @@ const AuthenticatedApp = () => {
         <Route path="/avatar-usage" element={<AvatarUsageStats />} />
         <Route path="/executive-brain-demo" element={<ExecutiveBrainDemo />} />
         <Route path="/executive-brain-pre-launch-test" element={<ExecutiveBrainPreLaunchTest />} />
+        {/* Brain Builder (Phase 1) */}
+        <Route path="/brain-builder" element={<BrainBuilderHome />} />
+        <Route path="/brain-builder/persons/new" element={<BrainPersonRegistration />} />
+        <Route path="/brain-builder/persons/:personId/edit" element={<BrainPersonRegistration />} />
+        <Route path="/brain-builder/persons/:personId/consent" element={<BrainSourceConsentUpload />} />
+        <Route path="/brain-builder/persons/:personId/use-cases" element={<BrainUseCaseWizard />} />
+        <Route path="/brain-builder/persons/:personId/interview" element={<BrainInterview />} />
+        <Route path="/brain-builder/persons/:personId/interview/:sessionId" element={<BrainInterview />} />
+        <Route path="/brain-builder/persons/:personId/policies" element={<BrainPolicyReview />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

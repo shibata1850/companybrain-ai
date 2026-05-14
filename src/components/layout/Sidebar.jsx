@@ -16,6 +16,12 @@ const navGroups = [
     ]
   },
   {
+    label: "Brain Builder",
+    items: [
+      { icon: Brain, label: "Brain 作成", path: "/brain-builder" },
+    ]
+  },
+  {
     label: "企業データ",
     items: [
       { icon: Building2, label: "会社プロフィール", path: "/company-profile" },
