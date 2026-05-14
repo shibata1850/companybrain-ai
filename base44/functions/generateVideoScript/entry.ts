@@ -1,12 +1,43 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.25";
 
+function jsonError(errorType, message, status = 500, detail) {
+  const body = { errorType, message, error: message };
+  if (detail !== undefined) body.detail = detail;
+  return Response.json(body, { status });
+}
+
+function resolveBusinessRole(user) {
+  const businessRole = String(user?.businessRole || "").trim();
+  if (businessRole) return businessRole;
+  const base44Role = String(user?.role || "").toLowerCase().trim();
+  if (base44Role === "admin") return "softdoing_admin";
+  return "viewer";
+}
+
+function isGlobalAdmin(user) {
+  const role = resolveBusinessRole(user);
+  return role === "softdoing_admin" || String(user?.role || "").toLowerCase() === "admin";
+}
+
+function assertTenantAccess(user, clientCompanyId) {
+  if (isGlobalAdmin(user)) return { allowed: true };
+  const userCompanyId = String(user?.clientCompanyId || "");
+  if (!userCompanyId) {
+    return { allowed: false, errorType: "missing_user_company", message: "User clientCompanyId is missing" };
+  }
+  if (userCompanyId !== String(clientCompanyId || "")) {
+    return { allowed: false, errorType: "tenant_mismatch", message: "You cannot access another company's data." };
+  }
+  return { allowed: true };
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
 
     if (!user) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
+      return jsonError("unauthorized", "認証が必要です。ログインしてください。", 401);
     }
 
     const {
@@ -17,12 +48,22 @@ Deno.serve(async (req) => {
       speakingStyle = "誠実"
     } = await req.json();
 
+    if (!clientCompanyId) {
+      return jsonError("invalid_request", "clientCompanyId is required", 400);
+    }
+
+    // テナント分離: asServiceRole を使う前に必ずチェック
+    const tenant = assertTenantAccess(user, clientCompanyId);
+    if (!tenant.allowed) {
+      return jsonError(tenant.errorType, tenant.message, 403);
+    }
+
     const company = (await base44.asServiceRole.entities.ClientCompany.filter({
       id: clientCompanyId
     }))?.[0];
 
     if (!company) {
-      return Response.json({ error: "Company not found" }, { status: 404 });
+      return jsonError("company_not_found", "ClientCompany が見つかりません。", 404);
     }
 
     // 利用制限チェック
@@ -39,11 +80,12 @@ Deno.serve(async (req) => {
 
     // Lightプランでは動画生成をブロック
     if (limits.videoSecondsLimitMonthly === 0) {
-      return Response.json({
-        error: "Feature not available",
-        message: "Lightプランでは動画生成機能は利用できません。",
-        limitExceeded: true,
-      }, { status: 403 });
+      return jsonError(
+        "plan_not_allowed",
+        "Lightプランでは動画生成機能は利用できません。",
+        403,
+        { planName, limitExceeded: true }
+      );
     }
 
     // 当月のAI回答数チェック（台本生成はAI回答数の上限も確認）
@@ -52,11 +94,12 @@ Deno.serve(async (req) => {
     }).then(c => c.filter(x => x.created_date?.startsWith(currentMonth)));
 
     if (limits.aiAnswerLimitMonthly !== null && monthlyConversations.length >= limits.aiAnswerLimitMonthly) {
-      return Response.json({
-        error: "Usage limit exceeded",
-        message: `月間AI回答数の上限（${limits.aiAnswerLimitMonthly}回答）に達しています。`,
-        limitExceeded: true,
-      }, { status: 429 });
+      return jsonError(
+        "usage_limit_exceeded",
+        `月間AI回答数の上限（${limits.aiAnswerLimitMonthly}回答）に達しています。`,
+        429,
+        { planName, used: monthlyConversations.length, limit: limits.aiAnswerLimitMonthly }
+      );
     }
 
     // 台本生成の利用制限チェック
@@ -74,11 +117,12 @@ Deno.serve(async (req) => {
      }).then(v => v.filter(x => x.created_date?.startsWith(currentMonth) && x.scriptStatus === "approved"));
 
      if (monthlyScripts.length >= scriptLimit) {
-       return Response.json({
-         error: "Usage limit exceeded",
-         message: `月間台本生成数の上限（${scriptLimit}回）に達しています。`,
-         limitExceeded: true,
-       }, { status: 429 });
+       return jsonError(
+         "usage_limit_exceeded",
+         `月間台本生成数の上限（${scriptLimit}回）に達しています。`,
+         429,
+         { planName, used: monthlyScripts.length, limit: scriptLimit }
+       );
      }
     }
 
@@ -90,13 +134,15 @@ Deno.serve(async (req) => {
     const totalVideoSeconds = monthlyVideos.reduce((sum, v) => sum + (v.durationSeconds || 0), 0);
 
     if (limits.videoSecondsLimitMonthly !== null && totalVideoSeconds >= limits.videoSecondsLimitMonthly) {
-     return Response.json({
-       error: "Usage limit exceeded",
-       message: `月間動画生成時間の上限（${limits.videoSecondsLimitMonthly}秒）に達しています。`,
-       limitExceeded: true,
-     }, { status: 429 });
+     return jsonError(
+       "usage_limit_exceeded",
+       `月間動画生成時間の上限（${limits.videoSecondsLimitMonthly}秒）に達しています。`,
+       429,
+       { planName, used: totalVideoSeconds, limit: limits.videoSecondsLimitMonthly }
+     );
     }
 
+    // 台本は社外向けの参照のみ許可（admin_only / executive / internal は流入させない）
     const chunks = await base44.asServiceRole.entities.KnowledgeChunk.filter({
       clientCompanyId,
       status: "approved",
@@ -109,6 +155,10 @@ Deno.serve(async (req) => {
 
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
     const model = Deno.env.get("OPENAI_MODEL") || "gpt-4o";
+
+    if (!openaiApiKey) {
+      return jsonError("missing_openai_key", "OPENAI_API_KEY が設定されていません。", 500);
+    }
 
     const prompt = `
 あなたは日本語の動画台本作成者です。
@@ -185,7 +235,7 @@ ${speakingStyle}
 
     if (!res.ok) {
       const errorText = await res.text();
-      return Response.json({ error: "OpenAI error", detail: errorText }, { status: 500 });
+      return jsonError("openai_api_error", "OpenAI APIの呼び出しに失敗しました。", 502, { status: res.status, detail: errorText });
     }
 
     const data = await res.json();
@@ -210,7 +260,7 @@ ${speakingStyle}
     await base44.asServiceRole.entities.UsageRecord.create({
      clientCompanyId,
      usageType: "script_generation",
-     provider: "gemini",
+     provider: "openai",
      units: 1,
      unitName: "script",
      estimatedCostUsd: 0,
@@ -227,6 +277,7 @@ ${speakingStyle}
     });
 
   } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    console.error("[generateVideoScript] Unexpected error:", error?.message, error?.stack);
+    return jsonError("unexpected_error", error?.message || "Unexpected error", 500, { stack: error?.stack || null });
   }
 });

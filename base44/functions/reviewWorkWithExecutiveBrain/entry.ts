@@ -1,12 +1,55 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.25";
 
+function jsonError(errorType, message, status = 500, detail) {
+  const body = { errorType, message, error: message };
+  if (detail !== undefined) body.detail = detail;
+  return Response.json(body, { status });
+}
+
+function resolveBusinessRole(user) {
+  const businessRole = String(user?.businessRole || "").trim();
+  if (businessRole) return businessRole;
+  const base44Role = String(user?.role || "").toLowerCase().trim();
+  if (base44Role === "admin") return "softdoing_admin";
+  return "viewer";
+}
+
+function isGlobalAdmin(user) {
+  const role = resolveBusinessRole(user);
+  return role === "softdoing_admin" || String(user?.role || "").toLowerCase() === "admin";
+}
+
+function assertTenantAccess(user, clientCompanyId) {
+  if (isGlobalAdmin(user)) return { allowed: true };
+  const userCompanyId = String(user?.clientCompanyId || "");
+  if (!userCompanyId) {
+    return { allowed: false, errorType: "missing_user_company", message: "User clientCompanyId is missing" };
+  }
+  if (userCompanyId !== String(clientCompanyId || "")) {
+    return { allowed: false, errorType: "tenant_mismatch", message: "You cannot access another company's data." };
+  }
+  return { allowed: true };
+}
+
+function knowledgeScopesForAudience(audienceScope, isAdmin) {
+  const base = {
+    public_demo: ["public"],
+    internal: ["public", "internal"],
+    training: ["public", "internal"],
+    executive: ["public", "internal", "executive"],
+  };
+  const scopes = [...(base[audienceScope] || ["public"])];
+  if (isAdmin) scopes.push("admin_only");
+  return scopes;
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
 
     if (!user) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
+      return jsonError("unauthorized", "認証が必要です。ログインしてください。", 401);
     }
 
     const {
@@ -18,6 +61,15 @@ Deno.serve(async (req) => {
       reviewPurpose,
     } = await req.json();
 
+    if (!clientCompanyId) return jsonError("invalid_request", "clientCompanyId is required", 400);
+    if (!avatarProfileId) return jsonError("invalid_request", "avatarProfileId is required", 400);
+
+    // テナント分離: asServiceRole を使う前に必ずチェック
+    const tenant = assertTenantAccess(user, clientCompanyId);
+    if (!tenant.allowed) {
+      return jsonError(tenant.errorType, tenant.message, 403);
+    }
+
     // プラン制限確認
     const limitCheck = await base44.asServiceRole.functions.invoke("checkExecutiveAvatarUsageLimit", {
       clientCompanyId,
@@ -27,43 +79,54 @@ Deno.serve(async (req) => {
     });
 
     if (!limitCheck.allowed) {
-      return Response.json({
-        error: "Usage limit exceeded",
-        message: limitCheck.message,
-      }, { status: 429 });
+      return jsonError("usage_limit_exceeded", limitCheck.message || "利用上限を超過しました。", 429, limitCheck);
     }
 
-    // プロファイル確認
+    // プロファイル取得
     const profile = await base44.asServiceRole.entities.ExecutiveAvatarProfile.get(avatarProfileId);
-    if (!profile || profile.consentStatus !== "approved" || profile.status !== "active") {
-      return Response.json({
-        error: "Avatar not ready",
-        message: "ExecutiveAvatarがアクティブになっていません。",
-      }, { status: 400 });
+    if (!profile) {
+      return jsonError("avatar_not_found", "ExecutiveAvatarProfile が見つかりません。", 404);
+    }
+
+    // アバターのテナント整合確認（avatarProfileId 経由のクロステナント防止）
+    if (!isGlobalAdmin(user) && String(profile.clientCompanyId || "") !== String(clientCompanyId)) {
+      return jsonError("tenant_mismatch", "このアバターは別の会社に属しています。", 403);
+    }
+
+    // 同意・有効化チェック
+    if (profile.consentStatus !== "approved") {
+      return jsonError("consent_not_approved", "本人同意（consentStatus = approved）が承認されていません。", 403);
+    }
+    if (profile.status !== "active") {
+      return jsonError("avatar_not_active", "ExecutiveAvatarがアクティブになっていません。", 400);
     }
 
     // 会社・ポリシー・ナレッジ取得
     const company = await base44.asServiceRole.entities.ClientCompany.get(clientCompanyId);
+    if (!company) {
+      return jsonError("company_not_found", "ClientCompany が見つかりません。", 404);
+    }
+
     const policies = await base44.asServiceRole.entities.AnswerPolicy.filter({
       clientCompanyId,
       status: "active",
     });
     const policy = policies[0] || null;
 
-    const chunks = await base44.asServiceRole.entities.KnowledgeChunk.filter({
+    // KnowledgeChunk をスコープで filter（admin_only は softdoing_admin のみ）
+    const allowedScopes = knowledgeScopesForAudience(profile.audienceScope, isGlobalAdmin(user));
+    const allChunks = await base44.asServiceRole.entities.KnowledgeChunk.filter({
       clientCompanyId,
       status: "approved",
     });
+    const chunks = allChunks.filter((c) => allowedScopes.includes(c.audienceScope));
 
     // Gemini でレビュー生成
     const geminiKey = Deno.env.get("GEMINI_API_KEY");
     const geminiModel = Deno.env.get("GEMINI_MODEL") || "gemini-2.0-flash";
 
     if (!geminiKey) {
-      return Response.json({
-        error: "Gemini API key not configured",
-        message: "GEMINI_API_KEY が設定されていません。",
-      }, { status: 500 });
+      return jsonError("missing_gemini_key", "GEMINI_API_KEY が設定されていません。", 500);
     }
 
     const reviewPrompt = `
@@ -135,10 +198,8 @@ ${inputText}
     );
 
     if (!geminiRes.ok) {
-      return Response.json({
-        error: "Gemini API error",
-        message: "レビュー生成に失敗しました。",
-      }, { status: 500 });
+      const detail = await geminiRes.text();
+      return jsonError("gemini_api_error", "レビュー生成に失敗しました。", 502, { status: geminiRes.status, detail });
     }
 
     const geminiData = await geminiRes.json();
@@ -190,6 +251,7 @@ ${inputText}
         : "レビューが完成しました。",
     });
   } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    console.error("[reviewWorkWithExecutiveBrain] Unexpected error:", error?.message, error?.stack);
+    return jsonError("unexpected_error", error?.message || "Unexpected error", 500, { stack: error?.stack || null });
   }
 });
