@@ -1,39 +1,74 @@
-**Welcome to your Base44 project** 
+# CompanyBrain AI
 
-**About**
+会社の脳みそを、対話で育てる。
 
-View and Edit  your app on [Base44.com](http://Base44.com) 
+経営者・上司・熟練社員の動画と声をもとに AI アバターを作成し、対話を通じて会社の判断基準・教育方針・営業方針・顧客対応方針を蓄積・整理・承認し、属人化を防ぐ「会社の脳みそ」を育てる AI エージェントアバターシステム。
 
-This project contains everything you need to run your app locally.
+## アーキテクチャ
 
-**Edit the code in your local development environment**
+- **Frontend**: React 18 + Vite + Tailwind CSS + shadcn/ui
+- **Backend**: Hono (Node.js)
+- **Database / Auth / Storage**: Supabase (Postgres + Auth + Storage)
+- **AI**: Google Gemini (server-side のみ呼び出し)
 
-Any change pushed to the repo will also be reflected in the Base44 Builder.
+## クイックスタート
 
-**Prerequisites:** 
+詳細は [`docs/migration-to-claude-code-stack.md`](docs/migration-to-claude-code-stack.md) を参照。
 
-1. Clone the repository using the project's Git URL 
-2. Navigate to the project directory
-3. Install dependencies: `npm install`
-4. Create an `.env.local` file and set the right environment variables
+```bash
+# 1. .env.local を作成
+cp .env.example .env.local
+# .env.local を編集して Supabase URL/keys と GEMINI_API_KEY を設定
+
+# 2. 依存インストール
+npm install
+
+# 3. Supabase にスキーマを流す
+#   Supabase Dashboard > SQL Editor で supabase/schema.sql を実行
+#   Storage > Create bucket: brain-source-assets (private)
+
+# 4. 起動（フロント + API を同時起動）
+npm run dev:all
+# → http://localhost:5173
+```
+
+## スクリプト
+
+| コマンド | 用途 |
+|---|---|
+| `npm run dev` | フロント（Vite）開発サーバー |
+| `npm run server:dev` | Hono バックエンド（--watch） |
+| `npm run dev:all` | フロント + バックエンド同時起動 |
+| `npm run build` | フロント本番ビルド |
+| `npm run server:start` | バックエンド本番起動 |
+| `npm run lint` | ESLint |
+
+## ディレクトリ構成
 
 ```
-VITE_BASE44_APP_ID=your_app_id
-VITE_BASE44_APP_BASE_URL=your_backend_url
-
-e.g.
-VITE_BASE44_APP_ID=cbef744a8545c389ef439ea6
-VITE_BASE44_APP_BASE_URL=https://my-to-do-list-81bfaad7.base44.app
+companybrain-ai/
+├── server/                  Hono バックエンド
+│   ├── index.js
+│   ├── lib/{supabase,gemini,auth-middleware}.js
+│   └── routes/{auth,brain-persons,brain-assets,chat,brain-interviews,brain-policies}.js
+├── supabase/
+│   └── schema.sql           Supabase 用 SQL
+├── src/                     React フロント
+│   ├── App.jsx
+│   ├── lib/{AuthContext,api,supabaseClient,useClientCompanyId,utils}.{js,jsx}
+│   ├── pages/{Login,BrainEntryUpload,BrainAvatarStudio}.jsx
+│   └── components/ui/       shadcn/ui
+└── docs/                    設計ドキュメント
 ```
 
-Run the app: `npm run dev`
+## セキュリティ
 
-**Publish your changes**
+- API キーはサーバーサイドのみ
+- テナント分離（`assertTenantAccess`）を `service_role` 操作の前に必ず実施
+- 方針候補は人間承認後のみ `knowledge_chunks` に登録（AI が勝手に正式 Knowledge を更新しない）
+- `admin_only` スコープは `softdoing_admin` のみ
+- 動画 / 音声 / 同意書はプライベートバケット + signed URL
 
-Open [Base44.com](http://Base44.com) and click on Publish.
+## ライセンス
 
-**Docs & Support**
-
-Documentation: [https://docs.base44.com/Integrations/Using-GitHub](https://docs.base44.com/Integrations/Using-GitHub)
-
-Support: [https://app.base44.com/support](https://app.base44.com/support)
+Proprietary. SOFTDOING 株式会社.
