@@ -20,6 +20,7 @@ import chatRouter from './routes/chat.js';
 import brainInterviewsRouter from './routes/brain-interviews.js';
 import brainPoliciesRouter from './routes/brain-policies.js';
 import filesRouter from './routes/files.js';
+import heygenRouter from './routes/heygen.js';
 
 // 起動前にスキーマを適用
 migrate();
@@ -40,6 +41,7 @@ app.route('/api/chat', chatRouter);
 app.route('/api/brain-interviews', brainInterviewsRouter);
 app.route('/api/brain-policies', brainPoliciesRouter);
 app.route('/api/files', filesRouter);
+app.route('/api/heygen', heygenRouter);
 
 app.notFound((c) => c.json({ errorType: 'not_found', message: 'API endpoint not found', error: 'API endpoint not found' }, 404));
 app.onError((err, c) => {

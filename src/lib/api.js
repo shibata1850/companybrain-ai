@@ -88,4 +88,10 @@ export const api = {
     request(`/brain-policies?brainPersonId=${encodeURIComponent(brainPersonId)}${status ? `&status=${status}` : ''}`),
   decidePolicy: (id, { decision, reviewerNote, audienceScope }) =>
     request(`/brain-policies/${id}/decision`, { method: 'POST', body: { decision, reviewerNote, audienceScope } }),
+
+  // HeyGen Live Avatar
+  heygenStatus: () => request('/heygen/status'),
+  heygenSessionToken: () => request('/heygen/session-token', { method: 'POST', body: {} }),
+  heygenAvatars: () => request('/heygen/avatars'),
+  heygenVoices: () => request('/heygen/voices'),
 };

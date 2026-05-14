@@ -46,8 +46,8 @@ router.post('/', async (c) => {
     INSERT INTO brain_persons (
       id, client_company_id, full_name, role_title, department, expertise_domain,
       strength_fields, speaking_style, values_note, internal_use_allowed,
-      external_use_allowed, status, notes, created_by
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      external_use_allowed, status, notes, heygen_avatar_id, heygen_voice_id, created_by
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   insert.run(
     id,
@@ -63,6 +63,8 @@ router.post('/', async (c) => {
     toBool(body.external_use_allowed),
     body.status || 'draft',
     body.notes || null,
+    body.heygen_avatar_id || null,
+    body.heygen_voice_id || null,
     ctx.id
   );
   const row = db.prepare('SELECT * FROM brain_persons WHERE id = ?').get(id);
@@ -94,6 +96,8 @@ router.patch('/:id', async (c) => {
   if ('external_use_allowed' in body) addText('external_use_allowed', toBool(body.external_use_allowed));
   if ('status' in body) addText('status', body.status);
   if ('notes' in body) addText('notes', body.notes);
+  if ('heygen_avatar_id' in body) addText('heygen_avatar_id', body.heygen_avatar_id || null);
+  if ('heygen_voice_id' in body) addText('heygen_voice_id', body.heygen_voice_id || null);
   fields.push(`updated_at = datetime('now')`);
 
   if (fields.length === 1) {
