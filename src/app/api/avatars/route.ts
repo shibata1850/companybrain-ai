@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { storageBucket, supabaseAdmin } from '@/lib/supabase';
 import { extractFrameAndAudio } from '@/lib/media';
 import {
+  createPhotoAvatar,
   pickDefaultJapaneseVoice,
   tryCloneVoice,
   uploadAsset,
@@ -118,7 +119,11 @@ export async function POST(req: NextRequest) {
   let voiceId: string;
   try {
     const frameUp = await uploadAsset(frame, 'image/jpeg');
-    talkingPhotoId = frameUp.key;
+    const photoAvatar = await createPhotoAvatar({
+      imageKey: frameUp.key,
+      name,
+    });
+    talkingPhotoId = photoAvatar.talkingPhotoId;
 
     const envDefaultVoice = process.env.HEYGEN_DEFAULT_VOICE_ID;
     let cloned: string | null = null;

@@ -74,6 +74,112 @@ export async function uploadAsset(
 }
 
 /**
+ * Register an uploaded image as a Photo Avatar so it can be referenced as
+ * a `talking_photo_id` in /v2/video/generate. Just using the raw image_key
+ * doesn't work — HeyGen rejects it as "avatar look not found".
+ *
+ * Flow:
+ *   1. POST /v2/photo_avatar/avatar_group/create with the image_key →
+ *      creates a group and an initial photo avatar record
+ *   2. Poll /v2/photo_avatar/{id} until the record is `ready`
+ *   3. Return the photo avatar id; that id is accepted as talking_photo_id
+ */
+export async function createPhotoAvatar(params: {
+  imageKey: string;
+  name: string;
+}): Promise<{ talkingPhotoId: string }> {
+  const createRes = await heygenFetch<{
+    data?: {
+      id?: string;
+      group_id?: string;
+      default_look_id?: string;
+      photo_avatar_id?: string;
+      looks?: Array<{ id?: string }>;
+    };
+  }>(`${HEYGEN_BASE}/v2/photo_avatar/avatar_group/create`, {
+    method: 'POST',
+    headers: headers({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({
+      name: params.name,
+      image_key: params.imageKey,
+    }),
+  });
+
+  let avatarId =
+    createRes.data?.default_look_id ||
+    createRes.data?.looks?.[0]?.id ||
+    createRes.data?.photo_avatar_id ||
+    createRes.data?.id;
+  const groupId = createRes.data?.group_id || createRes.data?.id;
+
+  // If we already have an id, poll its status until ready (or timeout).
+  // Some plans return the look directly, others require waiting for the
+  // photo to be processed.
+  if (avatarId) {
+    for (let i = 0; i < 30; i++) {
+      try {
+        const statusRes = await heygenFetch<{
+          data?: { status?: string; id?: string };
+        }>(`${HEYGEN_BASE}/v2/photo_avatar/${avatarId}`, {
+          method: 'GET',
+          headers: headers(),
+        });
+        const status = statusRes.data?.status;
+        if (!status || status === 'ready' || status === 'completed') break;
+        if (status === 'failed') {
+          throw new Error('Photo avatar processing failed');
+        }
+      } catch (e) {
+        // Endpoint variant may not exist; bail out of polling and trust the id.
+        console.warn(
+          '[heygen] photo_avatar status poll failed:',
+          e instanceof Error ? e.message : String(e),
+        );
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    return { talkingPhotoId: avatarId };
+  }
+
+  // Otherwise fall back to listing photo avatars and finding ours.
+  if (groupId) {
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      try {
+        const listRes = await heygenFetch<{
+          data?: {
+            photo_avatar_list?: Array<{
+              id?: string;
+              group_id?: string;
+              status?: string;
+            }>;
+          };
+        }>(`${HEYGEN_BASE}/v2/photo_avatar/list`, {
+          method: 'GET',
+          headers: headers(),
+        });
+        const list = listRes.data?.photo_avatar_list || [];
+        const found = list.find((p) => p.group_id === groupId);
+        if (found?.id) {
+          avatarId = found.id;
+          break;
+        }
+      } catch (e) {
+        console.warn('[heygen] photo_avatar list poll failed:', e);
+      }
+    }
+  }
+
+  if (!avatarId) {
+    throw new Error(
+      `Failed to register photo avatar (response: ${JSON.stringify(createRes)})`,
+    );
+  }
+  return { talkingPhotoId: avatarId };
+}
+
+/**
  * Try to clone a voice from an uploaded audio asset (Instant Voice Clone).
  *
  * HeyGen's voice cloning is only available on certain plans. If it isn't
