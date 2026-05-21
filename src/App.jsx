@@ -10,6 +10,7 @@ import { api } from '@/lib/api';
 import Login from '@/pages/Login';
 import BrainEntryUpload from '@/pages/BrainEntryUpload';
 import BrainAvatarStudio from '@/pages/BrainAvatarStudio';
+import BrainPersonDashboard from '@/pages/BrainPersonDashboard';
 
 function FullScreenLoading() {
   return (
@@ -44,7 +45,7 @@ function RootEntry() {
   });
   if (!clientCompanyId || isLoading) return <FullScreenLoading />;
   const hasBrain = Array.isArray(persons) && persons.length > 0;
-  return hasBrain ? <BrainAvatarStudio /> : <BrainEntryUpload />;
+  return hasBrain ? <BrainPersonDashboard /> : <BrainEntryUpload />;
 }
 
 const AuthenticatedApp = () => {
@@ -65,6 +66,8 @@ const AuthenticatedApp = () => {
   return (
     <Routes>
       <Route path="/" element={<RootEntry />} />
+      <Route path="/upload" element={<BrainEntryUpload />} />
+      <Route path="/studio" element={<BrainAvatarStudio />} />
       <Route path="/login" element={<Navigate to="/" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

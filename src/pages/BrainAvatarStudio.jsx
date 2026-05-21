@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useClientCompanyId } from "@/lib/useClientCompanyId";
@@ -14,7 +15,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Brain, Send, Sparkles, MessageCircle, ClipboardCheck, Loader2,
-  VideoOff, LogOut, Check, X, Settings, Wifi, WifiOff, Save
+  VideoOff, LogOut, Check, X, Settings, Wifi, WifiOff, Save, ArrowLeft
 } from "lucide-react";
 
 // HeyGen SDK は dynamic import で読み込む（バンドルサイズ削減）
@@ -43,6 +44,9 @@ export default function BrainAvatarStudio() {
   const { user, logout } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const selectedPersonId = searchParams.get("personId");
 
   const fallbackVideoRef = useRef(null);
   const liveVideoRef = useRef(null);
@@ -65,9 +69,13 @@ export default function BrainAvatarStudio() {
   });
   const primaryPerson = useMemo(() => {
     if (!persons || persons.length === 0) return null;
+    if (selectedPersonId) {
+      const found = persons.find((p) => p.id === selectedPersonId);
+      if (found) return found;
+    }
     const active = persons.find((p) => p.status === "active");
     return active || persons[0];
-  }, [persons]);
+  }, [persons, selectedPersonId]);
 
   // 動画素材
   const { data: assets = [] } = useQuery({
@@ -340,7 +348,10 @@ export default function BrainAvatarStudio() {
             </div>
           </div>
           <div className="flex items-center gap-3 text-xs text-slate-500">
-            <span>{user?.email}</span>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
+              <ArrowLeft className="w-3.5 h-3.5 mr-1" />一覧へ戻る
+            </Button>
+            <span className="hidden sm:inline">{user?.email}</span>
             <Button variant="ghost" size="sm" onClick={logout}>
               <LogOut className="w-3.5 h-3.5 mr-1" />ログアウト
             </Button>
