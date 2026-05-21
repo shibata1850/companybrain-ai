@@ -1,7 +1,8 @@
 import React, { useMemo, useRef, useState } from "react";
-import { useNavigate, useParams, Link } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import BrainPersonSubNav from "@/components/BrainPersonSubNav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,8 +12,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/components/ui/use-toast";
 import {
-  ArrowLeft, Brain, Upload, Video, Mic, FileText, Loader2,
-  Trash2, MessageCircle, Download,
+  ArrowLeft, Upload, Video, Mic, FileText, Loader2,
+  Trash2, Download,
 } from "lucide-react";
 
 const ASSET_KINDS = [
@@ -109,32 +110,7 @@ export default function BrainPersonAssets() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b border-slate-200">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link to="/" className="text-slate-500 hover:text-slate-900 flex items-center gap-1 text-sm">
-              <ArrowLeft className="w-4 h-4" />一覧
-            </Link>
-            <span className="text-slate-300">/</span>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
-                <Brain className="w-4 h-4 text-white" />
-              </div>
-              <div>
-                <div className="text-sm font-semibold text-slate-900">{person.full_name}</div>
-                <div className="text-[11px] text-slate-500">{person.role_title || "役職未設定"}</div>
-              </div>
-            </div>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => navigate(`/studio?personId=${encodeURIComponent(personId)}`)}
-          >
-            <MessageCircle className="w-4 h-4 mr-1" />対話を開く
-          </Button>
-        </div>
-      </header>
+      <BrainPersonSubNav person={person} active="assets" />
 
       <main className="max-w-5xl mx-auto px-6 py-10 space-y-10">
         <div>

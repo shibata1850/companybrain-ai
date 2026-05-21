@@ -21,7 +21,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Brain, Plus, LogOut, Pencil, MessageCircle, Loader2,
-  Users, Sparkles, FolderOpen,
+  Users, Sparkles, FolderOpen, ClipboardCheck, MessagesSquare,
 } from "lucide-react";
 
 const STATUS_OPTIONS = [
@@ -68,6 +68,8 @@ export default function BrainPersonDashboard() {
 
   const openStudio = (id) => navigate(`/studio?personId=${encodeURIComponent(id)}`);
   const openAssets = (id) => navigate(`/persons/${encodeURIComponent(id)}/assets`);
+  const openInterview = (id) => navigate(`/persons/${encodeURIComponent(id)}/interview`);
+  const openPolicies = (id) => navigate(`/persons/${encodeURIComponent(id)}/policies`);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -146,6 +148,8 @@ export default function BrainPersonDashboard() {
                 onOpen={() => openStudio(p.id)}
                 onEdit={() => setEditingId(p.id)}
                 onAssets={() => openAssets(p.id)}
+                onInterview={() => openInterview(p.id)}
+                onPolicies={() => openPolicies(p.id)}
               />
             ))}
           </div>
@@ -166,7 +170,7 @@ export default function BrainPersonDashboard() {
   );
 }
 
-function BrainPersonCard({ person, onOpen, onEdit, onAssets }) {
+function BrainPersonCard({ person, onOpen, onEdit, onAssets, onInterview, onPolicies }) {
   const status = STATUS_BADGE[person.status] || STATUS_BADGE.draft;
   return (
     <Card className="overflow-hidden hover:shadow-md transition-shadow">
@@ -199,11 +203,22 @@ function BrainPersonCard({ person, onOpen, onEdit, onAssets }) {
             <MessageCircle className="w-4 h-4 mr-1" />
             対話を開く
           </Button>
-          <Button onClick={onAssets} size="sm" variant="outline" title="資産を管理">
-            <FolderOpen className="w-4 h-4" />
-          </Button>
           <Button onClick={onEdit} size="sm" variant="outline" title="編集">
             <Pencil className="w-4 h-4" />
+          </Button>
+        </div>
+        <div className="grid grid-cols-3 gap-2 mt-2">
+          <Button onClick={onInterview} size="sm" variant="ghost" className="text-slate-600" title="インタビュー">
+            <MessagesSquare className="w-4 h-4 mr-1" />
+            <span className="text-xs">インタビュー</span>
+          </Button>
+          <Button onClick={onPolicies} size="sm" variant="ghost" className="text-slate-600" title="方針承認">
+            <ClipboardCheck className="w-4 h-4 mr-1" />
+            <span className="text-xs">方針承認</span>
+          </Button>
+          <Button onClick={onAssets} size="sm" variant="ghost" className="text-slate-600" title="資産">
+            <FolderOpen className="w-4 h-4 mr-1" />
+            <span className="text-xs">資産</span>
           </Button>
         </div>
       </CardContent>
