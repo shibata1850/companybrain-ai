@@ -1,0 +1,34 @@
+# docker-compose for production-style deployment.
+# - Builds the image from Dockerfile
+# - Mounts data/ and uploads/ as named volumes for persistence
+# - Reads secrets from .env.local (JWT_SECRET, GEMINI_API_KEY, optional HEYGEN_API_KEY)
+#
+# Usage:
+#   docker compose up -d --build
+#   docker compose logs -f
+#   docker compose down            # data/ and uploads/ volumes survive
+#   docker compose down -v         # drop volumes too
+
+services:
+  app:
+    build: .
+    image: companybrain-ai:latest
+    container_name: companybrain-ai
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env.local
+    environment:
+      NODE_ENV: production
+      SERVER_PORT: 3001
+      SERVER_HOST: 0.0.0.0
+      DB_PATH: /app/data/companybrain.db
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - companybrain_data:/app/data
+      - companybrain_uploads:/app/uploads
+
+volumes:
+  companybrain_data:
+  companybrain_uploads:

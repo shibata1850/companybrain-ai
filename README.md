@@ -64,8 +64,57 @@ npm run dev:all
 | `npm run server:dev` | Hono バックエンド（--watch） |
 | `npm run dev:all` | フロント + バックエンド同時起動 |
 | `npm run build` | フロント本番ビルド |
-| `npm run server:start` | バックエンド本番起動 |
+| `npm run server:start` | バックエンド起動（`dist/` があれば同時にフロント配信） |
+| `npm run prod:build` | フロントをビルドしてからサーバー起動（単発本番起動） |
 | `npm run lint` | ESLint |
+
+## 本番デプロイ
+
+本番では **同一の Node プロセスがフロント（`dist/`）と API（`/api/*`）の両方を配信**します。
+追加のリバースプロキシは必須ではありません（HTTPS 終端は必要に応じて前段に置いてください）。
+
+### Docker (推奨)
+
+```bash
+# 1. .env.local に本番値をセット（JWT_SECRET, GEMINI_API_KEY 等）
+cp .env.example .env.local
+# 編集
+
+# 2. ビルド + 起動（データは名前付きボリュームに永続化）
+docker compose up -d --build
+
+# 3. 動作確認
+curl http://localhost:3001/api/health
+# → {"ok":true,...}
+```
+
+ボリューム:
+- `companybrain_data`     → SQLite DB (`/app/data/companybrain.db`)
+- `companybrain_uploads`  → アップロードファイル (`/app/uploads`)
+
+停止と再起動はデータを保持: `docker compose down && docker compose up -d`
+データごと初期化: `docker compose down -v`
+
+### 素の Node で本番起動
+
+```bash
+npm ci --omit=dev   # ※ dev 依存も含む場合は npm ci
+npm run build
+NODE_ENV=production npm run server:start
+```
+
+`.env.local` で本番設定を上書きできます。アプリは `http://0.0.0.0:${SERVER_PORT|3001}` で待ち受けます。
+
+### 必須の本番設定
+
+| 環境変数 | 説明 |
+|---|---|
+| `JWT_SECRET` | 32文字以上のランダム文字列。**必ず固定値**を設定（未設定だと再起動でセッション失効）。 |
+| `GEMINI_API_KEY` | AI チャット・方針抽出に使用。<https://aistudio.google.com/apikey> |
+| `SERVER_PORT` | 待受ポート（デフォルト 3001） |
+| `DB_PATH` | SQLite ファイルパス（永続化先。デフォルト `./data/companybrain.db`） |
+| `UPLOAD_DIR` | アップロードファイル保存先（デフォルト `./uploads`） |
+| `HEYGEN_API_KEY` | （任意）Live Avatar を有効化。未設定なら動画ループ再生にフォールバック |
 
 ## ディレクトリ構成
 

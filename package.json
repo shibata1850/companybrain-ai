@@ -11,7 +11,9 @@
     "preview": "vite preview",
     "server:dev": "node --watch server/index.js",
     "server:start": "node server/index.js",
-    "dev:all": "concurrently -k -n web,api -c cyan,magenta \"npm run dev\" \"npm run server:dev\""
+    "dev:all": "concurrently -k -n web,api -c cyan,magenta \"npm run dev\" \"npm run server:dev\"",
+    "start": "node server/index.js",
+    "prod:build": "npm run build && node server/index.js"
   },
   "dependencies": {
     "@heygen/streaming-avatar": "~2.0.17",
