@@ -60,18 +60,25 @@ export default function AvatarDetail({ id }: { id: string }) {
     );
   }, [load]);
 
-  // Poll any non-terminal generations until they finish.
-  const pendingIds = useMemo(() => {
-    if (!data) return [] as string[];
+  // Stringify pending ids so the polling effect only restarts when the
+  // set of pending generations actually changes (otherwise every load()
+  // would reset the 5-second timer and polls would never fire).
+  const pendingKey = useMemo(() => {
+    if (!data) return '';
     return data.generations
       .filter((g) => g.status !== 'ready' && g.status !== 'error')
-      .map((g) => g.id);
+      .map((g) => g.id)
+      .sort()
+      .join(',');
   }, [data]);
 
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
-    if (pendingIds.length === 0) return;
+    if (!pendingKey) return;
+    const pendingIds = pendingKey.split(',');
+    console.log('[polling] starting for', pendingIds);
     pollTimer.current = setInterval(async () => {
+      console.log('[polling] tick — checking', pendingIds);
       for (const gid of pendingIds) {
         try {
           await fetch(`/api/generations/${gid}`);
@@ -84,7 +91,21 @@ export default function AvatarDetail({ id }: { id: string }) {
     return () => {
       if (pollTimer.current) clearInterval(pollTimer.current);
     };
-  }, [pendingIds, load]);
+  }, [pendingKey, load]);
+
+  async function refresh() {
+    if (!data) return;
+    for (const g of data.generations) {
+      if (g.status !== 'ready' && g.status !== 'error') {
+        try {
+          await fetch(`/api/generations/${g.id}`);
+        } catch {
+          // ignore
+        }
+      }
+    }
+    await load();
+  }
 
   async function ask(e: React.FormEvent) {
     e.preventDefault();
@@ -188,45 +209,76 @@ export default function AvatarDetail({ id }: { id: string }) {
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold">これまでの回答</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">これまでの回答</h2>
+          <button
+            type="button"
+            onClick={refresh}
+            className="rounded-md border border-white/20 px-3 py-1 text-xs text-white/70 hover:bg-white/10"
+          >
+            手動で更新
+          </button>
+        </div>
         {generations.length === 0 && (
           <p className="mt-2 text-sm text-white/50">まだ質問がありません。</p>
         )}
         <ul className="mt-3 space-y-4">
-          {generations.map((g) => (
-            <li
-              key={g.id}
-              className="rounded-lg border border-white/10 bg-white/5 p-4"
-            >
-              <div className="text-sm text-white/50">
-                {new Date(g.created_at).toLocaleString('ja-JP')}
-              </div>
-              <div className="mt-1 font-medium">Q. {g.question}</div>
-              {g.answer && (
-                <div className="mt-2 whitespace-pre-wrap text-sm text-white/80">
-                  A. {g.answer}
+          {generations.map((g) => {
+            const elapsedSec = Math.max(
+              0,
+              Math.round(
+                (Date.now() - new Date(g.created_at).getTime()) / 1000,
+              ),
+            );
+            const elapsedLabel =
+              elapsedSec < 60
+                ? `${elapsedSec}秒経過`
+                : `${Math.floor(elapsedSec / 60)}分${elapsedSec % 60}秒経過`;
+            return (
+              <li
+                key={g.id}
+                className="rounded-lg border border-white/10 bg-white/5 p-4"
+              >
+                <div className="text-sm text-white/50">
+                  {new Date(g.created_at).toLocaleString('ja-JP')}
                 </div>
-              )}
-              <div className="mt-3">
-                {g.status === 'ready' && g.video_url ? (
-                  <video
-                    controls
-                    src={g.video_url}
-                    poster={g.thumbnail_url ?? undefined}
-                    className="w-full max-w-md rounded-md border border-white/10"
-                  />
-                ) : g.status === 'error' ? (
-                  <div className="text-sm text-red-300">
-                    エラー: {g.error_message || '不明なエラー'}
-                  </div>
-                ) : (
-                  <div className="text-sm text-white/50">
-                    ステータス: {g.status} … 数十秒〜数分で動画が生成されます
+                <div className="mt-1 font-medium">Q. {g.question}</div>
+                {g.answer && (
+                  <div className="mt-2 whitespace-pre-wrap text-sm text-white/80">
+                    A. {g.answer}
                   </div>
                 )}
-              </div>
-            </li>
-          ))}
+                <div className="mt-3">
+                  {g.status === 'ready' && g.video_url ? (
+                    <video
+                      controls
+                      src={g.video_url}
+                      poster={g.thumbnail_url ?? undefined}
+                      className="w-full max-w-md rounded-md border border-white/10"
+                    />
+                  ) : g.status === 'error' ? (
+                    <div className="text-sm text-red-300">
+                      エラー: {g.error_message || '不明なエラー'}
+                    </div>
+                  ) : (
+                    <div className="rounded-md border border-indigo-400/30 bg-indigo-400/10 p-3 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-indigo-300" />
+                        <span>
+                          動画生成中 (ステータス: {g.status}) — {elapsedLabel}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-white/60">
+                        HeyGen側でレンダリング中です。通常1〜3分かかります。
+                        画面を閉じても処理は続き、戻ってきて「手動で更新」を
+                        押せば結果を取り込めます。
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       </section>
 
