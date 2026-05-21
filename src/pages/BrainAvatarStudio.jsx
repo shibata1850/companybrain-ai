@@ -12,10 +12,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Brain, Send, Sparkles, MessageCircle, ClipboardCheck, Loader2,
-  VideoOff, LogOut, Check, X, Settings, Wifi, WifiOff, Save, ArrowLeft
+  VideoOff, LogOut, Check, X, Settings, Wifi, WifiOff, Save, ArrowLeft,
+  RefreshCw, ExternalLink,
 } from "lucide-react";
 
 // HeyGen SDK は dynamic import で読み込む（バンドルサイズ削減）
@@ -111,6 +115,33 @@ export default function BrainAvatarStudio() {
   });
   const heygenConfigured = !!heygenStatus?.configured;
   const hasHeygenIds = !!(primaryPerson?.heygen_avatar_id);
+
+  // HeyGen catalogs (only fetched when configured + settings tab open)
+  const heygenCatalogEnabled = heygenConfigured && tab === "settings";
+  const {
+    data: heygenAvatarsResp,
+    isFetching: avatarsFetching,
+    refetch: refetchAvatars,
+    error: avatarsError,
+  } = useQuery({
+    queryKey: ["heygen-avatars"],
+    queryFn: () => api.heygenAvatars(),
+    enabled: heygenCatalogEnabled,
+    staleTime: 5 * 60 * 1000,
+  });
+  const {
+    data: heygenVoicesResp,
+    isFetching: voicesFetching,
+    refetch: refetchVoices,
+    error: voicesError,
+  } = useQuery({
+    queryKey: ["heygen-voices"],
+    queryFn: () => api.heygenVoices(),
+    enabled: heygenCatalogEnabled,
+    staleTime: 5 * 60 * 1000,
+  });
+  const heygenAvatars = heygenAvatarsResp?.avatars || [];
+  const heygenVoices = heygenVoicesResp?.voices || [];
 
   // 方針候補
   const { data: draftCandidates = [] } = useQuery({
@@ -606,62 +637,281 @@ export default function BrainAvatarStudio() {
 
             {/* === Live 設定 === */}
             <TabsContent value="settings" className="mt-4">
-              <Card className="border-slate-200">
-                <CardContent className="pt-5 space-y-4">
-                  <div>
-                    <h3 className="text-sm font-semibold text-slate-900">HeyGen Live Avatar 設定</h3>
-                    <p className="text-xs text-slate-500 mt-1">
-                      HeyGen.com で作成した Interactive Avatar（Digital Twin 含む）の avatar_id と voice_id を登録してください。
-                    </p>
-                  </div>
-                  <div className="bg-slate-50 rounded-md p-3 text-xs text-slate-600 space-y-1">
-                    <p className="font-semibold text-slate-700">取得手順:</p>
-                    <p>1. <a href="https://app.heygen.com/" target="_blank" rel="noopener noreferrer" className="text-cyan-600 hover:underline">HeyGen.com</a> にログイン</p>
-                    <p>2. ご自身のアバター（Photo / Video Avatar / Digital Twin）を作成・選択</p>
-                    <p>3. 「Avatar Settings」または「Use in Interactive Avatar」から ID をコピー</p>
-                    <p>4. Voice ID も「My Voices」または「Voice Library」から取得</p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="heygen-avatar-id">HeyGen Avatar ID</Label>
-                    <Input
-                      id="heygen-avatar-id"
-                      placeholder="例: Anna_public_3_20240108"
-                      value={settingsAvatar}
-                      onChange={(e) => setSettingsAvatar(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="heygen-voice-id">HeyGen Voice ID（任意）</Label>
-                    <Input
-                      id="heygen-voice-id"
-                      placeholder="例: 1bd001e7e50f421d891986aad5158bc8"
-                      value={settingsVoice}
-                      onChange={(e) => setSettingsVoice(e.target.value)}
-                    />
-                    <p className="text-[10px] text-slate-400">
-                      空欄の場合は HeyGen のデフォルト voice が使われます。
-                    </p>
-                  </div>
-
-                  <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-                    <div className="text-[11px] text-slate-500">
-                      {heygenConfigured ? (
-                        <span className="text-emerald-600">✓ サーバーに HEYGEN_API_KEY 設定済み</span>
-                      ) : (
-                        <span className="text-amber-600">⚠ サーバーで HEYGEN_API_KEY が未設定</span>
-                      )}
-                    </div>
-                    <Button size="sm" onClick={() => saveHeygenIdsMutation.mutate()} disabled={saveHeygenIdsMutation.isPending}>
-                      <Save className="w-3.5 h-3.5 mr-1" />保存
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+              <HeygenSettingsTab
+                heygenConfigured={heygenConfigured}
+                avatars={heygenAvatars}
+                voices={heygenVoices}
+                avatarsFetching={avatarsFetching}
+                voicesFetching={voicesFetching}
+                avatarsError={avatarsError}
+                voicesError={voicesError}
+                refetchAvatars={refetchAvatars}
+                refetchVoices={refetchVoices}
+                settingsAvatar={settingsAvatar}
+                setSettingsAvatar={setSettingsAvatar}
+                settingsVoice={settingsVoice}
+                setSettingsVoice={setSettingsVoice}
+                saveMutation={saveHeygenIdsMutation}
+              />
             </TabsContent>
           </Tabs>
         </div>
       </div>
     </div>
+  );
+}
+
+const JAPANESE_LANG_LABELS = ["Japanese", "japanese", "ja", "ja-JP", "JP"];
+
+function HeygenSettingsTab({
+  heygenConfigured,
+  avatars, voices,
+  avatarsFetching, voicesFetching,
+  avatarsError, voicesError,
+  refetchAvatars, refetchVoices,
+  settingsAvatar, setSettingsAvatar,
+  settingsVoice, setSettingsVoice,
+  saveMutation,
+}) {
+  const [voiceFilter, setVoiceFilter] = useState("ja");
+  const [manualMode, setManualMode] = useState(false);
+
+  const selectedAvatar = avatars.find((a) => a.avatar_id === settingsAvatar) || null;
+  const selectedVoice = voices.find((v) => v.voice_id === settingsVoice) || null;
+
+  const filteredVoices = useMemo(() => {
+    if (!voices.length) return [];
+    if (voiceFilter === "all") return voices;
+    if (voiceFilter === "ja") {
+      return voices.filter((v) =>
+        JAPANESE_LANG_LABELS.some((l) => (v.language || "").toLowerCase() === l.toLowerCase()),
+      );
+    }
+    // language code like 'en'
+    return voices.filter((v) => (v.language || "").toLowerCase().includes(voiceFilter.toLowerCase()));
+  }, [voices, voiceFilter]);
+
+  const languages = useMemo(() => {
+    const set = new Set();
+    voices.forEach((v) => v.language && set.add(v.language));
+    return Array.from(set).sort();
+  }, [voices]);
+
+  const pickFirstPublicAvatar = () => {
+    const pub = avatars.find((a) => a.is_public) || avatars[0];
+    if (pub) setSettingsAvatar(pub.avatar_id);
+  };
+
+  return (
+    <Card className="border-slate-200">
+      <CardContent className="pt-5 space-y-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">HeyGen Live Avatar 設定</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              この Brain Person に使う HeyGen の Avatar と Voice を選択してください。
+            </p>
+          </div>
+          <a
+            href="https://app.heygen.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-cyan-600 hover:underline inline-flex items-center gap-1 shrink-0"
+          >
+            HeyGen.com <ExternalLink className="w-3 h-3" />
+          </a>
+        </div>
+
+        {!heygenConfigured && (
+          <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-xs text-amber-800">
+            サーバーで <code>HEYGEN_API_KEY</code> が未設定のため、リストを取得できません。
+            <code>.env.local</code> に追加して再起動してください。
+          </div>
+        )}
+
+        {/* ===== AVATAR ===== */}
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label>Avatar</Label>
+            <div className="flex items-center gap-2">
+              {heygenConfigured && avatars.length > 0 && !settingsAvatar && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs"
+                  onClick={pickFirstPublicAvatar}
+                >
+                  公開アバターを 1 つ選ぶ
+                </Button>
+              )}
+              {heygenConfigured && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs"
+                  onClick={() => refetchAvatars()}
+                  disabled={avatarsFetching}
+                >
+                  {avatarsFetching ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                </Button>
+              )}
+            </div>
+          </div>
+          {avatarsError && (
+            <div className="text-xs text-red-600 break-words">
+              アバター取得失敗: {avatarsError.message}
+            </div>
+          )}
+          <div className="grid grid-cols-[180px_1fr] gap-3 items-start">
+            <div className="w-[180px] h-[180px] rounded-lg border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center">
+              {selectedAvatar?.normal_preview ? (
+                <img
+                  src={selectedAvatar.normal_preview}
+                  alt={selectedAvatar.pose_name || selectedAvatar.avatar_id}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-[11px] text-slate-400 text-center px-2">
+                  未選択
+                </span>
+              )}
+            </div>
+            <div className="space-y-2">
+              {manualMode ? (
+                <Input
+                  value={settingsAvatar}
+                  onChange={(e) => setSettingsAvatar(e.target.value)}
+                  placeholder="avatar_id を直接入力"
+                />
+              ) : (
+                <Select value={settingsAvatar || ""} onValueChange={setSettingsAvatar} disabled={!heygenConfigured}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={avatarsFetching ? "読み込み中..." : "アバターを選択..."} />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px]">
+                    {avatars.length === 0 && (
+                      <div className="px-2 py-3 text-xs text-slate-400">利用可能なアバターがありません</div>
+                    )}
+                    {avatars.map((a) => (
+                      <SelectItem key={a.avatar_id} value={a.avatar_id}>
+                        <span className="flex items-center gap-2">
+                          <span>{a.pose_name || a.avatar_id}</span>
+                          <span className="text-[10px] text-slate-400">
+                            {a.gender || ""}{a.is_public ? " · 公開" : ""}
+                          </span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {selectedAvatar && (
+                <div className="text-[11px] text-slate-500 space-y-0.5">
+                  <div>ID: <code className="text-slate-700">{selectedAvatar.avatar_id}</code></div>
+                  {selectedAvatar.pose_name && <div>Pose: {selectedAvatar.pose_name}</div>}
+                </div>
+              )}
+              <button
+                onClick={() => setManualMode((m) => !m)}
+                className="text-[10px] text-slate-400 hover:text-slate-600 underline"
+              >
+                {manualMode ? "← 一覧から選ぶ" : "リストに無い ID を直接入力"}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* ===== VOICE ===== */}
+        <section className="space-y-2 pt-2 border-t border-slate-100">
+          <div className="flex items-center justify-between">
+            <Label>Voice（任意）</Label>
+            <div className="flex items-center gap-2">
+              {heygenConfigured && languages.length > 0 && (
+                <Select value={voiceFilter} onValueChange={setVoiceFilter}>
+                  <SelectTrigger className="h-7 text-xs w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ja">日本語のみ</SelectItem>
+                    <SelectItem value="all">全言語</SelectItem>
+                    {languages.filter((l) => !JAPANESE_LANG_LABELS.includes(l)).slice(0, 20).map((l) => (
+                      <SelectItem key={l} value={l}>{l}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {heygenConfigured && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs"
+                  onClick={() => refetchVoices()}
+                  disabled={voicesFetching}
+                >
+                  {voicesFetching ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                </Button>
+              )}
+            </div>
+          </div>
+          {voicesError && (
+            <div className="text-xs text-red-600 break-words">
+              ボイス取得失敗: {voicesError.message}
+            </div>
+          )}
+          <Select
+            value={settingsVoice || "__none__"}
+            onValueChange={(v) => setSettingsVoice(v === "__none__" ? "" : v)}
+            disabled={!heygenConfigured}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={voicesFetching ? "読み込み中..." : "デフォルトを使う（未選択）"} />
+            </SelectTrigger>
+            <SelectContent className="max-h-[300px]">
+              <SelectItem value="__none__">
+                （デフォルト）
+              </SelectItem>
+              {filteredVoices.length === 0 && (
+                <div className="px-2 py-3 text-xs text-slate-400">該当するボイスがありません</div>
+              )}
+              {filteredVoices.slice(0, 200).map((v) => (
+                <SelectItem key={v.voice_id} value={v.voice_id}>
+                  <span className="flex items-center gap-2">
+                    <span>{v.name || v.voice_id}</span>
+                    <span className="text-[10px] text-slate-400">
+                      {v.language || ""}{v.gender ? ` · ${v.gender}` : ""}
+                    </span>
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedVoice?.preview_audio && (
+            <audio src={selectedVoice.preview_audio} controls className="w-full mt-1" style={{ height: 32 }} />
+          )}
+          <p className="text-[10px] text-slate-400">
+            未選択時は HeyGen のアバター標準ボイスが使われます。
+          </p>
+        </section>
+
+        {/* ===== FOOTER ===== */}
+        <div className="flex justify-between items-center pt-3 border-t border-slate-100">
+          <div className="text-[11px] text-slate-500">
+            {heygenConfigured ? (
+              <span className="text-emerald-600">✓ HEYGEN_API_KEY 設定済み</span>
+            ) : (
+              <span className="text-amber-600">⚠ HEYGEN_API_KEY 未設定</span>
+            )}
+          </div>
+          <Button
+            size="sm"
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+          >
+            {saveMutation.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1" />}
+            保存
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
