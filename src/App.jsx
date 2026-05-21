@@ -11,6 +11,7 @@ import Login from '@/pages/Login';
 import BrainEntryUpload from '@/pages/BrainEntryUpload';
 import BrainAvatarStudio from '@/pages/BrainAvatarStudio';
 import BrainPersonDashboard from '@/pages/BrainPersonDashboard';
+import BrainPersonAssets from '@/pages/BrainPersonAssets';
 
 function FullScreenLoading() {
   return (
@@ -68,6 +69,7 @@ const AuthenticatedApp = () => {
       <Route path="/" element={<RootEntry />} />
       <Route path="/upload" element={<BrainEntryUpload />} />
       <Route path="/studio" element={<BrainAvatarStudio />} />
+      <Route path="/persons/:personId/assets" element={<BrainPersonAssets />} />
       <Route path="/login" element={<Navigate to="/" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

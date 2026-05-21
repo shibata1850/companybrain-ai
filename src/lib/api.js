@@ -67,6 +67,7 @@ export const api = {
     return request('/brain-assets', { method: 'POST', body: form });
   },
   getAssetSignedUrl: (assetId) => request(`/brain-assets/${assetId}/signed-url`),
+  deleteBrainAsset: (assetId) => request(`/brain-assets/${assetId}`, { method: 'DELETE' }),
 
   // Chat
   chat: ({ brainPersonId, message }) =>

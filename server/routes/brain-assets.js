@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { requireAuth, jsonError } from '../lib/auth-middleware.js';
 import { db } from '../lib/db.js';
 import { assertTenantAccess } from '../lib/context.js';
-import { saveFile } from '../lib/storage.js';
+import { saveFile, deleteFile } from '../lib/storage.js';
 import { signFileToken } from '../lib/auth.js';
 
 const router = new Hono();
@@ -72,6 +72,20 @@ router.post('/', async (c) => {
   );
   const row = db.prepare('SELECT * FROM brain_source_assets WHERE id = ?').get(id);
   return c.json(row, 201);
+});
+
+// DELETE /api/brain-assets/:id
+router.delete('/:id', (c) => {
+  const ctx = c.get('ctx');
+  const id = c.req.param('id');
+  const asset = db.prepare('SELECT * FROM brain_source_assets WHERE id = ?').get(id);
+  if (!asset) return jsonError(c, 404, 'not_found', 'アセットが見つかりません。');
+  const t = assertTenantAccess(ctx, asset.client_company_id);
+  if (!t.ok) return jsonError(c, t.code, t.errorType, t.message);
+
+  db.prepare('DELETE FROM brain_source_assets WHERE id = ?').run(id);
+  deleteFile(asset.storage_path);
+  return c.json({ ok: true });
 });
 
 // GET /api/brain-assets/:id/signed-url

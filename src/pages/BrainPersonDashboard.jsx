@@ -21,7 +21,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Brain, Plus, LogOut, Pencil, MessageCircle, Loader2,
-  Users, Sparkles,
+  Users, Sparkles, FolderOpen,
 } from "lucide-react";
 
 const STATUS_OPTIONS = [
@@ -67,6 +67,7 @@ export default function BrainPersonDashboard() {
   );
 
   const openStudio = (id) => navigate(`/studio?personId=${encodeURIComponent(id)}`);
+  const openAssets = (id) => navigate(`/persons/${encodeURIComponent(id)}/assets`);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -144,6 +145,7 @@ export default function BrainPersonDashboard() {
                 person={p}
                 onOpen={() => openStudio(p.id)}
                 onEdit={() => setEditingId(p.id)}
+                onAssets={() => openAssets(p.id)}
               />
             ))}
           </div>
@@ -164,7 +166,7 @@ export default function BrainPersonDashboard() {
   );
 }
 
-function BrainPersonCard({ person, onOpen, onEdit }) {
+function BrainPersonCard({ person, onOpen, onEdit, onAssets }) {
   const status = STATUS_BADGE[person.status] || STATUS_BADGE.draft;
   return (
     <Card className="overflow-hidden hover:shadow-md transition-shadow">
@@ -197,7 +199,10 @@ function BrainPersonCard({ person, onOpen, onEdit }) {
             <MessageCircle className="w-4 h-4 mr-1" />
             対話を開く
           </Button>
-          <Button onClick={onEdit} size="sm" variant="outline">
+          <Button onClick={onAssets} size="sm" variant="outline" title="資産を管理">
+            <FolderOpen className="w-4 h-4" />
+          </Button>
+          <Button onClick={onEdit} size="sm" variant="outline" title="編集">
             <Pencil className="w-4 h-4" />
           </Button>
         </div>
