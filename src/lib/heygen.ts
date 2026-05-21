@@ -28,10 +28,14 @@ async function heygenFetch<T>(
 
 /**
  * Upload a raw asset (image or audio) to HeyGen. Returns the `image_key`
- * or `audio_key` HeyGen uses to reference it.
+ * (or `audio_key` for audio) HeyGen uses to reference it.
  *
- * NB: the upload API takes the raw binary as the request body and the
- * content type in the Content-Type header.
+ * The upload API takes the raw binary as the request body and the content
+ * type in the Content-Type header.
+ *
+ * The returned `image_key` can be used directly as `talking_photo_id` in
+ * the video generation request — there is no separate "create talking
+ * photo" step required.
  */
 export async function uploadAsset(
   bytes: Buffer | Uint8Array,
@@ -49,10 +53,20 @@ export async function uploadAsset(
     throw new Error(`HeyGen asset upload failed (${res.status}): ${text}`);
   }
   const data = JSON.parse(text) as {
-    data?: { id?: string; image_key?: string; url?: string };
+    data?: {
+      id?: string;
+      image_key?: string;
+      audio_key?: string;
+      asset_id?: string;
+      url?: string;
+    };
     code?: number;
   };
-  const key = data.data?.image_key || data.data?.id;
+  const key =
+    data.data?.image_key ||
+    data.data?.audio_key ||
+    data.data?.id ||
+    data.data?.asset_id;
   if (!key) {
     throw new Error(`HeyGen asset upload: missing key in response: ${text}`);
   }
@@ -60,45 +74,83 @@ export async function uploadAsset(
 }
 
 /**
- * Create a Photo Avatar (talking photo) from an uploaded image asset.
- * Returns a `talking_photo_id` usable in the video generation endpoint.
+ * Try to clone a voice from an uploaded audio asset (Instant Voice Clone).
+ *
+ * HeyGen's voice cloning is only available on certain plans. If it isn't
+ * available we return `null` and the caller should fall back to a default
+ * voice.
  */
-export async function createTalkingPhoto(
-  imageKey: string,
-): Promise<{ talkingPhotoId: string }> {
-  const data = await heygenFetch<{
-    data?: { talking_photo_id?: string; id?: string };
-  }>(`${HEYGEN_BASE}/v1/talking_photo`, {
-    method: 'POST',
-    headers: headers({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ image_key: imageKey }),
-  });
-  const id = data.data?.talking_photo_id || data.data?.id;
-  if (!id) throw new Error('HeyGen talking_photo: no id returned');
-  return { talkingPhotoId: id };
-}
-
-/**
- * Clone a voice from an uploaded audio asset (Instant Voice Clone).
- */
-export async function cloneVoice(params: {
+export async function tryCloneVoice(params: {
   audioKey: string;
   name: string;
-}): Promise<{ voiceId: string }> {
-  const data = await heygenFetch<{
-    data?: { voice_id?: string; id?: string };
-  }>(`${HEYGEN_BASE}/v1/voice.instant_clone`, {
-    method: 'POST',
-    headers: headers({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ audio_asset_id: params.audioKey, name: params.name }),
-  });
-  const id = data.data?.voice_id || data.data?.id;
-  if (!id) throw new Error('HeyGen voice clone: no voice_id returned');
-  return { voiceId: id };
+}): Promise<string | null> {
+  // We try a couple of variants of the endpoint because HeyGen has shipped
+  // it under different names depending on the plan / API version.
+  const attempts: Array<{ url: string; body: Record<string, unknown> }> = [
+    {
+      url: `${HEYGEN_BASE}/v2/voice/instant_clone`,
+      body: { audio_asset_id: params.audioKey, name: params.name },
+    },
+    {
+      url: `${HEYGEN_BASE}/v1/voice.instant_clone`,
+      body: { audio_asset_id: params.audioKey, name: params.name },
+    },
+  ];
+
+  for (const attempt of attempts) {
+    try {
+      const data = await heygenFetch<{
+        data?: { voice_id?: string; id?: string };
+      }>(attempt.url, {
+        method: 'POST',
+        headers: headers({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(attempt.body),
+      });
+      const id = data.data?.voice_id || data.data?.id;
+      if (id) return id;
+    } catch (e) {
+      console.warn(
+        `[heygen] voice clone via ${attempt.url} failed:`,
+        e instanceof Error ? e.message : String(e),
+      );
+    }
+  }
+  return null;
 }
 
 /**
- * Kick off a video render that lip-syncs the talking photo to the cloned
+ * Find the first Japanese voice in HeyGen's voice library, to use when
+ * cloning isn't available.
+ */
+export async function pickDefaultJapaneseVoice(): Promise<string | null> {
+  try {
+    const data = await heygenFetch<{
+      data?: {
+        voices?: Array<{
+          voice_id?: string;
+          language?: string;
+          gender?: string;
+        }>;
+      };
+    }>(`${HEYGEN_BASE}/v2/voices`, { method: 'GET', headers: headers() });
+    const voices = data.data?.voices || [];
+    const japanese = voices.find(
+      (v) =>
+        v.language?.toLowerCase().includes('japan') ||
+        v.language?.toLowerCase() === 'ja',
+    );
+    return japanese?.voice_id || voices[0]?.voice_id || null;
+  } catch (e) {
+    console.warn(
+      '[heygen] failed to list voices:',
+      e instanceof Error ? e.message : String(e),
+    );
+    return null;
+  }
+}
+
+/**
+ * Kick off a video render that lip-syncs the talking photo to the chosen
  * voice reading `inputText`. Returns the `video_id` to poll.
  */
 export async function generateVideo(params: {

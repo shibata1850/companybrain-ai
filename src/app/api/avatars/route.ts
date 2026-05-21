@@ -3,8 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { storageBucket, supabaseAdmin } from '@/lib/supabase';
 import { extractFrameAndAudio } from '@/lib/media';
 import {
-  cloneVoice,
-  createTalkingPhoto,
+  pickDefaultJapaneseVoice,
+  tryCloneVoice,
   uploadAsset,
 } from '@/lib/heygen';
 import { processTrainingVideo } from '@/lib/processing';
@@ -110,16 +110,40 @@ export async function POST(req: NextRequest) {
       upsert: true,
     });
 
-  // 6. Send frame + audio to HeyGen to create avatar + cloned voice.
+  // 6. Send frame + audio to HeyGen. The image_key from the asset upload
+  //    is used directly as the talking_photo_id. Voice cloning is best-
+  //    effort: if HeyGen's plan / API doesn't expose it, we fall back to a
+  //    standard Japanese voice from their library or one supplied via env.
   let talkingPhotoId: string;
   let voiceId: string;
   try {
     const frameUp = await uploadAsset(frame, 'image/jpeg');
-    const audioUp = await uploadAsset(audio, 'audio/mpeg');
-    const tp = await createTalkingPhoto(frameUp.key);
-    talkingPhotoId = tp.talkingPhotoId;
-    const vc = await cloneVoice({ audioKey: audioUp.key, name });
-    voiceId = vc.voiceId;
+    talkingPhotoId = frameUp.key;
+
+    const envDefaultVoice = process.env.HEYGEN_DEFAULT_VOICE_ID;
+    let cloned: string | null = null;
+    try {
+      const audioUp = await uploadAsset(audio, 'audio/mpeg');
+      cloned = await tryCloneVoice({ audioKey: audioUp.key, name });
+    } catch (e) {
+      console.warn(
+        '[avatars] audio upload / clone failed:',
+        e instanceof Error ? e.message : String(e),
+      );
+    }
+    if (cloned) {
+      voiceId = cloned;
+    } else if (envDefaultVoice) {
+      voiceId = envDefaultVoice;
+    } else {
+      const fallback = await pickDefaultJapaneseVoice();
+      if (!fallback) {
+        throw new Error(
+          'No voice available: voice clone failed and no fallback voice could be picked',
+        );
+      }
+      voiceId = fallback;
+    }
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     return NextResponse.json(
