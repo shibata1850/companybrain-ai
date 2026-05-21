@@ -48,19 +48,55 @@ export async function transcribeVideo(
 }
 
 /**
- * Generate embeddings for a list of text chunks.
- * Returns one vector per chunk (768 dims for text-embedding-004).
+ * Generate 768-dim embeddings for a list of text chunks. The pgvector
+ * column is sized vector(768), so we always request that dimensionality.
+ *
+ * Models change name and availability often, so we try the configured
+ * model first and then fall back through a list of known-working ones.
  */
+const EMBEDDING_FALLBACKS = [
+  'gemini-embedding-001',
+  'text-embedding-004',
+  'embedding-001',
+];
+
 export async function embedTexts(texts: string[]): Promise<number[][]> {
-  const model = gemini().getGenerativeModel({
-    model: env.geminiEmbeddingModel(),
-  });
-  const vectors: number[][] = [];
-  for (const text of texts) {
-    const r = await model.embedContent(text);
-    vectors.push(r.embedding.values);
+  if (texts.length === 0) return [];
+  const preferred = env.geminiEmbeddingModel();
+  const candidates = [
+    preferred,
+    ...EMBEDDING_FALLBACKS.filter((m) => m !== preferred),
+  ];
+
+  let lastError: unknown = null;
+  for (const modelName of candidates) {
+    try {
+      const model = gemini().getGenerativeModel({ model: modelName });
+      const vectors: number[][] = [];
+      for (const text of texts) {
+        const request = {
+          content: { role: 'user', parts: [{ text }] },
+          outputDimensionality: 768,
+        };
+        // outputDimensionality isn't typed on older SDK versions but is
+        // accepted by the API for models that support it.
+        const r = await model.embedContent(
+          request as unknown as Parameters<typeof model.embedContent>[0],
+        );
+        vectors.push(r.embedding.values);
+      }
+      return vectors;
+    } catch (e) {
+      lastError = e;
+      console.warn(
+        `[gemini] embedding model "${modelName}" failed:`,
+        e instanceof Error ? e.message : String(e),
+      );
+    }
   }
-  return vectors;
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('All embedding models failed');
 }
 
 /**
