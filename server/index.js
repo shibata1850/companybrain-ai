@@ -7,7 +7,7 @@
  *
  * 起動: `npm run server:dev` (file watch) または `npm run server:start`
  */
-import 'dotenv/config';
+import './load-env.js';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
