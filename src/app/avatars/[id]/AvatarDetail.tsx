@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import BrainSwitcher from '@/components/BrainSwitcher';
 
@@ -41,6 +42,7 @@ type DetailResponse = {
 type Tab = 'history' | 'training';
 
 export default function AvatarDetail({ id }: { id: string }) {
+  const router = useRouter();
   const [data, setData] = useState<DetailResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [question, setQuestion] = useState('');
@@ -49,6 +51,7 @@ export default function AvatarDetail({ id }: { id: string }) {
   const [training, setTraining] = useState(false);
   const [tab, setTab] = useState<Tab>('history');
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/avatars/${id}`, { cache: 'no-store' });
@@ -131,6 +134,21 @@ export default function AvatarDetail({ id }: { id: string }) {
     }
   }
 
+  async function moveToTrash() {
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/avatars/${id}`, { method: 'DELETE' });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      router.push('/');
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setDeleting(false);
+    }
+  }
+
   async function addTrainingVideo(e: React.FormEvent) {
     e.preventDefault();
     if (!trainFile) return;
@@ -194,7 +212,10 @@ export default function AvatarDetail({ id }: { id: string }) {
           </svg>
           一覧へ
         </Link>
-        <BrainSwitcher currentId={avatar.id} currentName={avatar.name} />
+        <div className="flex items-center gap-2">
+          <BrainSwitcher currentId={avatar.id} currentName={avatar.name} />
+          <AvatarMenu onDelete={moveToTrash} deleting={deleting} />
+        </div>
       </div>
 
       <header className="flex items-center gap-3">
@@ -660,4 +681,56 @@ function StatusGlyph({ status }: { status: string }) {
   if (status === 'error') return <span>!</span>;
   if (status === 'ready') return <span>▶</span>;
   return <span className="animate-pulse">●</span>;
+}
+
+function AvatarMenu({
+  onDelete,
+  deleting,
+}: {
+  onDelete: () => void;
+  deleting: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (!rootRef.current) return;
+      if (!rootRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        aria-label="このブレインの操作メニュー"
+        onClick={() => setOpen((o) => !o)}
+        className="grid h-8 w-8 place-items-center rounded-full border border-neutral-300 bg-white text-neutral-600 hover:border-neutral-900"
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+          <circle cx="3" cy="7" r="1.2" fill="currentColor" />
+          <circle cx="7" cy="7" r="1.2" fill="currentColor" />
+          <circle cx="11" cy="7" r="1.2" fill="currentColor" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute right-0 z-40 mt-1.5 w-48 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg">
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onDelete();
+            }}
+            disabled={deleting}
+            className="block w-full px-3 py-2 text-left text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
+          >
+            {deleting ? 'ゴミ箱に移動中…' : 'ゴミ箱に移動'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }

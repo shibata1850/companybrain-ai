@@ -20,6 +20,7 @@ export async function GET() {
   const { data, error } = await db
     .from('avatars')
     .select('id, name, description, cover_image_path, created_at')
+    .is('deleted_at', null)
     .order('created_at', { ascending: false });
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

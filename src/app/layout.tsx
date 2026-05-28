@@ -26,12 +26,20 @@ export default function RootLayout({
                 CompanyBrain
               </span>
             </Link>
-            <Link
-              href="/avatars/new"
-              className="rounded-full bg-neutral-900 px-4 py-1.5 text-xs font-medium text-white hover:bg-neutral-700"
-            >
-              + 新しいブレイン
-            </Link>
+            <nav className="flex items-center gap-2">
+              <Link
+                href="/trash"
+                className="rounded-full px-3 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+              >
+                ゴミ箱
+              </Link>
+              <Link
+                href="/avatars/new"
+                className="rounded-full bg-neutral-900 px-4 py-1.5 text-xs font-medium text-white hover:bg-neutral-700"
+              >
+                + 新しいブレイン
+              </Link>
+            </nav>
           </div>
         </header>
         <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>

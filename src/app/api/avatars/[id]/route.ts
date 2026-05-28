@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { storageBucket, supabaseAdmin } from '@/lib/supabase';
+import { permanentlyDeleteAvatars } from '@/lib/avatars';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -34,7 +35,6 @@ export async function GET(
     .order('created_at', { ascending: false })
     .limit(20);
 
-  // Sign a URL for the cover image so the client can display it.
   let coverUrl: string | null = null;
   if (avatar.cover_image_path) {
     const { data: signed } = await db.storage
@@ -48,4 +48,37 @@ export async function GET(
     training_videos: videos ?? [],
     generations: generations ?? [],
   });
+}
+
+/**
+ * DELETE moves the avatar to the trash by default (sets deleted_at to
+ * now). Pass ?permanent=true to delete the row outright and clean up
+ * its storage files.
+ */
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  const url = new URL(req.url);
+  const permanent = url.searchParams.get('permanent') === 'true';
+  const db = supabaseAdmin();
+
+  if (permanent) {
+    try {
+      await permanentlyDeleteAvatars([params.id]);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, permanent: true });
+  }
+
+  const { error } = await db
+    .from('avatars')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', params.id);
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true });
 }

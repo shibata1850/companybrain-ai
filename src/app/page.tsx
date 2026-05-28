@@ -20,6 +20,7 @@ async function loadAvatars() {
   const { data } = await db
     .from('avatars')
     .select('id, name, description, cover_image_path, created_at')
+    .is('deleted_at', null)
     .order('created_at', { ascending: false });
   const rows = (data ?? []) as AvatarRow[];
 
