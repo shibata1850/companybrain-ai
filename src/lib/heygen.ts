@@ -287,6 +287,10 @@ export async function generateVideo(params: {
     type: 'text',
     voice_id: params.voiceId,
     input_text: params.inputText,
+    speed: 1.0,
+    // Emotion gives the audio + lip-sync a more lifelike cadence on
+    // plans that support it. Plans that don't will just ignore it.
+    emotion: 'Friendly',
   };
 
   // Try a list of request shapes in order. HeyGen's Avatar IV has shipped
@@ -304,6 +308,9 @@ export async function generateVideo(params: {
             character: {
               type: 'avatar_iv',
               avatar_iv_id: params.talkingPhotoId,
+              // V4 expressive style adds natural head sway + eye movement.
+              style: 'expressive',
+              scale: 1.0,
             },
             voice,
           },
@@ -320,7 +327,10 @@ export async function generateVideo(params: {
               type: 'talking_photo',
               talking_photo_id: params.talkingPhotoId,
               talking_photo_style: 'expressive',
+              talking_style: 'expressive',
+              expression: 'default',
               version: 'v4',
+              scale: 1.0,
             },
             voice,
           },
@@ -337,6 +347,10 @@ export async function generateVideo(params: {
           character: {
             type: 'talking_photo',
             talking_photo_id: params.talkingPhotoId,
+            talking_photo_style: 'expressive',
+            talking_style: 'expressive',
+            expression: 'default',
+            scale: 1.0,
           },
           voice,
         },
