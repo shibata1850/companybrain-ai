@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
@@ -50,6 +51,22 @@ export default function NewAvatarPage() {
 
   return (
     <div className="mx-auto max-w-xl space-y-6">
+      <Link
+        href="/"
+        className="inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-900"
+      >
+        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
+          <path
+            d="M7.5 2.5L4 6l3.5 3.5"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        一覧へ
+      </Link>
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">
           新しいブレインを作る

@@ -1,7 +1,10 @@
 import Link from 'next/link';
+import { unstable_noStore as noStore } from 'next/cache';
 import { storageBucket, supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
 
 type AvatarRow = {
   id: string;
@@ -12,6 +15,7 @@ type AvatarRow = {
 };
 
 async function loadAvatars() {
+  noStore();
   const db = supabaseAdmin();
   const { data } = await db
     .from('avatars')

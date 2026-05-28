@@ -1,6 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import BrainSwitcher from '@/components/BrainSwitcher';
 
 type Avatar = {
   id: string;
@@ -175,6 +177,26 @@ export default function AvatarDetail({ id }: { id: string }) {
 
   return (
     <div className="space-y-8">
+      <div className="flex items-center justify-between gap-3">
+        <Link
+          href="/"
+          className="flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-900"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
+            <path
+              d="M7.5 2.5L4 6l3.5 3.5"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          一覧へ
+        </Link>
+        <BrainSwitcher currentId={avatar.id} currentName={avatar.name} />
+      </div>
+
       <header className="flex items-center gap-3">
         <div className="h-10 w-10 overflow-hidden rounded-full bg-neutral-100 ring-1 ring-neutral-200">
           {avatar.cover_url ? (
