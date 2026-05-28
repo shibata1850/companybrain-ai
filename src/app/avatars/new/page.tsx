@@ -31,7 +31,7 @@ export default function NewAvatarPage() {
     setSubmitting(true);
     setError(null);
     setProgressLabel(
-      '動画をアップロード中… (顔写真とボイスの学習、文字起こしが完了するまで数分かかります)',
+      '動画をアップロード中… 顔写真とボイスの学習、文字起こしが終わるまで数分かかります。',
     );
 
     try {
@@ -49,69 +49,74 @@ export default function NewAvatarPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto max-w-xl space-y-6">
       <header>
-        <h1 className="text-2xl font-bold">新しいブレインを作る</h1>
-        <p className="mt-1 text-sm text-white/60">
+        <h1 className="text-2xl font-semibold tracking-tight">
+          新しいブレインを作る
+        </h1>
+        <p className="mt-2 text-sm leading-relaxed text-neutral-500">
           人物が正面を向いて話している動画を1本アップロードしてください。
-          顔写真と声のクローンを作成し、話している内容を文字起こしして
-          知識ベースに登録します。
+          顔写真とボイスのクローン、発言の文字起こしを行い、知識ベースを
+          構築します。
         </p>
       </header>
 
-      <form onSubmit={onSubmit} className="space-y-4">
+      <form
+        onSubmit={onSubmit}
+        className="space-y-5 rounded-2xl border border-neutral-200 bg-white p-6"
+      >
         <div>
-          <label className="block text-sm font-medium text-white/80">
-            ブレイン名（人物名・役職など）
+          <label className="block text-sm font-medium text-neutral-700">
+            ブレイン名
           </label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="mt-1 w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm"
-            placeholder="例：田中部長"
+            className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+            placeholder="例: 田中部長"
             required
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-white/80">
-            説明（任意）
+          <label className="block text-sm font-medium text-neutral-700">
+            説明 <span className="text-neutral-400">(任意)</span>
           </label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={2}
-            className="mt-1 w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm"
-            placeholder="例：営業部長・10年の現場経験"
+            className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+            placeholder="例: 営業部長・10年の現場経験"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-white/80">
-            動画ファイル（mp4 / mov など）
+          <label className="block text-sm font-medium text-neutral-700">
+            動画ファイル
           </label>
           <input
             type="file"
             accept="video/*"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="mt-1 w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-indigo-500 file:px-3 file:py-1 file:text-white"
+            className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-neutral-900 file:px-3 file:py-1 file:text-white"
             required
           />
-          <p className="mt-1 text-xs text-white/40">
-            正面の顔がはっきり映り、音声がクリアな動画ほどクローン精度が
-            上がります。30秒〜2分程度がおすすめ。
+          <p className="mt-1.5 text-xs text-neutral-400">
+            正面の顔がはっきり映り、音声がクリアな動画ほど精度が
+            上がります。30秒〜2分が目安。
           </p>
         </div>
 
         {error && (
-          <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             {error}
           </div>
         )}
 
         {submitting && progressLabel && (
-          <div className="rounded-md border border-indigo-400/40 bg-indigo-400/10 p-3 text-sm">
+          <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-800">
             {progressLabel}
           </div>
         )}
@@ -119,7 +124,7 @@ export default function NewAvatarPage() {
         <button
           type="submit"
           disabled={submitting}
-          className="rounded-md bg-indigo-500 px-4 py-2 text-sm font-medium hover:bg-indigo-400 disabled:opacity-50"
+          className="w-full rounded-full bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
         >
           {submitting ? '作成中…' : 'ブレインを作成する'}
         </button>

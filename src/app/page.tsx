@@ -19,7 +19,6 @@ async function loadAvatars() {
     .order('created_at', { ascending: false });
   const rows = (data ?? []) as AvatarRow[];
 
-  // Sign cover URLs in parallel for the listing.
   const signed = await Promise.all(
     rows.map(async (a) => {
       if (!a.cover_image_path) return { ...a, cover_url: null };
@@ -42,32 +41,27 @@ export default async function HomePage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       <section>
-        <h1 className="text-2xl font-bold">ブレイン一覧</h1>
-        <p className="mt-1 text-sm text-white/60">
-          動画から学習した「人物アバター」に質問すると、その人の口調・知識で
-          答える動画が自動生成されます。
+        <h1 className="text-3xl font-semibold tracking-tight">ブレイン</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-500">
+          動画から学習した人物に質問すると、その人の口調と知識で答える動画が
+          自動生成されます。
         </p>
       </section>
 
       {loadError && (
-        <div className="rounded-md border border-red-500/40 bg-red-500/10 p-4 text-sm">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           <strong>読み込みエラー:</strong> {loadError}
-          <p className="mt-2 text-white/70">
-            <code>.env.local</code> の Supabase / Gemini / HeyGen キー設定と、
-            <code>supabase/migrations/0001_initial.sql</code>{' '}
-            のスキーマ適用を確認してください。
-          </p>
         </div>
       )}
 
       {!loadError && avatars.length === 0 && (
-        <div className="rounded-lg border border-white/10 bg-white/5 p-10 text-center">
-          <p className="text-white/70">まだブレインがありません。</p>
+        <div className="rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 p-16 text-center">
+          <p className="text-neutral-500">まだブレインがありません。</p>
           <Link
             href="/avatars/new"
-            className="mt-4 inline-block rounded-md bg-indigo-500 px-4 py-2 text-sm font-medium hover:bg-indigo-400"
+            className="mt-5 inline-block rounded-full bg-neutral-900 px-5 py-2 text-sm font-medium text-white hover:bg-neutral-700"
           >
             最初のブレインを作る
           </Link>
@@ -79,26 +73,26 @@ export default async function HomePage() {
           <Link
             key={a.id}
             href={`/avatars/${a.id}`}
-            className="group overflow-hidden rounded-lg border border-white/10 bg-white/5 transition hover:border-indigo-400"
+            className="group overflow-hidden rounded-2xl border border-neutral-200 bg-white transition hover:border-neutral-900 hover:shadow-lg"
           >
-            <div className="aspect-video bg-black/40">
+            <div className="aspect-[4/3] bg-neutral-100">
               {a.cover_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={a.cover_url}
                   alt={a.name}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-cover transition group-hover:scale-[1.02]"
                 />
               ) : (
-                <div className="flex h-full items-center justify-center text-white/30">
+                <div className="flex h-full items-center justify-center text-neutral-300">
                   no cover
                 </div>
               )}
             </div>
             <div className="p-4">
-              <h3 className="font-semibold">{a.name}</h3>
+              <h3 className="font-medium tracking-tight">{a.name}</h3>
               {a.description && (
-                <p className="mt-1 line-clamp-2 text-sm text-white/60">
+                <p className="mt-1 line-clamp-2 text-sm text-neutral-500">
                   {a.description}
                 </p>
               )}

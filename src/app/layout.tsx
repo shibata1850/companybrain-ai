@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -14,21 +15,26 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ja">
-      <body className="min-h-screen antialiased">
-        <header className="border-b border-white/10">
-          <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-            <a href="/" className="text-lg font-semibold tracking-tight">
-              CompanyBrain<span className="text-indigo-400"> AI</span>
-            </a>
-            <a
+      <body className="min-h-screen bg-white text-neutral-900">
+        <header className="sticky top-0 z-30 border-b border-neutral-200 bg-white/85 backdrop-blur">
+          <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
+            <Link href="/" className="flex items-center gap-2">
+              <span className="grid h-7 w-7 place-items-center rounded-lg bg-neutral-900 text-[11px] font-bold text-white">
+                CB
+              </span>
+              <span className="text-[15px] font-semibold tracking-tight">
+                CompanyBrain
+              </span>
+            </Link>
+            <Link
               href="/avatars/new"
-              className="rounded-md bg-indigo-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-400"
+              className="rounded-full bg-neutral-900 px-4 py-1.5 text-xs font-medium text-white hover:bg-neutral-700"
             >
-              新しいブレインを作る
-            </a>
+              + 新しいブレイン
+            </Link>
           </div>
         </header>
-        <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
+        <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
       </body>
     </html>
   );

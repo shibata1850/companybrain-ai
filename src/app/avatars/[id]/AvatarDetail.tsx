@@ -36,6 +36,8 @@ type DetailResponse = {
   generations: Generation[];
 };
 
+type Tab = 'history' | 'training';
+
 export default function AvatarDetail({ id }: { id: string }) {
   const [data, setData] = useState<DetailResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +45,8 @@ export default function AvatarDetail({ id }: { id: string }) {
   const [asking, setAsking] = useState(false);
   const [trainFile, setTrainFile] = useState<File | null>(null);
   const [training, setTraining] = useState(false);
+  const [tab, setTab] = useState<Tab>('history');
+  const [focusedId, setFocusedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/avatars/${id}`, { cache: 'no-store' });
@@ -51,10 +55,6 @@ export default function AvatarDetail({ id }: { id: string }) {
       setError(json.error || `HTTP ${res.status}`);
       return;
     }
-    console.log('[load] received', {
-      generations: json.generations?.length,
-      training_videos: json.training_videos?.length,
-    });
     setData(json);
   }, [id]);
 
@@ -64,9 +64,7 @@ export default function AvatarDetail({ id }: { id: string }) {
     );
   }, [load]);
 
-  // Stringify pending ids so the polling effect only restarts when the
-  // set of pending generations actually changes (otherwise every load()
-  // would reset the 5-second timer and polls would never fire).
+  // Polling — see commit history for why this uses a string key not the array.
   const pendingKey = useMemo(() => {
     if (!data) return '';
     return data.generations
@@ -80,9 +78,7 @@ export default function AvatarDetail({ id }: { id: string }) {
   useEffect(() => {
     if (!pendingKey) return;
     const pendingIds = pendingKey.split(',');
-    console.log('[polling] starting for', pendingIds);
     pollTimer.current = setInterval(async () => {
-      console.log('[polling] tick — checking', pendingIds);
       for (const gid of pendingIds) {
         try {
           await fetch(`/api/generations/${gid}`, { cache: 'no-store' });
@@ -102,7 +98,7 @@ export default function AvatarDetail({ id }: { id: string }) {
     for (const g of data.generations) {
       if (g.status !== 'ready' && g.status !== 'error') {
         try {
-          await fetch(`/api/generations/${g.id}`);
+          await fetch(`/api/generations/${g.id}`, { cache: 'no-store' });
         } catch {
           // ignore
         }
@@ -156,22 +152,31 @@ export default function AvatarDetail({ id }: { id: string }) {
     }
   }
 
-  if (error) {
+  if (error && !data) {
     return (
-      <div className="rounded-md border border-red-500/40 bg-red-500/10 p-4 text-sm">
+      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
         エラー: {error}
       </div>
     );
   }
   if (!data) {
-    return <div className="text-white/60">読み込み中…</div>;
+    return <div className="text-neutral-400">読み込み中…</div>;
   }
   const { avatar, training_videos, generations } = data;
 
+  // Decide which generation owns the hero player.
+  // Priority: explicit selection > latest non-error > latest of any kind.
+  const focused =
+    (focusedId && generations.find((g) => g.id === focusedId)) ||
+    generations.find((g) => g.status === 'rendering' || g.status === 'answering') ||
+    generations.find((g) => g.status === 'ready') ||
+    generations[0] ||
+    null;
+
   return (
     <div className="space-y-8">
-      <header className="flex items-center gap-4">
-        <div className="h-20 w-20 overflow-hidden rounded-full border border-white/10 bg-black/40">
+      <header className="flex items-center gap-3">
+        <div className="h-10 w-10 overflow-hidden rounded-full bg-neutral-100 ring-1 ring-neutral-200">
           {avatar.cover_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -181,153 +186,456 @@ export default function AvatarDetail({ id }: { id: string }) {
             />
           ) : null}
         </div>
-        <div>
-          <h1 className="text-2xl font-bold">{avatar.name}</h1>
+        <div className="min-w-0">
+          <h1 className="truncate text-lg font-semibold tracking-tight">
+            {avatar.name}
+          </h1>
           {avatar.description && (
-            <p className="text-sm text-white/60">{avatar.description}</p>
+            <p className="truncate text-xs text-neutral-500">
+              {avatar.description}
+            </p>
           )}
         </div>
       </header>
 
-      <section className="rounded-lg border border-white/10 bg-white/5 p-5">
-        <h2 className="text-lg font-semibold">質問する</h2>
-        <p className="mt-1 text-sm text-white/60">
-          学習済みの知識から、{avatar.name} 本人として答える動画を生成します。
-        </p>
-        <form onSubmit={ask} className="mt-3 space-y-3">
-          <textarea
+      {/* Hero video */}
+      <section>
+        <HeroStage
+          generation={focused}
+          coverUrl={avatar.cover_url}
+          avatarName={avatar.name}
+        />
+      </section>
+
+      {/* Subtle question input */}
+      <section>
+        <form
+          onSubmit={ask}
+          className="mx-auto flex max-w-3xl items-center gap-2 rounded-full border border-neutral-300 bg-white px-3 py-2 shadow-sm focus-within:border-neutral-900"
+        >
+          <input
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            rows={3}
-            placeholder="例：新人にまず教えるべきことは何ですか？"
-            className="w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-sm"
+            placeholder={`${avatar.name} に質問する…`}
+            className="flex-1 bg-transparent px-2 py-1 text-sm outline-none placeholder:text-neutral-400"
           />
           <button
             type="submit"
             disabled={asking || !question.trim()}
-            className="rounded-md bg-indigo-500 px-4 py-2 text-sm font-medium hover:bg-indigo-400 disabled:opacity-50"
+            className="rounded-full bg-neutral-900 px-4 py-1.5 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
           >
-            {asking ? '回答生成中…' : '回答動画を作る'}
+            {asking ? '生成中…' : '送信'}
           </button>
         </form>
-      </section>
-
-      <section>
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">これまでの回答</h2>
-          <button
-            type="button"
-            onClick={refresh}
-            className="rounded-md border border-white/20 px-3 py-1 text-xs text-white/70 hover:bg-white/10"
-          >
-            手動で更新
-          </button>
-        </div>
-        {generations.length === 0 && (
-          <p className="mt-2 text-sm text-white/50">まだ質問がありません。</p>
+        {error && (
+          <p className="mx-auto mt-2 max-w-3xl text-center text-xs text-red-600">
+            {error}
+          </p>
         )}
-        <ul className="mt-3 space-y-4">
-          {generations.map((g) => {
-            const elapsedSec = Math.max(
-              0,
-              Math.round(
-                (Date.now() - new Date(g.created_at).getTime()) / 1000,
-              ),
-            );
-            const elapsedLabel =
-              elapsedSec < 60
-                ? `${elapsedSec}秒経過`
-                : `${Math.floor(elapsedSec / 60)}分${elapsedSec % 60}秒経過`;
-            return (
-              <li
-                key={g.id}
-                className="rounded-lg border border-white/10 bg-white/5 p-4"
-              >
-                <div className="text-sm text-white/50">
-                  {new Date(g.created_at).toLocaleString('ja-JP')}
-                </div>
-                <div className="mt-1 font-medium">Q. {g.question}</div>
-                {g.answer && (
-                  <div className="mt-2 whitespace-pre-wrap text-sm text-white/80">
-                    A. {g.answer}
-                  </div>
-                )}
-                <div className="mt-3">
-                  {g.status === 'ready' && g.video_url ? (
-                    <video
-                      controls
-                      src={g.video_url}
-                      poster={g.thumbnail_url ?? undefined}
-                      className="w-full max-w-md rounded-md border border-white/10"
-                    />
-                  ) : g.status === 'error' ? (
-                    <div className="text-sm text-red-300">
-                      エラー: {g.error_message || '不明なエラー'}
-                    </div>
-                  ) : (
-                    <div className="rounded-md border border-indigo-400/30 bg-indigo-400/10 p-3 text-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-indigo-300" />
-                        <span>
-                          動画生成中 (ステータス: {g.status}) — {elapsedLabel}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-xs text-white/60">
-                        HeyGen側でレンダリング中です。通常1〜3分かかります。
-                        画面を閉じても処理は続き、戻ってきて「手動で更新」を
-                        押せば結果を取り込めます。
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
       </section>
 
-      <section className="rounded-lg border border-white/10 bg-white/5 p-5">
-        <h2 className="text-lg font-semibold">追加で学習させる</h2>
-        <p className="mt-1 text-sm text-white/60">
-          {avatar.name} が話している動画を追加するほど、回答内容が
-          本人らしくなります（顔と声は最初の動画から確定）。
-        </p>
-        <form onSubmit={addTrainingVideo} className="mt-3 space-y-3">
-          <input
-            type="file"
-            accept="video/*"
-            onChange={(e) => setTrainFile(e.target.files?.[0] ?? null)}
-            className="w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-indigo-500 file:px-3 file:py-1 file:text-white"
-          />
-          <button
-            type="submit"
-            disabled={!trainFile || training}
-            className="rounded-md bg-indigo-500 px-4 py-2 text-sm font-medium hover:bg-indigo-400 disabled:opacity-50"
-          >
-            {training ? '学習中…' : 'この動画から学習させる'}
-          </button>
-        </form>
-
-        <h3 className="mt-6 text-sm font-medium text-white/80">
-          学習済み動画 ({training_videos.length})
-        </h3>
-        <ul className="mt-2 space-y-2 text-sm">
-          {training_videos.map((v) => (
-            <li
-              key={v.id}
-              className="rounded-md border border-white/10 bg-black/30 p-3"
+      {/* Tabs */}
+      <section>
+        <div className="flex items-center justify-between border-b border-neutral-200">
+          <div className="flex gap-6">
+            <TabButton
+              active={tab === 'history'}
+              onClick={() => setTab('history')}
             >
-              <div className="flex items-center justify-between">
-                <span className="text-white/80">{v.file_name ?? v.id}</span>
-                <span className="text-xs text-white/50">{v.status}</span>
-              </div>
-              {v.summary && (
-                <p className="mt-1 text-xs text-white/60">{v.summary}</p>
-              )}
-            </li>
-          ))}
-        </ul>
+              回答履歴
+              <Pill>{generations.length}</Pill>
+            </TabButton>
+            <TabButton
+              active={tab === 'training'}
+              onClick={() => setTab('training')}
+            >
+              学習させる
+              <Pill>{training_videos.length}</Pill>
+            </TabButton>
+          </div>
+          {tab === 'history' && pendingKey && (
+            <button
+              type="button"
+              onClick={refresh}
+              className="text-xs text-neutral-500 hover:text-neutral-900"
+            >
+              手動で更新
+            </button>
+          )}
+        </div>
+
+        <div className="pt-5">
+          {tab === 'history' && (
+            <HistoryList
+              generations={generations}
+              focusedId={focused?.id ?? null}
+              onSelect={setFocusedId}
+            />
+          )}
+          {tab === 'training' && (
+            <TrainingPanel
+              avatarName={avatar.name}
+              videos={training_videos}
+              trainFile={trainFile}
+              onPickFile={setTrainFile}
+              onSubmit={addTrainingVideo}
+              submitting={training}
+            />
+          )}
+        </div>
       </section>
     </div>
   );
+}
+
+function HeroStage({
+  generation,
+  coverUrl,
+  avatarName,
+}: {
+  generation: Generation | null;
+  coverUrl: string | null;
+  avatarName: string;
+}) {
+  // No generations at all yet.
+  if (!generation) {
+    return (
+      <div className="relative mx-auto aspect-video w-full max-w-3xl overflow-hidden rounded-3xl border border-neutral-200 bg-neutral-50">
+        {coverUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={coverUrl}
+            alt={avatarName}
+            className="h-full w-full object-cover opacity-90"
+          />
+        ) : null}
+        <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/40 via-transparent">
+          <div className="w-full p-6 text-white">
+            <p className="text-sm font-medium">質問してみましょう</p>
+            <p className="mt-1 text-xs text-white/70">
+              下のフォームに質問を入力すると、{avatarName} が答える動画が
+              生成されます。
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Ready: show the actual video.
+  if (generation.status === 'ready' && generation.video_url) {
+    return (
+      <div className="mx-auto w-full max-w-3xl space-y-3">
+        <div className="overflow-hidden rounded-3xl border border-neutral-200 bg-black">
+          <video
+            key={generation.id}
+            controls
+            autoPlay
+            src={generation.video_url}
+            poster={generation.thumbnail_url ?? undefined}
+            className="aspect-video w-full bg-black"
+          />
+        </div>
+        <div className="px-1">
+          <p className="text-xs uppercase tracking-wider text-neutral-400">
+            質問
+          </p>
+          <p className="mt-1 text-sm font-medium">{generation.question}</p>
+          {generation.answer && (
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-neutral-600">
+              {generation.answer}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Error.
+  if (generation.status === 'error') {
+    return (
+      <div className="mx-auto w-full max-w-3xl space-y-3">
+        <div className="flex aspect-video w-full items-center justify-center overflow-hidden rounded-3xl border border-red-200 bg-red-50 px-8 text-center text-sm text-red-700">
+          動画の生成に失敗しました
+          <br />
+          <span className="text-xs">
+            {generation.error_message || '不明なエラー'}
+          </span>
+        </div>
+        <div className="px-1">
+          <p className="text-xs uppercase tracking-wider text-neutral-400">
+            質問
+          </p>
+          <p className="mt-1 text-sm font-medium">{generation.question}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Rendering / answering.
+  const elapsedSec = Math.max(
+    0,
+    Math.round((Date.now() - new Date(generation.created_at).getTime()) / 1000),
+  );
+  const elapsedLabel =
+    elapsedSec < 60
+      ? `${elapsedSec}秒経過`
+      : `${Math.floor(elapsedSec / 60)}分${elapsedSec % 60}秒経過`;
+
+  return (
+    <div className="mx-auto w-full max-w-3xl space-y-3">
+      <div className="relative aspect-video w-full overflow-hidden rounded-3xl border border-neutral-200 bg-neutral-900">
+        {coverUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={coverUrl}
+            alt={avatarName}
+            className="h-full w-full object-cover opacity-40"
+          />
+        ) : null}
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white">
+          <div className="flex items-center gap-2">
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-white" />
+            <span className="text-sm font-medium">動画を生成中</span>
+          </div>
+          <p className="text-xs text-white/70">
+            {generation.status === 'answering'
+              ? 'Gemini が回答を考えています'
+              : `HeyGen がレンダリング中 — ${elapsedLabel}`}
+          </p>
+        </div>
+      </div>
+      <div className="px-1">
+        <p className="text-xs uppercase tracking-wider text-neutral-400">
+          質問
+        </p>
+        <p className="mt-1 text-sm font-medium">{generation.question}</p>
+        {generation.answer && (
+          <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-neutral-600">
+            {generation.answer}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HistoryList({
+  generations,
+  focusedId,
+  onSelect,
+}: {
+  generations: Generation[];
+  focusedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  if (generations.length === 0) {
+    return (
+      <p className="py-6 text-center text-sm text-neutral-400">
+        まだ質問がありません。
+      </p>
+    );
+  }
+  return (
+    <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {generations.map((g) => {
+        const isFocused = g.id === focusedId;
+        return (
+          <li key={g.id}>
+            <button
+              type="button"
+              onClick={() => onSelect(g.id)}
+              className={`flex w-full gap-3 rounded-xl border p-3 text-left transition ${
+                isFocused
+                  ? 'border-neutral-900 bg-neutral-50'
+                  : 'border-neutral-200 bg-white hover:border-neutral-400'
+              }`}
+            >
+              <div className="relative h-16 w-24 flex-none overflow-hidden rounded-lg bg-neutral-100">
+                {g.thumbnail_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={g.thumbnail_url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="grid h-full place-items-center text-[10px] text-neutral-400">
+                    <StatusGlyph status={g.status} />
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="line-clamp-2 text-sm font-medium text-neutral-900">
+                  {g.question}
+                </p>
+                <p className="mt-1 text-[11px] text-neutral-400">
+                  {new Date(g.created_at).toLocaleString('ja-JP')}
+                </p>
+                <StatusBadge status={g.status} />
+              </div>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function TrainingPanel({
+  avatarName,
+  videos,
+  trainFile,
+  onPickFile,
+  onSubmit,
+  submitting,
+}: {
+  avatarName: string;
+  videos: TrainingVideo[];
+  trainFile: File | null;
+  onPickFile: (f: File | null) => void;
+  onSubmit: (e: React.FormEvent) => void;
+  submitting: boolean;
+}) {
+  return (
+    <div className="space-y-6">
+      <form
+        onSubmit={onSubmit}
+        className="rounded-2xl border border-neutral-200 bg-white p-5"
+      >
+        <p className="text-sm font-medium text-neutral-900">
+          追加で学習させる
+        </p>
+        <p className="mt-1 text-xs text-neutral-500">
+          {avatarName} が話している動画を追加するほど、回答内容が本人らしく
+          なります。顔と声は最初の動画で確定しています。
+        </p>
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <input
+            type="file"
+            accept="video/*"
+            onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
+            className="flex-1 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-neutral-900 file:px-3 file:py-1 file:text-white"
+          />
+          <button
+            type="submit"
+            disabled={!trainFile || submitting}
+            className="rounded-full bg-neutral-900 px-4 py-2 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
+          >
+            {submitting ? '学習中…' : '学習させる'}
+          </button>
+        </div>
+      </form>
+
+      <div>
+        <p className="text-xs uppercase tracking-wider text-neutral-400">
+          学習済み動画
+        </p>
+        {videos.length === 0 ? (
+          <p className="mt-3 text-sm text-neutral-400">
+            まだ学習動画がありません。
+          </p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {videos.map((v) => (
+              <li
+                key={v.id}
+                className="rounded-xl border border-neutral-200 bg-white p-3"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="truncate text-sm text-neutral-800">
+                    {v.file_name ?? v.id}
+                  </span>
+                  <StatusBadge status={v.status} />
+                </div>
+                {v.summary && (
+                  <p className="mt-2 text-xs leading-relaxed text-neutral-500">
+                    {v.summary}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`-mb-px flex items-center gap-1.5 border-b-2 px-1 pb-3 text-sm transition ${
+        active
+          ? 'border-neutral-900 text-neutral-900'
+          : 'border-transparent text-neutral-500 hover:text-neutral-900'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Pill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded-full bg-neutral-100 px-1.5 text-[10px] font-medium text-neutral-500">
+      {children}
+    </span>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; cls: string }> = {
+    ready: {
+      label: '完成',
+      cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+    },
+    rendering: {
+      label: '生成中',
+      cls: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
+    },
+    answering: {
+      label: '回答作成中',
+      cls: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
+    },
+    pending: {
+      label: '待機中',
+      cls: 'bg-neutral-100 text-neutral-600 ring-neutral-200',
+    },
+    processing: {
+      label: '処理中',
+      cls: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
+    },
+    error: {
+      label: 'エラー',
+      cls: 'bg-red-50 text-red-700 ring-red-200',
+    },
+  };
+  const s = map[status] || {
+    label: status,
+    cls: 'bg-neutral-100 text-neutral-600 ring-neutral-200',
+  };
+  return (
+    <span
+      className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${s.cls}`}
+    >
+      {s.label}
+    </span>
+  );
+}
+
+function StatusGlyph({ status }: { status: string }) {
+  if (status === 'error') return <span>!</span>;
+  if (status === 'ready') return <span>▶</span>;
+  return <span className="animate-pulse">●</span>;
 }
