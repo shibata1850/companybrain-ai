@@ -11,6 +11,58 @@ function gemini(): GoogleGenAI {
 }
 
 /**
+ * Try the preferred model first; if it's not available on this API key
+ * (404 / permission errors), retry with each fallback in order. Lets us
+ * point at the latest model in config without breaking if the user's
+ * account hasn't been opted into it yet.
+ */
+const ANSWER_MODEL_FALLBACKS = [
+  'gemini-2.5-pro',
+  'gemini-pro-latest',
+  'gemini-2.5-flash',
+  'gemini-flash-latest',
+];
+const TRANSCRIBE_MODEL_FALLBACKS = [
+  'gemini-2.5-flash',
+  'gemini-flash-latest',
+  'gemini-2.5-pro',
+];
+
+async function generateWithFallback(opts: {
+  preferred: string;
+  fallbacks: string[];
+  contents: Content[];
+  config?: Record<string, unknown>;
+}): Promise<string> {
+  const tried = new Set<string>();
+  const candidates = [opts.preferred, ...opts.fallbacks].filter((m) => {
+    if (tried.has(m)) return false;
+    tried.add(m);
+    return true;
+  });
+  let lastError: unknown = null;
+  for (const model of candidates) {
+    try {
+      const response = await gemini().models.generateContent({
+        model,
+        contents: opts.contents,
+        config: opts.config,
+      });
+      return response.text ?? '';
+    } catch (e) {
+      lastError = e;
+      console.warn(
+        `[gemini] text model "${model}" failed, trying next:`,
+        e instanceof Error ? e.message : String(e),
+      );
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('All text models failed');
+}
+
+/**
  * Transcribe a video file and produce a short summary in one call.
  * Returns plain transcript text plus a 1-2 sentence summary.
  */
@@ -33,15 +85,12 @@ export async function transcribeVideo(
   "summary": "<この動画で語られている内容を1〜2文で要約>"
 }`;
 
-  const response = await gemini().models.generateContent({
-    model: env.geminiTextModel(),
-    contents: [
-      { role: 'user', parts: [videoPart, { text: prompt }] },
-    ],
+  const text = await generateWithFallback({
+    preferred: env.geminiTranscribeModel(),
+    fallbacks: TRANSCRIBE_MODEL_FALLBACKS,
+    contents: [{ role: 'user', parts: [videoPart, { text: prompt }] }],
     config: { responseMimeType: 'application/json' },
   });
-
-  const text = response.text ?? '';
   const parsed = JSON.parse(text) as { transcript: string; summary: string };
   return parsed;
 }
@@ -152,11 +201,12 @@ ${question}`,
     },
   ];
 
-  const response = await gemini().models.generateContent({
-    model: env.geminiTextModel(),
+  const text = await generateWithFallback({
+    preferred: env.geminiAnswerModel(),
+    fallbacks: ANSWER_MODEL_FALLBACKS,
     contents,
   });
-  return (response.text ?? '').trim();
+  return text.trim();
 }
 
 /**

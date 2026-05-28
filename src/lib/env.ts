@@ -12,7 +12,19 @@ export const env = {
   supabaseServiceKey: () => required('SUPABASE_SERVICE_ROLE_KEY'),
   storageBucket: () => process.env.SUPABASE_STORAGE_BUCKET || 'companybrain',
   geminiApiKey: () => required('GEMINI_API_KEY'),
-  geminiTextModel: () => process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash',
+  // The "answer" model is what speaks as the persona — quality matters
+  // more than speed here, so default to Pro. Override per deployment via
+  // GEMINI_ANSWER_MODEL.
+  geminiAnswerModel: () =>
+    process.env.GEMINI_ANSWER_MODEL ||
+    process.env.GEMINI_TEXT_MODEL ||
+    'gemini-2.5-pro',
+  // The "transcribe" model handles video → text. Flash is plenty for
+  // transcription and significantly cheaper / faster.
+  geminiTranscribeModel: () =>
+    process.env.GEMINI_TRANSCRIBE_MODEL ||
+    process.env.GEMINI_TEXT_MODEL ||
+    'gemini-2.5-flash',
   geminiEmbeddingModel: () =>
     process.env.GEMINI_EMBEDDING_MODEL || 'gemini-embedding-001',
   heygenApiKey: () => required('HEYGEN_API_KEY'),
