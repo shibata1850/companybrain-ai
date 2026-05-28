@@ -260,7 +260,7 @@ export async function pickDefaultJapaneseVoice(): Promise<string | null> {
  * voice reading `inputText`. Returns the `video_id` to poll.
  *
  * Output dimension can be overridden via env vars HEYGEN_VIDEO_WIDTH /
- * HEYGEN_VIDEO_HEIGHT. Default is 480x854 (portrait, ~480p) to keep the
+ * HEYGEN_VIDEO_HEIGHT. Default is 360x640 (portrait, ~nHD) to keep the
  * per-second cost as low as possible.
  */
 export async function generateVideo(params: {
@@ -268,8 +268,8 @@ export async function generateVideo(params: {
   voiceId: string;
   inputText: string;
 }): Promise<{ videoId: string }> {
-  const width = Number(process.env.HEYGEN_VIDEO_WIDTH) || 480;
-  const height = Number(process.env.HEYGEN_VIDEO_HEIGHT) || 854;
+  const width = Number(process.env.HEYGEN_VIDEO_WIDTH) || 360;
+  const height = Number(process.env.HEYGEN_VIDEO_HEIGHT) || 640;
   const body = {
     video_inputs: [
       {
