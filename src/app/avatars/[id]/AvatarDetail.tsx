@@ -45,12 +45,16 @@ export default function AvatarDetail({ id }: { id: string }) {
   const [training, setTraining] = useState(false);
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/avatars/${id}`);
+    const res = await fetch(`/api/avatars/${id}`, { cache: 'no-store' });
     const json = (await res.json()) as DetailResponse & { error?: string };
     if (!res.ok) {
       setError(json.error || `HTTP ${res.status}`);
       return;
     }
+    console.log('[load] received', {
+      generations: json.generations?.length,
+      training_videos: json.training_videos?.length,
+    });
     setData(json);
   }, [id]);
 
@@ -81,7 +85,7 @@ export default function AvatarDetail({ id }: { id: string }) {
       console.log('[polling] tick — checking', pendingIds);
       for (const gid of pendingIds) {
         try {
-          await fetch(`/api/generations/${gid}`);
+          await fetch(`/api/generations/${gid}`, { cache: 'no-store' });
         } catch {
           // ignore
         }

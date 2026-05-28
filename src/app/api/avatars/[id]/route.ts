@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { storageBucket, supabaseAdmin } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(
   _req: NextRequest,
