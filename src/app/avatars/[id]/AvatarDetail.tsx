@@ -554,47 +554,99 @@ function HistoryList({
   }
   return (
     <ul className="grid grid-cols-1 gap-3 anim-stagger sm:grid-cols-2">
-      {generations.map((g) => {
-        const isFocused = g.id === focusedId;
-        return (
-          <li key={g.id}>
-            <button
-              type="button"
-              onClick={() => onSelect(g.id)}
-              className={`flex w-full gap-3 rounded-xl border p-3 text-left transition ${
-                isFocused
-                  ? 'border-neutral-900 bg-neutral-50'
-                  : 'border-neutral-200 bg-white hover:border-neutral-400'
-              }`}
-            >
-              <div className="relative h-16 w-24 flex-none overflow-hidden rounded-lg bg-neutral-100">
-                {g.thumbnail_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={g.thumbnail_url}
-                    alt=""
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="grid h-full place-items-center text-[10px] text-neutral-400">
-                    <StatusGlyph status={g.status} />
-                  </div>
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="line-clamp-2 text-sm font-medium text-neutral-900">
-                  {g.question}
-                </p>
-                <p className="mt-1 text-[11px] text-neutral-400">
-                  {new Date(g.created_at).toLocaleString('ja-JP')}
-                </p>
-                <StatusBadge status={g.status} />
-              </div>
-            </button>
-          </li>
-        );
-      })}
+      {generations.map((g) => (
+        <HistoryItem
+          key={g.id}
+          generation={g}
+          focused={g.id === focusedId}
+          onSelect={() => onSelect(g.id)}
+        />
+      ))}
     </ul>
+  );
+}
+
+function HistoryItem({
+  generation,
+  focused,
+  onSelect,
+}: {
+  generation: Generation;
+  focused: boolean;
+  onSelect: () => void;
+}) {
+  const [openAnswer, setOpenAnswer] = useState(false);
+  return (
+    <li
+      className={`flex flex-col gap-2 rounded-xl border p-3 transition ${
+        focused
+          ? 'border-neutral-900 bg-neutral-50'
+          : 'border-neutral-200 bg-white hover:border-neutral-400'
+      }`}
+    >
+      <button
+        type="button"
+        onClick={onSelect}
+        className="flex w-full gap-3 text-left"
+      >
+        <div className="relative h-16 w-24 flex-none overflow-hidden rounded-lg bg-neutral-100">
+          {generation.thumbnail_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={generation.thumbnail_url}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="grid h-full place-items-center text-[10px] text-neutral-400">
+              <StatusGlyph status={generation.status} />
+            </div>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="line-clamp-2 text-sm font-medium text-neutral-900">
+            {generation.question}
+          </p>
+          <p className="mt-1 text-[11px] text-neutral-400">
+            {new Date(generation.created_at).toLocaleString('ja-JP')}
+          </p>
+          <StatusBadge status={generation.status} />
+        </div>
+      </button>
+
+      {generation.answer && (
+        <div className="pl-[6.75rem]">
+          <button
+            type="button"
+            onClick={() => setOpenAnswer((v) => !v)}
+            className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[11px] text-neutral-600 transition hover:border-neutral-900"
+          >
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 10 10"
+              className={`transition ${openAnswer ? 'rotate-90' : ''}`}
+              aria-hidden
+            >
+              <path
+                d="M3 2l4 3-4 3"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            {openAnswer ? '回答テキストを閉じる' : '回答テキストを見る'}
+          </button>
+          {openAnswer && (
+            <p className="mt-2 max-h-60 overflow-y-auto whitespace-pre-wrap rounded-lg border border-neutral-200 bg-white p-3 text-xs leading-relaxed text-neutral-700 anim-fade-in">
+              {generation.answer}
+            </p>
+          )}
+        </div>
+      )}
+    </li>
   );
 }
 
