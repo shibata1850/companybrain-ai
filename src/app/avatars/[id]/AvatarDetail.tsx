@@ -21,6 +21,7 @@ type TrainingVideo = {
   mime_type: string | null;
   status: string;
   summary: string | null;
+  transcript: string | null;
   created_at: string;
 };
 
@@ -724,39 +725,10 @@ function TrainingPanel({
             まだ学習素材がありません。
           </p>
         ) : (
-          <ul className="mt-3 space-y-2">
-            {videos.map((v) => {
-              const isText = v.mime_type?.startsWith('text/');
-              return (
-              <li
-                key={v.id}
-                className="rounded-xl border border-neutral-200 bg-white p-3"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span
-                      className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${
-                        isText
-                          ? 'bg-amber-50 text-amber-700 ring-amber-200'
-                          : 'bg-sky-50 text-sky-700 ring-sky-200'
-                      }`}
-                    >
-                      {isText ? 'テキスト' : '動画'}
-                    </span>
-                    <span className="truncate text-sm text-neutral-800">
-                      {v.file_name ?? v.id}
-                    </span>
-                  </span>
-                  <StatusBadge status={v.status} />
-                </div>
-                {v.summary && (
-                  <p className="mt-2 text-xs leading-relaxed text-neutral-500">
-                    {v.summary}
-                  </p>
-                )}
-              </li>
-              );
-            })}
+          <ul className="mt-3 space-y-2 anim-stagger">
+            {videos.map((v) => (
+              <TrainingMaterialCard key={v.id} material={v} />
+            ))}
           </ul>
         )}
       </div>
@@ -840,6 +812,292 @@ function StatusGlyph({ status }: { status: string }) {
   if (status === 'error') return <span>!</span>;
   if (status === 'ready') return <span>▶</span>;
   return <span className="animate-pulse">●</span>;
+}
+
+function TrainingMaterialCard({ material }: { material: TrainingVideo }) {
+  const router = useRouter();
+  const [mode, setMode] = useState<'view' | 'edit'>('view');
+  const [expanded, setExpanded] = useState(false);
+  const [title, setTitle] = useState(material.file_name ?? '');
+  const [transcript, setTranscript] = useState(material.transcript ?? '');
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [removed, setRemoved] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const isText = material.mime_type?.startsWith('text/');
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/training-videos/${material.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          file_name: title,
+          transcript,
+        }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      setMode('view');
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function doDelete() {
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/training-videos/${material.id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const json = (await res.json()) as { error?: string };
+        throw new Error(json.error || `HTTP ${res.status}`);
+      }
+      await new Promise((r) => setTimeout(r, 180));
+      setRemoved(true);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setDeleting(false);
+    }
+  }
+
+  if (removed) return null;
+
+  if (mode === 'edit') {
+    return (
+      <li className="rounded-xl border border-neutral-300 bg-white p-3 anim-fade-in">
+        <div className="flex items-center gap-2">
+          <span
+            className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${
+              isText
+                ? 'bg-amber-50 text-amber-700 ring-amber-200'
+                : 'bg-sky-50 text-sky-700 ring-sky-200'
+            }`}
+          >
+            {isText ? 'テキスト' : '動画'}
+          </span>
+          <span className="text-xs text-neutral-400">編集中</span>
+        </div>
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="タイトル"
+          className="mt-2 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+        />
+        <textarea
+          value={transcript}
+          onChange={(e) => setTranscript(e.target.value)}
+          rows={8}
+          placeholder="本文・文字起こし"
+          className="mt-2 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm leading-relaxed focus:border-neutral-900 focus:outline-none"
+        />
+        {error && (
+          <p className="mt-2 text-xs text-red-600">{error}</p>
+        )}
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-[11px] text-neutral-400">
+            本文を変更すると、保存時に自動で再ベクトル化されます。
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setMode('view');
+                setTitle(material.file_name ?? '');
+                setTranscript(material.transcript ?? '');
+                setError(null);
+              }}
+              disabled={saving}
+              className="rounded-full border border-neutral-300 px-3 py-1.5 text-xs text-neutral-700 transition hover:border-neutral-900"
+            >
+              キャンセル
+            </button>
+            <button
+              type="button"
+              onClick={save}
+              disabled={saving}
+              className="rounded-full bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-neutral-700 disabled:opacity-40"
+            >
+              {saving ? '保存中…' : '保存'}
+            </button>
+          </div>
+        </div>
+      </li>
+    );
+  }
+
+  return (
+    <li
+      className={`rounded-xl border border-neutral-200 bg-white p-3 transition ${
+        deleting ? 'anim-fade-out' : ''
+      }`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${
+              isText
+                ? 'bg-amber-50 text-amber-700 ring-amber-200'
+                : 'bg-sky-50 text-sky-700 ring-sky-200'
+            }`}
+          >
+            {isText ? 'テキスト' : '動画'}
+          </span>
+          <span className="truncate text-sm text-neutral-800">
+            {material.file_name ?? material.id}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <StatusBadge status={material.status} />
+          <MaterialMenu
+            onEdit={() => {
+              setMode('edit');
+              setExpanded(true);
+            }}
+            onDelete={() => setConfirmDelete(true)}
+          />
+        </div>
+      </div>
+
+      {material.summary && !expanded && (
+        <p className="mt-2 text-xs leading-relaxed text-neutral-500">
+          {material.summary}
+        </p>
+      )}
+
+      {material.transcript && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-2 inline-flex items-center gap-1 text-[11px] text-neutral-500 hover:text-neutral-900"
+        >
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 10 10"
+            className={`transition ${expanded ? 'rotate-90' : ''}`}
+            aria-hidden
+          >
+            <path
+              d="M3 2l4 3-4 3"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          {expanded ? '本文を閉じる' : '本文を見る'}
+        </button>
+      )}
+
+      {expanded && material.transcript && (
+        <p className="mt-2 max-h-72 overflow-y-auto whitespace-pre-wrap rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-xs leading-relaxed text-neutral-700 anim-fade-in">
+          {material.transcript}
+        </p>
+      )}
+
+      {confirmDelete && (
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 anim-fade-in">
+          <span>この学習素材を削除します。元に戻せません。</span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(false)}
+              disabled={deleting}
+              className="rounded-full bg-white px-3 py-1 text-[11px] text-neutral-700"
+            >
+              キャンセル
+            </button>
+            <button
+              type="button"
+              onClick={doDelete}
+              disabled={deleting}
+              className="rounded-full bg-red-600 px-3 py-1 text-[11px] font-medium text-white hover:bg-red-500 disabled:opacity-50"
+            >
+              {deleting ? '削除中…' : '削除する'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <p className="mt-2 text-xs text-red-600">{error}</p>
+      )}
+    </li>
+  );
+}
+
+function MaterialMenu({
+  onEdit,
+  onDelete,
+}: {
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (!rootRef.current) return;
+      if (!rootRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        aria-label="素材の操作メニュー"
+        onClick={() => setOpen((o) => !o)}
+        className="grid h-7 w-7 place-items-center rounded-full text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+          <circle cx="3" cy="7" r="1.2" fill="currentColor" />
+          <circle cx="7" cy="7" r="1.2" fill="currentColor" />
+          <circle cx="11" cy="7" r="1.2" fill="currentColor" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute right-0 z-30 mt-1.5 w-40 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg anim-fade-in">
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onEdit();
+            }}
+            className="block w-full px-3 py-2 text-left text-xs text-neutral-700 transition hover:bg-neutral-50"
+          >
+            編集
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onDelete();
+            }}
+            className="block w-full px-3 py-2 text-left text-xs text-red-700 transition hover:bg-red-50"
+          >
+            削除
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function DetailSkeleton() {
