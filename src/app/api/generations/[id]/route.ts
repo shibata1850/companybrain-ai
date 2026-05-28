@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVideoStatus } from '@/lib/heygen';
 
@@ -63,4 +64,79 @@ export async function GET(
   }
 
   return NextResponse.json({ generation: gen });
+}
+
+/**
+ * Edit the answer text of a draft generation. Only allowed before the
+ * draft is sent to HeyGen.
+ */
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  const body = (await req.json().catch(() => ({}))) as { answer?: string };
+  if (typeof body.answer !== 'string') {
+    return NextResponse.json(
+      { error: 'answer (string) is required' },
+      { status: 400 },
+    );
+  }
+
+  const db = supabaseAdmin();
+  const { data: gen } = await db
+    .from('generations')
+    .select('id, avatar_id, status')
+    .eq('id', params.id)
+    .single();
+  if (!gen) {
+    return NextResponse.json({ error: 'not found' }, { status: 404 });
+  }
+  if (gen.status === 'rendering' || gen.status === 'ready') {
+    return NextResponse.json(
+      { error: 'cannot edit a generation that is already rendering or ready' },
+      { status: 400 },
+    );
+  }
+
+  const { error } = await db
+    .from('generations')
+    .update({
+      answer: body.answer,
+      status: 'draft',
+      error_message: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', params.id);
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  revalidatePath(`/avatars/${gen.avatar_id}`);
+  return NextResponse.json({ ok: true });
+}
+
+/**
+ * Discard a generation (typically a draft the user decided not to render).
+ */
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  const db = supabaseAdmin();
+  const { data: gen } = await db
+    .from('generations')
+    .select('id, avatar_id')
+    .eq('id', params.id)
+    .single();
+  if (!gen) {
+    return NextResponse.json({ ok: true });
+  }
+  const { error } = await db
+    .from('generations')
+    .delete()
+    .eq('id', params.id);
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  revalidatePath(`/avatars/${gen.avatar_id}`);
+  return NextResponse.json({ ok: true });
 }

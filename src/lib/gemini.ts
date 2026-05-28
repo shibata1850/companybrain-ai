@@ -99,6 +99,14 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
     : new Error('All embedding models failed');
 }
 
+export type AnswerLength = 'short' | 'standard' | 'detailed';
+
+const LENGTH_RULE: Record<AnswerLength, string> = {
+  short: '50〜80文字以内で一言で答える。',
+  standard: '80〜150文字以内で簡潔に。要点だけを話す。',
+  detailed: '200〜400文字程度。背景や具体例まで丁寧に話す。',
+};
+
 /**
  * Given a question and retrieved knowledge chunks (the persona's own past
  * utterances), produce an answer in the persona's voice.
@@ -107,8 +115,9 @@ export async function answerAsPersona(params: {
   personaName: string;
   question: string;
   knowledge: string[];
+  length?: AnswerLength;
 }): Promise<string> {
-  const { personaName, question, knowledge } = params;
+  const { personaName, question, knowledge, length = 'standard' } = params;
   const model = gemini().getGenerativeModel({ model: env.geminiTextModel() });
 
   const contextBlock =
@@ -130,7 +139,7 @@ ${contextBlock}
 # ルール
 - 一人称（私 / 僕 / 俺 など、参考発言と同じ口調）で答える
 - 動画として読み上げられるので、自然な話し言葉にする
-- 80〜150文字以内で簡潔に。要点だけを話す。
+- ${LENGTH_RULE[length]}
 - 箇条書きや見出しは使わない
 - 「AIとして」「私はAIなので」のようなメタ発言は禁止
 - 参考発言に直接の答えがない場合は、参考発言から推測される考え方で答える

@@ -29,11 +29,25 @@ type Generation = {
   id: string;
   question: string;
   answer: string | null;
-  status: string;
+  status: string; // draft | rendering | ready | error
   video_url: string | null;
   thumbnail_url: string | null;
   error_message: string | null;
   created_at: string;
+};
+
+type AnswerLength = 'short' | 'standard' | 'detailed';
+
+const LENGTH_LABEL: Record<AnswerLength, string> = {
+  short: '短く',
+  standard: '標準',
+  detailed: '詳しく',
+};
+
+const LENGTH_COST_HINT: Record<AnswerLength, string> = {
+  short: '15〜20秒・約 $0.25〜0.35',
+  standard: '25〜35秒・約 $0.45〜0.55',
+  detailed: '60〜90秒・約 $1.00〜1.50',
 };
 
 type DetailResponse = {
@@ -55,6 +69,7 @@ export default function AvatarDetail({ id }: { id: string }) {
   const [trainText, setTrainText] = useState('');
   const [trainTextTitle, setTrainTextTitle] = useState('');
   const [trainingText, setTrainingText] = useState(false);
+  const [askLength, setAskLength] = useState<AnswerLength>('standard');
   const [tab, setTab] = useState<Tab>('history');
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -127,11 +142,17 @@ export default function AvatarDetail({ id }: { id: string }) {
       const res = await fetch(`/api/avatars/${id}/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ question, length: askLength }),
       });
-      const json = (await res.json()) as { error?: string };
+      const json = (await res.json()) as {
+        id?: string;
+        error?: string;
+      };
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
       setQuestion('');
+      // Make the new draft the focused item so the preview appears in
+      // the hero immediately.
+      if (json.id) setFocusedId(json.id);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -217,10 +238,12 @@ export default function AvatarDetail({ id }: { id: string }) {
   const { avatar, training_videos, generations } = data;
 
   // Decide which generation owns the hero player.
-  // Priority: explicit selection > latest non-error > latest of any kind.
+  // Priority: explicit selection > active draft awaiting approval >
+  //           rendering > ready > anything.
   const focused =
     (focusedId && generations.find((g) => g.id === focusedId)) ||
-    generations.find((g) => g.status === 'rendering' || g.status === 'answering') ||
+    generations.find((g) => g.status === 'draft') ||
+    generations.find((g) => g.status === 'rendering') ||
     generations.find((g) => g.status === 'ready') ||
     generations[0] ||
     null;
@@ -280,6 +303,7 @@ export default function AvatarDetail({ id }: { id: string }) {
             generation={focused}
             coverUrl={avatar.cover_url}
             avatarName={avatar.name}
+            onChanged={load}
           />
         </div>
       </section>
@@ -305,9 +329,34 @@ export default function AvatarDetail({ id }: { id: string }) {
             disabled={asking || !question.trim()}
             className="rounded-full bg-neutral-900 px-4 py-1.5 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
           >
-            {asking ? '生成中…' : '送信'}
+            {asking ? '回答生成中…' : '回答を作る'}
           </button>
         </form>
+        <div className="mx-auto mt-2 flex max-w-3xl items-center justify-center gap-2 text-[11px] text-neutral-500">
+          <span>回答の長さ:</span>
+          <div className="inline-flex rounded-full bg-neutral-100 p-0.5">
+            {(['short', 'standard', 'detailed'] as AnswerLength[]).map((L) => (
+              <button
+                key={L}
+                type="button"
+                onClick={() => setAskLength(L)}
+                className={`rounded-full px-2.5 py-0.5 transition ${
+                  askLength === L
+                    ? 'bg-white text-neutral-900 shadow-sm'
+                    : 'text-neutral-500 hover:text-neutral-900'
+                }`}
+              >
+                {LENGTH_LABEL[L]}
+              </button>
+            ))}
+          </div>
+          <span className="text-neutral-400">
+            ({LENGTH_COST_HINT[askLength]})
+          </span>
+        </div>
+        <p className="mx-auto mt-1 max-w-3xl text-center text-[11px] text-neutral-400">
+          送信時はテキストのみ生成(無料)。内容を確認してから動画化できます。
+        </p>
         {error && (
           <p className="mx-auto mt-2 max-w-3xl text-center text-xs text-red-600">
             {error}
@@ -376,6 +425,32 @@ export default function AvatarDetail({ id }: { id: string }) {
 }
 
 function HeroStage({
+  generation,
+  coverUrl,
+  avatarName,
+  onChanged,
+}: {
+  generation: Generation | null;
+  coverUrl: string | null;
+  avatarName: string;
+  onChanged: () => void;
+}) {
+  // Delegate the draft case to a dedicated panel so the JSX stays readable.
+  if (generation && generation.status === 'draft') {
+    return (
+      <DraftStage generation={generation} onChanged={onChanged} />
+    );
+  }
+  return (
+    <HeroStageImpl
+      generation={generation}
+      coverUrl={coverUrl}
+      avatarName={avatarName}
+    />
+  );
+}
+
+function HeroStageImpl({
   generation,
   coverUrl,
   avatarName,
@@ -822,13 +897,17 @@ function Pill({ children }: { children: React.ReactNode }) {
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
+    draft: {
+      label: '下書き',
+      cls: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
+    },
     ready: {
       label: '完成',
       cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
     },
     rendering: {
-      label: '生成中',
-      cls: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
+      label: '動画化中',
+      cls: 'bg-amber-50 text-amber-700 ring-amber-200',
     },
     answering: {
       label: '回答作成中',
@@ -863,7 +942,202 @@ function StatusBadge({ status }: { status: string }) {
 function StatusGlyph({ status }: { status: string }) {
   if (status === 'error') return <span>!</span>;
   if (status === 'ready') return <span>▶</span>;
+  if (status === 'draft') return <span>✎</span>;
   return <span className="animate-pulse">●</span>;
+}
+
+function DraftStage({
+  generation,
+  onChanged,
+}: {
+  generation: Generation;
+  onChanged: () => void;
+}) {
+  const [text, setText] = useState(generation.answer ?? '');
+  const [busy, setBusy] = useState<'regen' | 'render' | 'discard' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const lastSyncedAnswer = useRef(generation.answer ?? '');
+
+  // If the server overwrites the answer (e.g. user clicked regenerate),
+  // pull the new text into the textarea — but don't clobber unsaved
+  // edits the user is in the middle of typing.
+  useEffect(() => {
+    if (generation.answer !== lastSyncedAnswer.current) {
+      setText(generation.answer ?? '');
+      lastSyncedAnswer.current = generation.answer ?? '';
+    }
+  }, [generation.answer]);
+
+  const dirty = text !== (generation.answer ?? '');
+
+  async function regenerate(length: AnswerLength) {
+    setBusy('regen');
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/generations/${generation.id}/regenerate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ length }),
+        },
+      );
+      const json = (await res.json()) as { answer?: string; error?: string };
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      if (json.answer) {
+        setText(json.answer);
+        lastSyncedAnswer.current = json.answer;
+      }
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function saveEdit() {
+    if (!dirty) return;
+    setBusy('regen');
+    setError(null);
+    try {
+      const res = await fetch(`/api/generations/${generation.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answer: text }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      lastSyncedAnswer.current = text;
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function render() {
+    if (dirty) {
+      // Save edits first so the rendered video matches what the user sees.
+      await saveEdit();
+    }
+    setBusy('render');
+    setError(null);
+    try {
+      const res = await fetch(`/api/generations/${generation.id}/render`, {
+        method: 'POST',
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function discard() {
+    if (
+      !window.confirm('この下書きを破棄します。よろしいですか？')
+    ) {
+      return;
+    }
+    setBusy('discard');
+    setError(null);
+    try {
+      const res = await fetch(`/api/generations/${generation.id}`, {
+        method: 'DELETE',
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-3xl space-y-3">
+      <div className="rounded-3xl border border-indigo-200 bg-indigo-50/40 p-5">
+        <div className="flex items-center justify-between">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100 px-2.5 py-0.5 text-[11px] font-medium text-indigo-700">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-indigo-500" />
+            回答プレビュー(下書き)
+          </span>
+          <span className="text-[11px] text-neutral-500">
+            {text.length} 文字
+          </span>
+        </div>
+        <p className="mt-3 text-xs uppercase tracking-wider text-neutral-500">
+          質問
+        </p>
+        <p className="mt-1 text-sm font-medium text-neutral-900">
+          {generation.question}
+        </p>
+        <p className="mt-4 text-xs uppercase tracking-wider text-neutral-500">
+          回答(編集可能)
+        </p>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={Math.max(4, Math.min(12, Math.ceil(text.length / 50)))}
+          className="mt-1 w-full rounded-xl border border-neutral-300 bg-white p-3 text-sm leading-relaxed focus:border-neutral-900 focus:outline-none"
+          placeholder="回答テキスト"
+        />
+
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-neutral-600">
+          <span>長さを変えて再生成:</span>
+          {(['short', 'standard', 'detailed'] as AnswerLength[]).map((L) => (
+            <button
+              key={L}
+              type="button"
+              onClick={() => regenerate(L)}
+              disabled={busy !== null}
+              className="rounded-full border border-neutral-300 bg-white px-2.5 py-1 transition hover:border-neutral-900 disabled:opacity-40"
+            >
+              {busy === 'regen' ? '生成中…' : LENGTH_LABEL[L]}
+            </button>
+          ))}
+          <span className="text-neutral-400">
+            ※ 再生成は無料(Gemini のみ)
+          </span>
+        </div>
+
+        {error && (
+          <p className="mt-3 text-xs text-red-600">{error}</p>
+        )}
+
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-indigo-200/60 pt-4">
+          <p className="text-[11px] text-neutral-500">
+            {dirty
+              ? '⚠ 編集が保存されていません。動画化時に自動保存されます。'
+              : 'この内容で動画にすると HeyGen API クレジットを消費します。'}
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={discard}
+              disabled={busy !== null}
+              className="rounded-full border border-neutral-300 bg-white px-4 py-1.5 text-xs text-neutral-700 transition hover:border-neutral-900 disabled:opacity-40"
+            >
+              {busy === 'discard' ? '破棄中…' : '破棄'}
+            </button>
+            <button
+              type="button"
+              onClick={render}
+              disabled={busy !== null || text.trim().length === 0}
+              className="rounded-full bg-indigo-600 px-4 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-500 disabled:opacity-40"
+            >
+              {busy === 'render' ? '動画化を開始中…' : '動画にする'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function TrainingMaterialCard({ material }: { material: TrainingVideo }) {
