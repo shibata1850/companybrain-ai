@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import BrainSwitcher from '@/components/BrainSwitcher';
+import { MicButton } from '@/components/MicButton';
 
 type Avatar = {
   id: string;
@@ -262,6 +263,10 @@ export default function AvatarDetail({ id }: { id: string }) {
             placeholder={`${avatar.name} に質問する…`}
             className="flex-1 bg-transparent px-2 py-1 text-sm outline-none placeholder:text-neutral-400"
           />
+          <MicButton
+            disabled={asking}
+            onTranscript={(text) => setQuestion(text)}
+          />
           <button
             type="submit"
             disabled={asking || !question.trim()}
@@ -384,11 +389,7 @@ function HeroStage({
             質問
           </p>
           <p className="mt-1 text-sm font-medium">{generation.question}</p>
-          {generation.answer && (
-            <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-neutral-600">
-              {generation.answer}
-            </p>
-          )}
+          <AnswerDisclosure answer={generation.answer} />
         </div>
       </div>
     );
@@ -453,12 +454,45 @@ function HeroStage({
           質問
         </p>
         <p className="mt-1 text-sm font-medium">{generation.question}</p>
-        {generation.answer && (
-          <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-neutral-600">
-            {generation.answer}
-          </p>
-        )}
+        <AnswerDisclosure answer={generation.answer} />
       </div>
+    </div>
+  );
+}
+
+function AnswerDisclosure({ answer }: { answer: string | null }) {
+  const [open, setOpen] = useState(false);
+  if (!answer) return null;
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex items-center gap-1 rounded-full border border-neutral-300 bg-white px-3 py-1 text-[11px] text-neutral-600 hover:border-neutral-900"
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          className={`transition ${open ? 'rotate-90' : ''}`}
+          aria-hidden
+        >
+          <path
+            d="M3 2l4 3-4 3"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        {open ? '回答テキストを閉じる' : '回答テキストを見る'}
+      </button>
+      {open && (
+        <p className="mt-2 whitespace-pre-wrap rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-sm leading-relaxed text-neutral-700">
+          {answer}
+        </p>
+      )}
     </div>
   );
 }
