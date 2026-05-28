@@ -325,35 +325,29 @@ export async function generateVideo(params: {
   // Background replacement so the speaker is composited over a calm,
   // controlled scene instead of whatever was in the source frame.
   // Defaults to a warm neutral office-wall colour; override via env.
+  //
+  // For HeyGen Photo Avatar, the `background` field only takes effect
+  // when the source photo is matted (i.e. the person has been segmented
+  // from their original background). We ask HeyGen to do that with the
+  // `matting` flag on the character.
   const background = buildBackground();
   const composeInput = (
     character: Record<string, unknown>,
   ): Record<string, unknown> => ({
-    character,
+    character: { ...character, matting: true },
     voice,
     ...(background ? { background } : {}),
   });
 
-  // Try a list of request shapes in order. HeyGen's Avatar IV has shipped
-  // under a couple of names while it stabilises, so we cover the variants
-  // we know about and fall through to the classic talking_photo engine
-  // if none are accepted.
+  // Try a list of request shapes in order. We've confirmed HeyGen only
+  // accepts `type: 'avatar'` or `type: 'talking_photo'` on the standard
+  // /v2/video/generate endpoint, so the V4 cascade is now:
+  //   1. talking_photo with version='v4' (HeyGen routes V4-capable
+  //      Photo Avatars through this path).
+  //   2. plain talking_photo (universal fallback).
   type Attempt = { name: string; body: Record<string, unknown> };
   const attempts: Attempt[] = [];
   if (useV4) {
-    attempts.push({
-      name: 'avatar_iv',
-      body: {
-        video_inputs: [
-          composeInput({
-            type: 'avatar_iv',
-            avatar_iv_id: params.talkingPhotoId,
-            scale: 1.0,
-          }),
-        ],
-        dimension,
-      },
-    });
     attempts.push({
       name: 'talking_photo+v4',
       body: {
