@@ -417,7 +417,7 @@ function HeroStage({
           <video
             key={generation.id}
             controls
-            autoPlay
+            preload="metadata"
             src={generation.video_url}
             poster={generation.thumbnail_url ?? undefined}
             className="aspect-video w-full bg-black"
