@@ -1,14 +1,12 @@
-import {
-  GoogleGenerativeAI,
-  type Content,
-  type Part,
-} from '@google/generative-ai';
+import { GoogleGenAI, type Content, type Part } from '@google/genai';
 import { env } from './env';
 
-let client: GoogleGenerativeAI | null = null;
+let client: GoogleGenAI | null = null;
 
-function gemini(): GoogleGenerativeAI {
-  if (!client) client = new GoogleGenerativeAI(env.geminiApiKey());
+function gemini(): GoogleGenAI {
+  if (!client) {
+    client = new GoogleGenAI({ apiKey: env.geminiApiKey() });
+  }
   return client;
 }
 
@@ -20,8 +18,6 @@ export async function transcribeVideo(
   videoBytes: Buffer,
   mimeType: string,
 ): Promise<{ transcript: string; summary: string }> {
-  const model = gemini().getGenerativeModel({ model: env.geminiTextModel() });
-
   const videoPart: Part = {
     inlineData: {
       data: videoBytes.toString('base64'),
@@ -37,12 +33,15 @@ export async function transcribeVideo(
   "summary": "<この動画で語られている内容を1〜2文で要約>"
 }`;
 
-  const result = await model.generateContent({
-    contents: [{ role: 'user', parts: [videoPart, { text: prompt }] }],
-    generationConfig: { responseMimeType: 'application/json' },
+  const response = await gemini().models.generateContent({
+    model: env.geminiTextModel(),
+    contents: [
+      { role: 'user', parts: [videoPart, { text: prompt }] },
+    ],
+    config: { responseMimeType: 'application/json' },
   });
 
-  const text = result.response.text();
+  const text = response.text ?? '';
   const parsed = JSON.parse(text) as { transcript: string; summary: string };
   return parsed;
 }
@@ -71,19 +70,16 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
   let lastError: unknown = null;
   for (const modelName of candidates) {
     try {
-      const model = gemini().getGenerativeModel({ model: modelName });
       const vectors: number[][] = [];
       for (const text of texts) {
-        const request = {
-          content: { role: 'user', parts: [{ text }] },
-          outputDimensionality: 768,
-        };
-        // outputDimensionality isn't typed on older SDK versions but is
-        // accepted by the API for models that support it.
-        const r = await model.embedContent(
-          request as unknown as Parameters<typeof model.embedContent>[0],
-        );
-        vectors.push(r.embedding.values);
+        const response = await gemini().models.embedContent({
+          model: modelName,
+          contents: text,
+          config: { outputDimensionality: 768 },
+        });
+        const values = response.embeddings?.[0]?.values;
+        if (!values) throw new Error('no embedding values returned');
+        vectors.push(values);
       }
       return vectors;
     } catch (e) {
@@ -118,7 +114,6 @@ export async function answerAsPersona(params: {
   length?: AnswerLength;
 }): Promise<string> {
   const { personaName, question, knowledge, length = 'standard' } = params;
-  const model = gemini().getGenerativeModel({ model: env.geminiTextModel() });
 
   const contextBlock =
     knowledge.length === 0
@@ -157,8 +152,11 @@ ${question}`,
     },
   ];
 
-  const result = await model.generateContent({ contents });
-  return result.response.text().trim();
+  const response = await gemini().models.generateContent({
+    model: env.geminiTextModel(),
+    contents,
+  });
+  return (response.text ?? '').trim();
 }
 
 /**
