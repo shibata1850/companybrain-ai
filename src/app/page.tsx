@@ -1,49 +1,45 @@
+'use client';
+
 import Link from 'next/link';
-import { unstable_noStore as noStore } from 'next/cache';
-import { storageBucket, supabaseAdmin } from '@/lib/supabase';
+import { useCallback, useEffect, useState } from 'react';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-export const fetchCache = 'force-no-store';
-
-type AvatarRow = {
+type Avatar = {
   id: string;
   name: string;
   description: string | null;
+  cover_url: string | null;
   cover_image_path: string | null;
   created_at: string;
 };
 
-async function loadAvatars() {
-  noStore();
-  const db = supabaseAdmin();
-  const { data } = await db
-    .from('avatars')
-    .select('id, name, description, cover_image_path, created_at')
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false });
-  const rows = (data ?? []) as AvatarRow[];
+export default function HomePage() {
+  const [avatars, setAvatars] = useState<Avatar[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const signed = await Promise.all(
-    rows.map(async (a) => {
-      if (!a.cover_image_path) return { ...a, cover_url: null };
-      const { data: s } = await db.storage
-        .from(storageBucket())
-        .createSignedUrl(a.cover_image_path, 60 * 60);
-      return { ...a, cover_url: s?.signedUrl ?? null };
-    }),
-  );
-  return signed;
-}
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch('/api/avatars', { cache: 'no-store' });
+      const json = (await res.json()) as { avatars?: Avatar[]; error?: string };
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      setAvatars(json.avatars ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-export default async function HomePage() {
-  let avatars: Awaited<ReturnType<typeof loadAvatars>> = [];
-  let loadError: string | null = null;
-  try {
-    avatars = await loadAvatars();
-  } catch (e) {
-    loadError = e instanceof Error ? e.message : String(e);
-  }
+  // Re-fetch on every mount AND whenever the tab regains focus, so the
+  // list stays in sync no matter how the user navigated here.
+  useEffect(() => {
+    load();
+    function onFocus() {
+      load();
+    }
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [load]);
 
   return (
     <div className="space-y-10">
@@ -55,13 +51,17 @@ export default async function HomePage() {
         </p>
       </section>
 
-      {loadError && (
+      {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          <strong>読み込みエラー:</strong> {loadError}
+          <strong>読み込みエラー:</strong> {error}
         </div>
       )}
 
-      {!loadError && avatars.length === 0 && (
+      {loading && (
+        <div className="text-sm text-neutral-400">読み込み中…</div>
+      )}
+
+      {!loading && !error && avatars.length === 0 && (
         <div className="rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 p-16 text-center">
           <p className="text-neutral-500">まだブレインがありません。</p>
           <Link

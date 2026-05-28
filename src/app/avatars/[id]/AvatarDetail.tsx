@@ -18,6 +18,7 @@ type Avatar = {
 type TrainingVideo = {
   id: string;
   file_name: string | null;
+  mime_type: string | null;
   status: string;
   summary: string | null;
   created_at: string;
@@ -50,6 +51,9 @@ export default function AvatarDetail({ id }: { id: string }) {
   const [asking, setAsking] = useState(false);
   const [trainFile, setTrainFile] = useState<File | null>(null);
   const [training, setTraining] = useState(false);
+  const [trainText, setTrainText] = useState('');
+  const [trainTextTitle, setTrainTextTitle] = useState('');
+  const [trainingText, setTrainingText] = useState(false);
   const [tab, setTab] = useState<Tab>('history');
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -147,6 +151,32 @@ export default function AvatarDetail({ id }: { id: string }) {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setDeleting(false);
+    }
+  }
+
+  async function addTrainingText(e: React.FormEvent) {
+    e.preventDefault();
+    if (!trainText.trim()) return;
+    setTrainingText(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/avatars/${id}/train-text`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: trainText,
+          title: trainTextTitle.trim() || undefined,
+        }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      setTrainText('');
+      setTrainTextTitle('');
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setTrainingText(false);
     }
   }
 
@@ -326,8 +356,14 @@ export default function AvatarDetail({ id }: { id: string }) {
               videos={training_videos}
               trainFile={trainFile}
               onPickFile={setTrainFile}
-              onSubmit={addTrainingVideo}
-              submitting={training}
+              onSubmitVideo={addTrainingVideo}
+              submittingVideo={training}
+              trainText={trainText}
+              onChangeText={setTrainText}
+              trainTextTitle={trainTextTitle}
+              onChangeTextTitle={setTrainTextTitle}
+              onSubmitText={addTrainingText}
+              submittingText={trainingText}
             />
           )}
         </div>
@@ -564,64 +600,150 @@ function TrainingPanel({
   videos,
   trainFile,
   onPickFile,
-  onSubmit,
-  submitting,
+  onSubmitVideo,
+  submittingVideo,
+  trainText,
+  onChangeText,
+  trainTextTitle,
+  onChangeTextTitle,
+  onSubmitText,
+  submittingText,
 }: {
   avatarName: string;
   videos: TrainingVideo[];
   trainFile: File | null;
   onPickFile: (f: File | null) => void;
-  onSubmit: (e: React.FormEvent) => void;
-  submitting: boolean;
+  onSubmitVideo: (e: React.FormEvent) => void;
+  submittingVideo: boolean;
+  trainText: string;
+  onChangeText: (v: string) => void;
+  trainTextTitle: string;
+  onChangeTextTitle: (v: string) => void;
+  onSubmitText: (e: React.FormEvent) => void;
+  submittingText: boolean;
 }) {
+  const [mode, setMode] = useState<'video' | 'text'>('video');
   return (
     <div className="space-y-6">
-      <form
-        onSubmit={onSubmit}
-        className="rounded-2xl border border-neutral-200 bg-white p-5"
-      >
-        <p className="text-sm font-medium text-neutral-900">
-          追加で学習させる
-        </p>
-        <p className="mt-1 text-xs text-neutral-500">
-          {avatarName} が話している動画を追加するほど、回答内容が本人らしく
-          なります。顔と声は最初の動画で確定しています。
-        </p>
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <input
-            type="file"
-            accept="video/*"
-            onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
-            className="flex-1 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-neutral-900 file:px-3 file:py-1 file:text-white"
-          />
-          <button
-            type="submit"
-            disabled={!trainFile || submitting}
-            className="rounded-full bg-neutral-900 px-4 py-2 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
-          >
-            {submitting ? '学習中…' : '学習させる'}
-          </button>
+      <div className="rounded-2xl border border-neutral-200 bg-white p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-neutral-900">
+              追加で学習させる
+            </p>
+            <p className="mt-1 text-xs text-neutral-500">
+              {avatarName} の発言や知識を追加するほど、回答が本人らしく
+              なります。顔と声は最初の動画で確定しています。
+            </p>
+          </div>
+          <div className="flex shrink-0 rounded-full bg-neutral-100 p-0.5 text-xs">
+            <button
+              type="button"
+              onClick={() => setMode('video')}
+              className={`rounded-full px-3 py-1 transition ${
+                mode === 'video'
+                  ? 'bg-white text-neutral-900 shadow-sm'
+                  : 'text-neutral-500 hover:text-neutral-900'
+              }`}
+            >
+              動画
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('text')}
+              className={`rounded-full px-3 py-1 transition ${
+                mode === 'text'
+                  ? 'bg-white text-neutral-900 shadow-sm'
+                  : 'text-neutral-500 hover:text-neutral-900'
+              }`}
+            >
+              テキスト
+            </button>
+          </div>
         </div>
-      </form>
+
+        {mode === 'video' ? (
+          <form
+            onSubmit={onSubmitVideo}
+            className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center"
+          >
+            <input
+              type="file"
+              accept="video/*"
+              onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
+              className="flex-1 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-neutral-900 file:px-3 file:py-1 file:text-white"
+            />
+            <button
+              type="submit"
+              disabled={!trainFile || submittingVideo}
+              className="rounded-full bg-neutral-900 px-4 py-2 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
+            >
+              {submittingVideo ? '学習中…' : '動画から学習'}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={onSubmitText} className="mt-4 space-y-3">
+            <input
+              type="text"
+              value={trainTextTitle}
+              onChange={(e) => onChangeTextTitle(e.target.value)}
+              placeholder="タイトル(任意): 営業方針 / 業務マニュアル など"
+              className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+            />
+            <textarea
+              value={trainText}
+              onChange={(e) => onChangeText(e.target.value)}
+              rows={6}
+              placeholder={`${avatarName} の考え方や知識をテキストで貼り付けてください。\n例: 議事録、メモ、ブログ記事、社内資料の本文 など`}
+              className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm leading-relaxed focus:border-neutral-900 focus:outline-none"
+            />
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] text-neutral-400">
+                {trainText.length.toLocaleString()} 文字
+              </p>
+              <button
+                type="submit"
+                disabled={!trainText.trim() || submittingText}
+                className="rounded-full bg-neutral-900 px-4 py-2 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
+              >
+                {submittingText ? '学習中…' : 'テキストから学習'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
 
       <div>
         <p className="text-xs uppercase tracking-wider text-neutral-400">
-          学習済み動画
+          学習素材
         </p>
         {videos.length === 0 ? (
           <p className="mt-3 text-sm text-neutral-400">
-            まだ学習動画がありません。
+            まだ学習素材がありません。
           </p>
         ) : (
           <ul className="mt-3 space-y-2">
-            {videos.map((v) => (
+            {videos.map((v) => {
+              const isText = v.mime_type?.startsWith('text/');
+              return (
               <li
                 key={v.id}
                 className="rounded-xl border border-neutral-200 bg-white p-3"
               >
                 <div className="flex items-center justify-between gap-3">
-                  <span className="truncate text-sm text-neutral-800">
-                    {v.file_name ?? v.id}
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span
+                      className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${
+                        isText
+                          ? 'bg-amber-50 text-amber-700 ring-amber-200'
+                          : 'bg-sky-50 text-sky-700 ring-sky-200'
+                      }`}
+                    >
+                      {isText ? 'テキスト' : '動画'}
+                    </span>
+                    <span className="truncate text-sm text-neutral-800">
+                      {v.file_name ?? v.id}
+                    </span>
                   </span>
                   <StatusBadge status={v.status} />
                 </div>
@@ -631,7 +753,8 @@ function TrainingPanel({
                   </p>
                 )}
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </div>

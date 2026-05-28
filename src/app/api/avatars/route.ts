@@ -26,7 +26,20 @@ export async function GET() {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ avatars: data ?? [] });
+  const bucket = storageBucket();
+  const avatars = await Promise.all(
+    (data ?? []).map(async (a) => {
+      let cover_url: string | null = null;
+      if (a.cover_image_path) {
+        const { data: s } = await db.storage
+          .from(bucket)
+          .createSignedUrl(a.cover_image_path, 60 * 60);
+        cover_url = s?.signedUrl ?? null;
+      }
+      return { ...a, cover_url };
+    }),
+  );
+  return NextResponse.json({ avatars });
 }
 
 export async function POST(req: NextRequest) {
