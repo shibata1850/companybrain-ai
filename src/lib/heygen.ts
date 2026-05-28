@@ -3,6 +3,35 @@ import { env } from './env';
 const HEYGEN_BASE = 'https://api.heygen.com';
 const UPLOAD_BASE = 'https://upload.heygen.com';
 
+/**
+ * Background passed to /v2/video/generate. Lets us swap the original
+ * frame's background for something calm and controlled.
+ *
+ * Env config:
+ *   HEYGEN_BACKGROUND_TYPE  = 'color' | 'image' | 'video' | 'none'
+ *   HEYGEN_BACKGROUND_VALUE = hex color (for 'color') or public URL
+ *                             (for 'image' / 'video')
+ *
+ * Default: solid warm neutral wall (#e8e4dc) — reads as a calm office.
+ */
+function buildBackground(): Record<string, unknown> | null {
+  const type = (process.env.HEYGEN_BACKGROUND_TYPE || 'color').toLowerCase();
+  if (type === 'none') return null;
+  if (type === 'image') {
+    const url = process.env.HEYGEN_BACKGROUND_VALUE;
+    if (!url) return null;
+    return { type: 'image', url };
+  }
+  if (type === 'video') {
+    const url = process.env.HEYGEN_BACKGROUND_VALUE;
+    if (!url) return null;
+    return { type: 'video', url };
+  }
+  // color (default)
+  const value = process.env.HEYGEN_BACKGROUND_VALUE || '#e8e4dc';
+  return { type: 'color', value };
+}
+
 function headers(extra: Record<string, string> = {}): Record<string, string> {
   return {
     'X-Api-Key': env.heygenApiKey(),
@@ -293,6 +322,18 @@ export async function generateVideo(params: {
     emotion: 'Friendly',
   };
 
+  // Background replacement so the speaker is composited over a calm,
+  // controlled scene instead of whatever was in the source frame.
+  // Defaults to a warm neutral office-wall colour; override via env.
+  const background = buildBackground();
+  const composeInput = (
+    character: Record<string, unknown>,
+  ): Record<string, unknown> => ({
+    character,
+    voice,
+    ...(background ? { background } : {}),
+  });
+
   // Try a list of request shapes in order. HeyGen's Avatar IV has shipped
   // under a couple of names while it stabilises, so we cover the variants
   // we know about and fall through to the classic talking_photo engine
@@ -304,16 +345,13 @@ export async function generateVideo(params: {
       name: 'avatar_iv',
       body: {
         video_inputs: [
-          {
-            character: {
-              type: 'avatar_iv',
-              avatar_iv_id: params.talkingPhotoId,
-              // V4 expressive style adds natural head sway + eye movement.
-              style: 'expressive',
-              scale: 1.0,
-            },
-            voice,
-          },
+          composeInput({
+            type: 'avatar_iv',
+            avatar_iv_id: params.talkingPhotoId,
+            // V4 expressive style adds natural head sway + eye movement.
+            style: 'expressive',
+            scale: 1.0,
+          }),
         ],
         dimension,
       },
@@ -322,18 +360,15 @@ export async function generateVideo(params: {
       name: 'talking_photo+v4',
       body: {
         video_inputs: [
-          {
-            character: {
-              type: 'talking_photo',
-              talking_photo_id: params.talkingPhotoId,
-              talking_photo_style: 'expressive',
-              talking_style: 'expressive',
-              expression: 'default',
-              version: 'v4',
-              scale: 1.0,
-            },
-            voice,
-          },
+          composeInput({
+            type: 'talking_photo',
+            talking_photo_id: params.talkingPhotoId,
+            talking_photo_style: 'expressive',
+            talking_style: 'expressive',
+            expression: 'default',
+            version: 'v4',
+            scale: 1.0,
+          }),
         ],
         dimension,
       },
@@ -343,17 +378,14 @@ export async function generateVideo(params: {
     name: 'talking_photo',
     body: {
       video_inputs: [
-        {
-          character: {
-            type: 'talking_photo',
-            talking_photo_id: params.talkingPhotoId,
-            talking_photo_style: 'expressive',
-            talking_style: 'expressive',
-            expression: 'default',
-            scale: 1.0,
-          },
-          voice,
-        },
+        composeInput({
+          type: 'talking_photo',
+          talking_photo_id: params.talkingPhotoId,
+          talking_photo_style: 'expressive',
+          talking_style: 'expressive',
+          expression: 'default',
+          scale: 1.0,
+        }),
       ],
       dimension,
     },
