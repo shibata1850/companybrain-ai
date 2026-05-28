@@ -205,13 +205,13 @@ export default function AvatarDetail({ id }: { id: string }) {
 
   if (error && !data) {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 anim-fade-in">
         エラー: {error}
       </div>
     );
   }
   if (!data) {
-    return <div className="text-neutral-400">読み込み中…</div>;
+    return <DetailSkeleton />;
   }
   const { avatar, training_videos, generations } = data;
 
@@ -274,11 +274,13 @@ export default function AvatarDetail({ id }: { id: string }) {
 
       {/* Hero video */}
       <section>
-        <HeroStage
-          generation={focused}
-          coverUrl={avatar.cover_url}
-          avatarName={avatar.name}
-        />
+        <div key={focused?.id ?? 'empty'} className="anim-fade-in">
+          <HeroStage
+            generation={focused}
+            coverUrl={avatar.cover_url}
+            avatarName={avatar.name}
+          />
+        </div>
       </section>
 
       {/* Subtle question input */}
@@ -342,7 +344,7 @@ export default function AvatarDetail({ id }: { id: string }) {
           )}
         </div>
 
-        <div className="pt-5">
+        <div key={tab} className="pt-5 anim-fade-in-up">
           {tab === 'history' && (
             <HistoryList
               generations={generations}
@@ -550,7 +552,7 @@ function HistoryList({
     );
   }
   return (
-    <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <ul className="grid grid-cols-1 gap-3 anim-stagger sm:grid-cols-2">
       {generations.map((g) => {
         const isFocused = g.id === focusedId;
         return (
@@ -838,6 +840,27 @@ function StatusGlyph({ status }: { status: string }) {
   if (status === 'error') return <span>!</span>;
   if (status === 'ready') return <span>▶</span>;
   return <span className="animate-pulse">●</span>;
+}
+
+function DetailSkeleton() {
+  return (
+    <div className="space-y-8 anim-fade-in">
+      <div className="flex items-center justify-between">
+        <div className="h-3 w-16 rounded anim-shimmer" />
+        <div className="h-7 w-40 rounded-full anim-shimmer" />
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="h-10 w-10 rounded-full anim-shimmer" />
+        <div className="h-4 w-32 rounded anim-shimmer" />
+      </div>
+      <div className="mx-auto aspect-video w-full max-w-3xl rounded-3xl anim-shimmer" />
+      <div className="mx-auto h-10 w-full max-w-3xl rounded-full anim-shimmer" />
+      <div className="flex gap-6 border-b border-neutral-200 pb-3">
+        <div className="h-4 w-16 rounded anim-shimmer" />
+        <div className="h-4 w-16 rounded anim-shimmer" />
+      </div>
+    </div>
+  );
 }
 
 function AvatarMenu({

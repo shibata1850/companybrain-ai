@@ -176,7 +176,7 @@ export default function TrashClient() {
         </div>
       )}
 
-      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <ul className="grid grid-cols-1 gap-3 anim-stagger sm:grid-cols-2 lg:grid-cols-3">
         {avatars.map((a) => (
           <li
             key={a.id}

@@ -71,7 +71,7 @@ export default function BrainSwitcher({
       </button>
 
       {open && (
-        <div className="absolute left-0 z-40 mt-1.5 w-64 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg">
+        <div className="absolute left-0 z-40 mt-1.5 w-64 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg anim-fade-in-up">
           <div className="max-h-72 overflow-y-auto py-1">
             {loading && (
               <div className="px-3 py-2 text-xs text-neutral-400">
