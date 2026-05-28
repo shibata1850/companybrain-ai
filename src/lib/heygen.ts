@@ -258,12 +258,18 @@ export async function pickDefaultJapaneseVoice(): Promise<string | null> {
 /**
  * Kick off a video render that lip-syncs the talking photo to the chosen
  * voice reading `inputText`. Returns the `video_id` to poll.
+ *
+ * Output dimension can be overridden via env vars HEYGEN_VIDEO_WIDTH /
+ * HEYGEN_VIDEO_HEIGHT. Default is 480x854 (portrait, ~480p) to keep the
+ * per-second cost as low as possible.
  */
 export async function generateVideo(params: {
   talkingPhotoId: string;
   voiceId: string;
   inputText: string;
 }): Promise<{ videoId: string }> {
+  const width = Number(process.env.HEYGEN_VIDEO_WIDTH) || 480;
+  const height = Number(process.env.HEYGEN_VIDEO_HEIGHT) || 854;
   const body = {
     video_inputs: [
       {
@@ -278,7 +284,7 @@ export async function generateVideo(params: {
         },
       },
     ],
-    dimension: { width: 720, height: 1280 },
+    dimension: { width, height },
   };
   const data = await heygenFetch<{ data?: { video_id?: string } }>(
     `${HEYGEN_BASE}/v2/video/generate`,
