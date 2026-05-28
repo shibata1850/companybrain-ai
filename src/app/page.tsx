@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 type Avatar = {
   id: string;
@@ -16,6 +16,7 @@ export default function HomePage() {
   const [avatars, setAvatars] = useState<Avatar[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -30,8 +31,6 @@ export default function HomePage() {
     }
   }, []);
 
-  // Re-fetch on every mount AND whenever the tab regains focus, so the
-  // list stays in sync no matter how the user navigated here.
   useEffect(() => {
     load();
     function onFocus() {
@@ -40,6 +39,23 @@ export default function HomePage() {
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, [load]);
+
+  async function moveToTrash(id: string) {
+    setBusyId(id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/avatars/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const json = (await res.json()) as { error?: string };
+        throw new Error(json.error || `HTTP ${res.status}`);
+      }
+      setAvatars((prev) => prev.filter((a) => a.id !== id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   return (
     <div className="space-y-10">
@@ -53,7 +69,7 @@ export default function HomePage() {
 
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          <strong>読み込みエラー:</strong> {error}
+          <strong>エラー:</strong> {error}
         </div>
       )}
 
@@ -75,36 +91,111 @@ export default function HomePage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {avatars.map((a) => (
-          <Link
+          <BrainCard
             key={a.id}
-            href={`/avatars/${a.id}`}
-            className="group overflow-hidden rounded-2xl border border-neutral-200 bg-white transition hover:border-neutral-900 hover:shadow-lg"
-          >
-            <div className="aspect-[4/3] bg-neutral-100">
-              {a.cover_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={a.cover_url}
-                  alt={a.name}
-                  className="h-full w-full object-cover transition group-hover:scale-[1.02]"
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center text-neutral-300">
-                  no cover
-                </div>
-              )}
-            </div>
-            <div className="p-4">
-              <h3 className="font-medium tracking-tight">{a.name}</h3>
-              {a.description && (
-                <p className="mt-1 line-clamp-2 text-sm text-neutral-500">
-                  {a.description}
-                </p>
-              )}
-            </div>
-          </Link>
+            avatar={a}
+            busy={busyId === a.id}
+            onTrash={() => moveToTrash(a.id)}
+          />
         ))}
       </div>
+    </div>
+  );
+}
+
+function BrainCard({
+  avatar,
+  busy,
+  onTrash,
+}: {
+  avatar: Avatar;
+  busy: boolean;
+  onTrash: () => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (!rootRef.current) return;
+      if (!rootRef.current.contains(e.target as Node)) setMenuOpen(false);
+    }
+    if (menuOpen) document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [menuOpen]);
+
+  return (
+    <div
+      ref={rootRef}
+      className="group relative overflow-hidden rounded-2xl border border-neutral-200 bg-white transition hover:border-neutral-900 hover:shadow-lg"
+    >
+      <Link
+        href={`/avatars/${avatar.id}`}
+        className="block"
+        aria-label={`${avatar.name} の詳細`}
+      >
+        <div className="aspect-[4/3] bg-neutral-100">
+          {avatar.cover_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={avatar.cover_url}
+              alt={avatar.name}
+              className="h-full w-full object-cover transition group-hover:scale-[1.02]"
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-neutral-300">
+              no cover
+            </div>
+          )}
+        </div>
+        <div className="p-4">
+          <h3 className="font-medium tracking-tight">{avatar.name}</h3>
+          {avatar.description && (
+            <p className="mt-1 line-clamp-2 text-sm text-neutral-500">
+              {avatar.description}
+            </p>
+          )}
+        </div>
+      </Link>
+
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setMenuOpen((o) => !o);
+        }}
+        aria-label="操作メニュー"
+        className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-white/90 text-neutral-700 opacity-0 shadow-sm ring-1 ring-neutral-200 backdrop-blur transition hover:bg-white group-hover:opacity-100 group-focus-within:opacity-100"
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+          <circle cx="3" cy="7" r="1.2" fill="currentColor" />
+          <circle cx="7" cy="7" r="1.2" fill="currentColor" />
+          <circle cx="11" cy="7" r="1.2" fill="currentColor" />
+        </svg>
+      </button>
+
+      {menuOpen && (
+        <div className="absolute right-2 top-12 z-20 w-44 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setMenuOpen(false);
+              onTrash();
+            }}
+            disabled={busy}
+            className="block w-full px-3 py-2 text-left text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
+          >
+            {busy ? 'ゴミ箱に移動中…' : 'ゴミ箱に移動'}
+          </button>
+        </div>
+      )}
+
+      {busy && (
+        <div className="pointer-events-none absolute inset-0 bg-white/60" />
+      )}
     </div>
   );
 }
