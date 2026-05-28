@@ -259,10 +259,17 @@ export async function pickDefaultJapaneseVoice(): Promise<string | null> {
  * Kick off a video render that lip-syncs the talking photo to the chosen
  * voice reading `inputText`. Returns the `video_id` to poll.
  *
- * Output dimension can be overridden via env vars HEYGEN_VIDEO_WIDTH /
- * HEYGEN_VIDEO_HEIGHT. Default is 1080x1920 (portrait, full HD) for the
- * highest standard quality. NB: 1080p+ may bill at a higher per-second
- * tier than 480/720p.
+ * Resolution: env HEYGEN_VIDEO_WIDTH / HEYGEN_VIDEO_HEIGHT (default 1080x1920).
+ *
+ * Quality mode: env HEYGEN_AVATAR_QUALITY
+ *   - "premium" (default): try HeyGen's newest Avatar IV / V4 lip-sync
+ *     engine first. Falls back automatically to the standard talking_photo
+ *     model if the account / plan can't access V4.
+ *   - "standard": skip V4 entirely and use the classic talking_photo flow.
+ *     Cheaper per second, lower lip-sync fidelity.
+ *
+ * NB: Avatar IV typically bills at a higher per-second rate than the
+ * standard model. Compare cost in HeyGen's usage page after a few renders.
  */
 export async function generateVideo(params: {
   talkingPhotoId: string;
@@ -271,33 +278,100 @@ export async function generateVideo(params: {
 }): Promise<{ videoId: string }> {
   const width = Number(process.env.HEYGEN_VIDEO_WIDTH) || 1080;
   const height = Number(process.env.HEYGEN_VIDEO_HEIGHT) || 1920;
-  const body = {
-    video_inputs: [
-      {
-        character: {
-          type: 'talking_photo',
-          talking_photo_id: params.talkingPhotoId,
-        },
-        voice: {
-          type: 'text',
-          voice_id: params.voiceId,
-          input_text: params.inputText,
-        },
-      },
-    ],
-    dimension: { width, height },
+  const dimension = { width, height };
+  const useV4 =
+    (process.env.HEYGEN_AVATAR_QUALITY || 'premium').toLowerCase() !==
+    'standard';
+
+  const voice = {
+    type: 'text',
+    voice_id: params.voiceId,
+    input_text: params.inputText,
   };
-  const data = await heygenFetch<{ data?: { video_id?: string } }>(
-    `${HEYGEN_BASE}/v2/video/generate`,
-    {
-      method: 'POST',
-      headers: headers({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(body),
+
+  // Try a list of request shapes in order. HeyGen's Avatar IV has shipped
+  // under a couple of names while it stabilises, so we cover the variants
+  // we know about and fall through to the classic talking_photo engine
+  // if none are accepted.
+  type Attempt = { name: string; body: Record<string, unknown> };
+  const attempts: Attempt[] = [];
+  if (useV4) {
+    attempts.push({
+      name: 'avatar_iv',
+      body: {
+        video_inputs: [
+          {
+            character: {
+              type: 'avatar_iv',
+              avatar_iv_id: params.talkingPhotoId,
+            },
+            voice,
+          },
+        ],
+        dimension,
+      },
+    });
+    attempts.push({
+      name: 'talking_photo+v4',
+      body: {
+        video_inputs: [
+          {
+            character: {
+              type: 'talking_photo',
+              talking_photo_id: params.talkingPhotoId,
+              talking_photo_style: 'expressive',
+              version: 'v4',
+            },
+            voice,
+          },
+        ],
+        dimension,
+      },
+    });
+  }
+  attempts.push({
+    name: 'talking_photo',
+    body: {
+      video_inputs: [
+        {
+          character: {
+            type: 'talking_photo',
+            talking_photo_id: params.talkingPhotoId,
+          },
+          voice,
+        },
+      ],
+      dimension,
     },
-  );
-  const id = data.data?.video_id;
-  if (!id) throw new Error('HeyGen generate: no video_id returned');
-  return { videoId: id };
+  });
+
+  let lastError: unknown = null;
+  for (const attempt of attempts) {
+    try {
+      const data = await heygenFetch<{ data?: { video_id?: string } }>(
+        `${HEYGEN_BASE}/v2/video/generate`,
+        {
+          method: 'POST',
+          headers: headers({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify(attempt.body),
+        },
+      );
+      const id = data.data?.video_id;
+      if (id) {
+        console.log(`[heygen] video render started via "${attempt.name}"`);
+        return { videoId: id };
+      }
+    } catch (e) {
+      lastError = e;
+      console.warn(
+        `[heygen] "${attempt.name}" failed:`,
+        e instanceof Error ? e.message : String(e),
+      );
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('HeyGen generate: all avatar engines failed');
 }
 
 export type HeyGenVideoStatus = {
