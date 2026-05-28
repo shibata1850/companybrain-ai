@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase';
-import { generateVideo } from '@/lib/heygen';
+import { createTalk } from '@/lib/did';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -42,9 +42,11 @@ export async function POST(
     .select('heygen_photo_id, heygen_voice_id')
     .eq('id', gen.avatar_id)
     .single();
+  // heygen_photo_id now stores the D-ID source image URL,
+  // heygen_voice_id stores the Microsoft Azure voice id.
   if (!avatar?.heygen_photo_id || !avatar?.heygen_voice_id) {
     return NextResponse.json(
-      { error: 'avatar is not fully trained yet (missing HeyGen ids)' },
+      { error: 'avatar is not fully set up yet (missing source image or voice)' },
       { status: 400 },
     );
   }
@@ -59,22 +61,22 @@ export async function POST(
     .eq('id', params.id);
 
   try {
-    const { videoId } = await generateVideo({
-      talkingPhotoId: avatar.heygen_photo_id,
+    const { talkId } = await createTalk({
+      sourceUrl: avatar.heygen_photo_id,
       voiceId: avatar.heygen_voice_id,
-      inputText: gen.answer,
+      text: gen.answer,
     });
 
     await db
       .from('generations')
       .update({
-        heygen_video_id: videoId,
+        heygen_video_id: talkId,
         updated_at: new Date().toISOString(),
       })
       .eq('id', params.id);
 
     revalidatePath(`/avatars/${gen.avatar_id}`);
-    return NextResponse.json({ heygen_video_id: videoId });
+    return NextResponse.json({ heygen_video_id: talkId });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     await db

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getVideoStatus } from '@/lib/heygen';
+import { getTalkStatus } from '@/lib/did';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -26,11 +26,12 @@ export async function GET(
     return NextResponse.json({ generation: gen });
   }
 
-  // Otherwise, if HeyGen has a video_id, ask HeyGen what's going on.
+  // Otherwise, ask D-ID what's going on. heygen_video_id now holds the
+  // D-ID talk id.
   if (gen.heygen_video_id) {
     try {
-      const status = await getVideoStatus(gen.heygen_video_id);
-      if (status.status === 'completed' && status.videoUrl) {
+      const status = await getTalkStatus(gen.heygen_video_id);
+      if (status.status === 'done' && status.videoUrl) {
         const { data: updated } = await db
           .from('generations')
           .update({
@@ -44,12 +45,12 @@ export async function GET(
           .single();
         return NextResponse.json({ generation: updated ?? gen });
       }
-      if (status.status === 'failed') {
+      if (status.status === 'error' || status.status === 'rejected') {
         const { data: updated } = await db
           .from('generations')
           .update({
             status: 'error',
-            error_message: status.error || 'HeyGen render failed',
+            error_message: status.error || 'video render failed',
             updated_at: new Date().toISOString(),
           })
           .eq('id', gen.id)

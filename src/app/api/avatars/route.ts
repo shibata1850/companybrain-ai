@@ -3,12 +3,8 @@ import { revalidatePath } from 'next/cache';
 import { randomUUID } from 'node:crypto';
 import { storageBucket, supabaseAdmin } from '@/lib/supabase';
 import { extractFrameAndAudio } from '@/lib/media';
-import {
-  createPhotoAvatar,
-  pickDefaultJapaneseVoice,
-  tryCloneVoice,
-  uploadAsset,
-} from '@/lib/heygen';
+import { uploadImage as didUploadImage } from '@/lib/did';
+import { env } from '@/lib/env';
 import { processTrainingVideo } from '@/lib/processing';
 
 export const runtime = 'nodejs';
@@ -104,13 +100,13 @@ export async function POST(req: NextRequest) {
   }
   const videoId = tv.id as string;
 
-  // 4. Extract one frame + audio so we can build the HeyGen avatar+voice.
+  // 4. Extract one frame from the video to serve as the face image.
+  //    Audio is also extracted but unused for now (D-ID's default flow
+  //    uses Microsoft TTS rather than cloning the user's voice).
   let frame: Buffer;
-  let audio: Buffer;
   try {
     const out = await extractFrameAndAudio(videoBytes, ext);
     frame = out.frame;
-    audio = out.audio;
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     return NextResponse.json(
@@ -119,7 +115,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 5. Save cover image to storage so the UI can show it.
+  // 5. Save cover image to Supabase storage so the UI can show it.
   const coverPath = `${avatarId}/cover.jpg`;
   await db.storage
     .from(bucket)
@@ -128,56 +124,28 @@ export async function POST(req: NextRequest) {
       upsert: true,
     });
 
-  // 6. Send frame + audio to HeyGen. The image_key from the asset upload
-  //    is used directly as the talking_photo_id. Voice cloning is best-
-  //    effort: if HeyGen's plan / API doesn't expose it, we fall back to a
-  //    standard Japanese voice from their library or one supplied via env.
-  let talkingPhotoId: string;
-  let voiceId: string;
+  // 6. Upload the face image to D-ID. The returned URL is what /talks
+  //    accepts as `source_url`.
+  let sourceUrl: string;
   try {
-    const frameUp = await uploadAsset(frame, 'image/jpeg');
-    const photoAvatar = await createPhotoAvatar({
-      imageKey: frameUp.key,
-      name,
-    });
-    talkingPhotoId = photoAvatar.talkingPhotoId;
-
-    const envDefaultVoice = process.env.HEYGEN_DEFAULT_VOICE_ID;
-    let cloned: string | null = null;
-    try {
-      const audioUp = await uploadAsset(audio, 'audio/mpeg');
-      cloned = await tryCloneVoice({ audioKey: audioUp.key, name });
-    } catch (e) {
-      console.warn(
-        '[avatars] audio upload / clone failed:',
-        e instanceof Error ? e.message : String(e),
-      );
-    }
-    if (cloned) {
-      voiceId = cloned;
-    } else if (envDefaultVoice) {
-      voiceId = envDefaultVoice;
-    } else {
-      const fallback = await pickDefaultJapaneseVoice();
-      if (!fallback) {
-        throw new Error(
-          'No voice available: voice clone failed and no fallback voice could be picked',
-        );
-      }
-      voiceId = fallback;
-    }
+    const up = await didUploadImage(frame, 'image/jpeg');
+    sourceUrl = up.url;
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     return NextResponse.json(
-      { error: `HeyGen setup failed: ${message}` },
+      { error: `D-ID image upload failed: ${message}` },
       { status: 500 },
     );
   }
 
+  // For D-ID we reuse the existing columns to avoid a migration:
+  //   heygen_photo_id -> D-ID source image URL
+  //   heygen_voice_id -> Microsoft Azure voice id (e.g. ja-JP-NanamiNeural)
+  const voiceId = env.didVoiceId();
   await db
     .from('avatars')
     .update({
-      heygen_photo_id: talkingPhotoId,
+      heygen_photo_id: sourceUrl,
       heygen_voice_id: voiceId,
       cover_image_path: coverPath,
     })

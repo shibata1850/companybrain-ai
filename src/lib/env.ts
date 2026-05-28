@@ -27,5 +27,10 @@ export const env = {
     'gemini-2.5-flash',
   geminiEmbeddingModel: () =>
     process.env.GEMINI_EMBEDDING_MODEL || 'gemini-embedding-001',
-  heygenApiKey: () => required('HEYGEN_API_KEY'),
+  didApiKey: () => required('DID_API_KEY'),
+  didVoiceId: () => process.env.DID_VOICE_ID || 'ja-JP-NanamiNeural',
+  // HeyGen is legacy — not required to start the app. Returns empty
+  // string if unset so the (now-unused) heygen.ts helpers don't blow
+  // up at import time.
+  heygenApiKey: () => process.env.HEYGEN_API_KEY || '',
 };
