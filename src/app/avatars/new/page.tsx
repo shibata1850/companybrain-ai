@@ -42,6 +42,7 @@ export default function NewAvatarPage() {
         throw new Error(data.error || `failed: HTTP ${res.status}`);
       }
       router.push(`/avatars/${data.id}`);
+      router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setSubmitting(false);

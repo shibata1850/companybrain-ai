@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase';
 import { permanentlyDeleteAvatars } from '@/lib/avatars';
 
@@ -35,6 +36,8 @@ export async function DELETE() {
   const ids = (trashed ?? []).map((a) => a.id as string);
   try {
     const result = await permanentlyDeleteAvatars(ids);
+    revalidatePath('/');
+    revalidatePath('/trash');
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

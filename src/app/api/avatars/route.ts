@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { randomUUID } from 'node:crypto';
 import { storageBucket, supabaseAdmin } from '@/lib/supabase';
 import { extractFrameAndAudio } from '@/lib/media';
@@ -180,6 +181,10 @@ export async function POST(req: NextRequest) {
   } catch {
     // status is already 'error' on the training_videos row; avatar still exists.
   }
+
+  // Invalidate the home page's router cache so the just-created brain
+  // shows up immediately when the user navigates back to the list.
+  revalidatePath('/');
 
   return NextResponse.json({ id: avatarId });
 }

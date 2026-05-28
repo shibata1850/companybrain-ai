@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { storageBucket, supabaseAdmin } from '@/lib/supabase';
 import { permanentlyDeleteAvatars } from '@/lib/avatars';
 
@@ -70,6 +71,8 @@ export async function DELETE(
       const message = e instanceof Error ? e.message : String(e);
       return NextResponse.json({ error: message }, { status: 500 });
     }
+    revalidatePath('/');
+    revalidatePath('/trash');
     return NextResponse.json({ ok: true, permanent: true });
   }
 
@@ -80,5 +83,7 @@ export async function DELETE(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  revalidatePath('/');
+  revalidatePath('/trash');
   return NextResponse.json({ ok: true });
 }
