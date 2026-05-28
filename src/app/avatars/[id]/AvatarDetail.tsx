@@ -559,7 +559,7 @@ function HeroStageImpl({
           <p className="text-xs text-white/70">
             {generation.status === 'answering'
               ? 'Gemini が回答を考えています'
-              : `HeyGen がレンダリング中 — ${elapsedLabel}`}
+              : `動画をレンダリング中 — ${elapsedLabel}`}
           </p>
         </div>
       </div>
@@ -1114,7 +1114,7 @@ function DraftStage({
           <p className="text-[11px] text-neutral-500">
             {dirty
               ? '⚠ 編集が保存されていません。動画化時に自動保存されます。'
-              : 'この内容で動画にすると HeyGen API クレジットを消費します。'}
+              : 'この内容で動画にすると動画生成のクレジットを消費します。'}
           </p>
           <div className="flex gap-2">
             <button
