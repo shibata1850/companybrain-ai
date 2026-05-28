@@ -348,8 +348,6 @@ export async function generateVideo(params: {
           composeInput({
             type: 'avatar_iv',
             avatar_iv_id: params.talkingPhotoId,
-            // V4 expressive style adds natural head sway + eye movement.
-            style: 'expressive',
             scale: 1.0,
           }),
         ],
@@ -363,9 +361,6 @@ export async function generateVideo(params: {
           composeInput({
             type: 'talking_photo',
             talking_photo_id: params.talkingPhotoId,
-            talking_photo_style: 'expressive',
-            talking_style: 'expressive',
-            expression: 'default',
             version: 'v4',
             scale: 1.0,
           }),
@@ -381,9 +376,6 @@ export async function generateVideo(params: {
         composeInput({
           type: 'talking_photo',
           talking_photo_id: params.talkingPhotoId,
-          talking_photo_style: 'expressive',
-          talking_style: 'expressive',
-          expression: 'default',
           scale: 1.0,
         }),
       ],
