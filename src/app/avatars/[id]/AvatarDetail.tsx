@@ -1058,14 +1058,55 @@ function TranscriptPanel({
   onExport?: () => void;
 }) {
   const [confirmingClear, setConfirmingClear] = useState(false);
+  const [search, setSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
+
+  // Filter the persisted log on the search term; partials stay visible.
+  const filteredMessages = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return messages;
+    return messages.filter((m) => m.text.toLowerCase().includes(q));
+  }, [messages, search]);
+
   useEffect(() => {
     const el = scrollerRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, partialUser, partialAgent]);
+    if (el && !search) el.scrollTop = el.scrollHeight;
+  }, [messages, partialUser, partialAgent, search]);
+
+  // Focus the search input as soon as it opens; "/" hotkey opens it too.
+  useEffect(() => {
+    if (searchOpen) {
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    }
+  }, [searchOpen]);
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === 'INPUT' ||
+          t.tagName === 'TEXTAREA' ||
+          (t as HTMLElement).isContentEditable)
+      )
+        return;
+      if (e.key === '/') {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const totalLive = (partialUser ? 1 : 0) + (partialAgent ? 1 : 0);
   const turns = Math.ceil(messages.length / 2);
+  const hiddenByFilter =
+    search.trim() && messages.length > filteredMessages.length
+      ? messages.length - filteredMessages.length
+      : 0;
 
   return (
     <section>
@@ -1102,6 +1143,40 @@ function TranscriptPanel({
           )}
         </button>
         <div className="flex items-center gap-3 text-[11px]">
+          {messages.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchOpen((v) => !v);
+                if (searchOpen) setSearch('');
+              }}
+              className={`inline-flex items-center gap-1 transition ${
+                searchOpen
+                  ? 'text-neutral-900'
+                  : 'text-neutral-500 hover:text-neutral-900'
+              }`}
+              title="会話を検索 (/)"
+            >
+              <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden>
+                <circle
+                  cx="7"
+                  cy="7"
+                  r="4.5"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  fill="none"
+                />
+                <path
+                  d="M10.5 10.5L14 14"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  fill="none"
+                  strokeLinecap="round"
+                />
+              </svg>
+              検索
+            </button>
+          )}
           {onExport && messages.length > 0 && (
             <button
               type="button"
@@ -1162,6 +1237,63 @@ function TranscriptPanel({
         </div>
       )}
 
+      {searchOpen && open && (
+        <div className="mt-2 flex items-center gap-2 rounded-full border border-neutral-300 bg-white px-3 py-1.5 anim-fade-in">
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 16 16"
+            aria-hidden
+            className="text-neutral-400"
+          >
+            <circle
+              cx="7"
+              cy="7"
+              r="4.5"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              fill="none"
+            />
+            <path
+              d="M10.5 10.5L14 14"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              fill="none"
+              strokeLinecap="round"
+            />
+          </svg>
+          <input
+            ref={searchInputRef}
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setSearch('');
+                setSearchOpen(false);
+              }
+            }}
+            placeholder="会話を検索…(Esc で閉じる)"
+            className="flex-1 bg-transparent text-xs outline-none placeholder:text-neutral-400"
+          />
+          {search && (
+            <span className="text-[10px] text-neutral-500">
+              {filteredMessages.length} / {messages.length} 件
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setSearch('');
+              setSearchOpen(false);
+            }}
+            className="text-[11px] text-neutral-400 hover:text-neutral-900"
+          >
+            閉じる
+          </button>
+        </div>
+      )}
+
       {open && (
         <div
           ref={scrollerRef}
@@ -1173,7 +1305,12 @@ function TranscriptPanel({
             </p>
           ) : (
             <ul className="space-y-2.5">
-              {messages.map((m, i) => (
+              {hiddenByFilter > 0 && (
+                <li className="rounded-md bg-neutral-50 px-3 py-1.5 text-center text-[10px] text-neutral-500">
+                  検索でヒットしなかったメッセージ {hiddenByFilter} 件を非表示中
+                </li>
+              )}
+              {filteredMessages.map((m, i) => (
                 <li
                   key={`${m.at}-${i}`}
                   className={`flex ${
@@ -1191,7 +1328,7 @@ function TranscriptPanel({
                       {m.role === 'user' ? 'あなた' : avatarName}
                     </p>
                     <p className="mt-0.5 whitespace-pre-wrap leading-relaxed">
-                      {m.text}
+                      <Highlight text={m.text} term={search} />
                     </p>
                   </div>
                 </li>
@@ -1284,6 +1421,34 @@ function AvatarMenu({
       )}
     </div>
   );
+}
+
+function Highlight({ text, term }: { text: string; term: string }) {
+  const q = term.trim();
+  if (!q) return <>{text}</>;
+  const lower = text.toLowerCase();
+  const needle = q.toLowerCase();
+  const parts: React.ReactNode[] = [];
+  let i = 0;
+  let n = 0;
+  while (i < text.length) {
+    const idx = lower.indexOf(needle, i);
+    if (idx === -1) {
+      parts.push(text.slice(i));
+      break;
+    }
+    if (idx > i) parts.push(text.slice(i, idx));
+    parts.push(
+      <mark
+        key={`m-${n++}`}
+        className="rounded bg-yellow-200 px-0.5 text-neutral-900"
+      >
+        {text.slice(idx, idx + needle.length)}
+      </mark>,
+    );
+    i = idx + needle.length;
+  }
+  return <>{parts}</>;
 }
 
 function PencilGlyph() {

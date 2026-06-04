@@ -451,6 +451,19 @@ export default function StreamingStage({
       reconnectTimerRef.current = null;
     }
     manualStopRef.current = false;
+    // Ask once for permission so we can ping the user when the agent
+    // speaks while they have the tab buried.
+    if (
+      typeof window !== 'undefined' &&
+      'Notification' in window &&
+      Notification.permission === 'default'
+    ) {
+      try {
+        await Notification.requestPermission();
+      } catch {
+        // user dismissed
+      }
+    }
     setStatus((s) => (s === 'reconnecting' ? s : 'connecting'));
     try {
       const tokenRes = await fetch('/api/streaming/token', {
@@ -713,6 +726,66 @@ export default function StreamingStage({
     status === 'thinking' ||
     status === 'speaking';
 
+  // Keyboard shortcuts. Skip when the user is typing in an input.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === 'INPUT' ||
+          t.tagName === 'TEXTAREA' ||
+          (t as HTMLElement).isContentEditable)
+      )
+        return;
+      // Space = toggle mute, Esc = end session — only while live.
+      if (isLive && e.code === 'Space') {
+        e.preventDefault();
+        setMuted((m) => !m);
+      } else if (isLive && e.key === 'Escape') {
+        e.preventDefault();
+        void stop();
+      } else if (!isLive && e.code === 'KeyS') {
+        // Quick start when not yet in a session.
+        e.preventDefault();
+        void start();
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLive]);
+
+  // Browser notification: fire only when the agent transitions to
+  // "speaking" and the tab is not currently visible.
+  const prevStatusRef = useRef<Status>('idle');
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = status;
+    if (
+      status === 'speaking' &&
+      prev !== 'speaking' &&
+      typeof document !== 'undefined' &&
+      document.hidden &&
+      'Notification' in window &&
+      Notification.permission === 'granted'
+    ) {
+      try {
+        const n = new Notification(`${avatarName} が話しています`, {
+          body: 'タブに戻って続きを聞いてください。',
+          icon: coverUrl || undefined,
+          tag: `cb-${avatarName}`,
+        });
+        n.onclick = () => {
+          window.focus();
+          n.close();
+        };
+        setTimeout(() => n.close(), 6000);
+      } catch {
+        // ignore
+      }
+    }
+  }, [status, avatarName, coverUrl]);
+
   if (minimized) {
     return (
       <div className="w-full space-y-3">
@@ -915,6 +988,9 @@ export default function StreamingStage({
               </p>
               <p className="mt-1 text-xs text-white/70">
                 マイクへのアクセスを許可してください。
+              </p>
+              <p className="mt-2 text-[10px] text-white/40">
+                ショートカット: S で開始 / Space でマイク切替 / Esc で終了 / / で検索
               </p>
             </div>
             <button
