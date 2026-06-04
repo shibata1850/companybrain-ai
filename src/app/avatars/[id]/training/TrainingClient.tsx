@@ -1113,7 +1113,7 @@ function FolderQuickMenu({
         >
           📁 未分類へ
         </button>
-        <div className="max-h-44 overflow-y-auto border-t border-neutral-100">
+        <div className="border-t border-neutral-100">
           {options.length === 0 && (
             <p className="px-3 py-2 text-[11px] text-neutral-400">
               既存フォルダなし
@@ -1201,7 +1201,7 @@ function BulkFolderPicker({
         align="end"
         width={224}
       >
-        <div className="max-h-48 overflow-y-auto">
+        <div>
           {options.length === 0 && (
             <p className="px-3 py-2 text-[11px] text-neutral-400">
               既存フォルダなし

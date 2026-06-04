@@ -1532,7 +1532,7 @@ function VoicePicker({
         >
           デフォルト(環境設定)
         </button>
-        <div className="max-h-72 overflow-y-auto border-t border-neutral-100">
+        <div className="border-t border-neutral-100">
           {VOICES.map((v) => (
             <button
               key={v.id}
@@ -1623,7 +1623,7 @@ function LanguagePicker({
         onClose={() => setOpen(false)}
         width={232}
       >
-        <div className="max-h-72 overflow-y-auto">
+        <div>
           {LANGUAGES.map((l) => {
             const isCurrent =
               (current ?? 'auto') === l.id ||
