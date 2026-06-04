@@ -29,12 +29,16 @@ export const env = {
     process.env.GEMINI_EMBEDDING_MODEL || 'gemini-embedding-001',
   didApiKey: () => process.env.DID_API_KEY || '',
   didVoiceId: () => process.env.DID_VOICE_ID || 'ja-JP-NanamiNeural',
-  heygenApiKey: () => required('HEYGEN_API_KEY'),
-  // Stock Interactive Avatar id used during streaming sessions. The
-  // Starter plan ships a fixed set; the user can pick any of them via
-  // env. Default is a widely available avatar.
+  heygenApiKey: () => process.env.HEYGEN_API_KEY || '',
   heygenInteractiveAvatarId: () =>
     process.env.HEYGEN_INTERACTIVE_AVATAR_ID || 'Wayne_20240711',
   heygenInteractiveLanguage: () =>
     process.env.HEYGEN_INTERACTIVE_LANGUAGE || 'ja',
+  // Gemini Live API — the real-time voice conversation engine.
+  // Available voices (multi-lingual incl. Japanese):
+  //   Aoede / Charon / Fenrir / Kore / Leda / Orus / Puck / Zephyr.
+  geminiLiveModel: () =>
+    process.env.GEMINI_LIVE_MODEL ||
+    'gemini-2.5-flash-preview-native-audio-dialog',
+  geminiLiveVoice: () => process.env.GEMINI_LIVE_VOICE || 'Kore',
 };

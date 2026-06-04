@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import BrainSwitcher from '@/components/BrainSwitcher';
-import { MicButton } from '@/components/MicButton';
 import StreamingStage from '@/components/StreamingStage';
 
 type Avatar = {
@@ -39,22 +38,12 @@ type DetailResponse = {
   generations: Generation[];
 };
 
-type AnswerLength = 'short' | 'standard' | 'detailed';
 type Tab = 'history' | 'training';
-
-const LENGTH_LABEL: Record<AnswerLength, string> = {
-  short: '短く',
-  standard: '標準',
-  detailed: '詳しく',
-};
 
 export default function AvatarDetail({ id }: { id: string }) {
   const router = useRouter();
   const [data, setData] = useState<DetailResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [question, setQuestion] = useState('');
-  const [asking, setAsking] = useState(false);
-  const [askLength, setAskLength] = useState<AnswerLength>('standard');
   const [tab, setTab] = useState<Tab>('history');
   const [deleting, setDeleting] = useState(false);
   const [trainFile, setTrainFile] = useState<File | null>(null);
@@ -62,9 +51,6 @@ export default function AvatarDetail({ id }: { id: string }) {
   const [trainText, setTrainText] = useState('');
   const [trainTextTitle, setTrainTextTitle] = useState('');
   const [trainingText, setTrainingText] = useState(false);
-  const [sessionActive, setSessionActive] = useState(false);
-
-  const speakRef = useRef<((text: string) => Promise<void>) | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/avatars/${id}`, { cache: 'no-store' });
@@ -81,54 +67,6 @@ export default function AvatarDetail({ id }: { id: string }) {
       setError(e instanceof Error ? e.message : String(e)),
     );
   }, [load]);
-
-  function handleAvatarReady(speak: (text: string) => Promise<void>) {
-    speakRef.current = speak;
-    setSessionActive(true);
-  }
-
-  function handleStatusChange(s: string) {
-    if (s === 'ended' || s === 'error' || s === 'idle') {
-      setSessionActive(false);
-      speakRef.current = null;
-    }
-  }
-
-  async function ask(e: React.FormEvent) {
-    e.preventDefault();
-    if (!question.trim()) return;
-    if (!sessionActive) {
-      setError('まず動画上の「セッションを開始」を押してください。');
-      return;
-    }
-    setAsking(true);
-    setError(null);
-    const q = question;
-    setQuestion('');
-    try {
-      const res = await fetch(`/api/avatars/${id}/ask`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: q, length: askLength }),
-      });
-      const json = (await res.json()) as {
-        answer?: string;
-        error?: string;
-      };
-      if (!res.ok || !json.answer) {
-        throw new Error(json.error || `HTTP ${res.status}`);
-      }
-      // Pipe the persona's answer to the live avatar so it speaks.
-      if (speakRef.current) {
-        await speakRef.current(json.answer);
-      }
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setAsking(false);
-    }
-  }
 
   async function moveToTrash() {
     setDeleting(true);
@@ -256,64 +194,19 @@ export default function AvatarDetail({ id }: { id: string }) {
 
       <section>
         <StreamingStage
+          avatarId={avatar.id}
           coverUrl={avatar.cover_url}
           avatarName={avatar.name}
-          onAvatarReady={handleAvatarReady}
-          onStatusChange={handleStatusChange}
         />
       </section>
 
-      <section>
-        <form
-          onSubmit={ask}
-          className="mx-auto flex max-w-3xl items-center gap-2 rounded-full border border-neutral-300 bg-white px-3 py-2 shadow-sm focus-within:border-neutral-900"
-        >
-          <input
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder={
-              sessionActive
-                ? `${avatar.name} に話しかける…`
-                : 'まずセッションを開始してください'
-            }
-            disabled={!sessionActive || asking}
-            className="flex-1 bg-transparent px-2 py-1 text-sm outline-none placeholder:text-neutral-400 disabled:opacity-60"
-          />
-          <MicButton
-            disabled={!sessionActive || asking}
-            onTranscript={(text) => setQuestion(text)}
-          />
-          <button
-            type="submit"
-            disabled={!sessionActive || asking || !question.trim()}
-            className="rounded-full bg-neutral-900 px-4 py-1.5 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
-          >
-            {asking ? '応答準備中…' : '送信'}
-          </button>
-        </form>
-        <div className="mx-auto mt-2 flex max-w-3xl items-center justify-center gap-2 text-[11px] text-neutral-500">
-          <span>回答の長さ:</span>
-          <div className="inline-flex rounded-full bg-neutral-100 p-0.5">
-            {(['short', 'standard', 'detailed'] as AnswerLength[]).map((L) => (
-              <button
-                key={L}
-                type="button"
-                onClick={() => setAskLength(L)}
-                className={`rounded-full px-2.5 py-0.5 transition ${
-                  askLength === L
-                    ? 'bg-white text-neutral-900 shadow-sm'
-                    : 'text-neutral-500 hover:text-neutral-900'
-                }`}
-              >
-                {LENGTH_LABEL[L]}
-              </button>
-            ))}
-          </div>
-        </div>
+      <section className="mx-auto max-w-3xl text-center text-[11px] text-neutral-500">
+        <p>
+          マイクで{avatar.name}に話しかけてください。
+          回答は学習させた発言・知識を参考に、その人物として答えます。
+        </p>
         {error && (
-          <p className="mx-auto mt-2 max-w-3xl text-center text-xs text-red-600">
-            {error}
-          </p>
+          <p className="mt-2 text-xs text-red-600">{error}</p>
         )}
       </section>
 
