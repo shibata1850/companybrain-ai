@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import PortalMenu from '@/components/PortalMenu';
 
 type Avatar = {
   id: string;
@@ -84,6 +85,52 @@ export default function TrainingClient({ avatarId }: { avatarId: string }) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBulkMoving(false);
+    }
+  }
+
+  async function renameFolder(from: string, to: string) {
+    setError(null);
+    try {
+      const res = await fetch(`/api/avatars/${avatarId}/folders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from, to }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      // Follow the renamed folder so the filter stays in sync.
+      if (activeFolder === from) setActiveFolder(to);
+      setFolderDrafts((s) => {
+        const next = new Set(s);
+        next.delete(from);
+        next.add(to);
+        return next;
+      });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function deleteFolder(name: string) {
+    setError(null);
+    try {
+      const res = await fetch(`/api/avatars/${avatarId}/folders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: name, to: null }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      if (activeFolder === name) setActiveFolder(UNFILED);
+      setFolderDrafts((s) => {
+        const next = new Set(s);
+        next.delete(name);
+        return next;
+      });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -320,6 +367,8 @@ export default function TrainingClient({ avatarId }: { avatarId: string }) {
                   count={count}
                   active={activeFolder === name}
                   onClick={() => setActiveFolder(name)}
+                  onRename={(next) => renameFolder(name, next)}
+                  onDelete={() => deleteFolder(name)}
                 />
               ))}
             </ul>
@@ -560,34 +609,169 @@ function FolderRow({
   count,
   active,
   onClick,
+  // Optional management callbacks; only passed for named folders.
+  onRename,
+  onDelete,
 }: {
   label: string;
   count: number;
   active: boolean;
   onClick: () => void;
+  onRename?: (next: string) => void | Promise<void>;
+  onDelete?: () => void | Promise<void>;
 }) {
+  const [renaming, setRenaming] = useState(false);
+  const [draft, setDraft] = useState(label);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  if (renaming && onRename) {
+    return (
+      <li>
+        <div className="flex items-center gap-1.5 rounded-md bg-neutral-100 px-1.5 py-1">
+          <input
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => {
+              if (draft.trim() && draft.trim() !== label) {
+                void onRename(draft.trim());
+              }
+              setRenaming(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                if (draft.trim() && draft.trim() !== label) {
+                  void onRename(draft.trim());
+                }
+                setRenaming(false);
+              } else if (e.key === 'Escape') {
+                setDraft(label);
+                setRenaming(false);
+              }
+            }}
+            className="flex-1 rounded-md border border-neutral-300 px-2 py-1 text-xs focus:border-neutral-900 focus:outline-none"
+          />
+        </div>
+      </li>
+    );
+  }
+
   return (
     <li>
-      <button
-        type="button"
-        onClick={onClick}
-        className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs transition ${
+      <div
+        className={`group flex w-full items-center justify-between rounded-md text-xs transition ${
           active
             ? 'bg-neutral-900 text-white'
             : 'text-neutral-700 hover:bg-neutral-100'
         }`}
       >
-        <span className="truncate">📁 {label}</span>
-        <span
-          className={`ml-2 shrink-0 rounded-full px-1.5 text-[10px] ${
-            active
-              ? 'bg-white/20 text-white'
-              : 'bg-neutral-100 text-neutral-500'
-          }`}
+        <button
+          type="button"
+          onClick={onClick}
+          className="min-w-0 flex-1 truncate px-2 py-1.5 text-left"
         >
-          {count}
-        </span>
-      </button>
+          📁 {label}
+        </button>
+        <div className="flex shrink-0 items-center gap-1 pr-1">
+          <span
+            className={`shrink-0 rounded-full px-1.5 text-[10px] ${
+              active
+                ? 'bg-white/20 text-white'
+                : 'bg-neutral-100 text-neutral-500'
+            }`}
+          >
+            {count}
+          </span>
+          {(onRename || onDelete) && (
+            <>
+              <button
+                ref={buttonRef}
+                type="button"
+                aria-label={`${label} の操作`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen((o) => !o);
+                }}
+                className={`grid h-5 w-5 place-items-center rounded-full transition ${
+                  active
+                    ? 'text-white/70 hover:bg-white/15'
+                    : 'text-neutral-400 opacity-0 hover:bg-neutral-200 hover:text-neutral-900 group-hover:opacity-100'
+                }`}
+              >
+                <svg width="11" height="11" viewBox="0 0 14 14" aria-hidden>
+                  <circle cx="3" cy="7" r="1.1" fill="currentColor" />
+                  <circle cx="7" cy="7" r="1.1" fill="currentColor" />
+                  <circle cx="11" cy="7" r="1.1" fill="currentColor" />
+                </svg>
+              </button>
+              <PortalMenu
+                anchorRef={buttonRef}
+                open={menuOpen}
+                onClose={() => setMenuOpen(false)}
+                align="end"
+                width={160}
+              >
+                {onRename && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setDraft(label);
+                      setRenaming(true);
+                    }}
+                    className="block w-full px-3 py-2 text-left text-xs text-neutral-700 transition hover:bg-neutral-50"
+                  >
+                    名前を変更
+                  </button>
+                )}
+                {onDelete && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setConfirmingDelete(true);
+                    }}
+                    className="block w-full px-3 py-2 text-left text-xs text-red-700 transition hover:bg-red-50"
+                  >
+                    フォルダを削除
+                  </button>
+                )}
+              </PortalMenu>
+            </>
+          )}
+        </div>
+      </div>
+      {confirmingDelete && onDelete && (
+        <div className="mt-1 space-y-2 rounded-md border border-red-200 bg-red-50 p-2 text-[11px] text-red-800 anim-fade-in">
+          <p>
+            「{label}」フォルダを削除します。
+            <br />
+            (中の素材は未分類に戻ります)
+          </p>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirmingDelete(false)}
+              className="rounded-full bg-white px-2.5 py-1 text-[10px] text-neutral-700"
+            >
+              キャンセル
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                await onDelete();
+                setConfirmingDelete(false);
+              }}
+              className="rounded-full bg-red-600 px-2.5 py-1 text-[10px] font-medium text-white hover:bg-red-500"
+            >
+              削除する
+            </button>
+          </div>
+        </div>
+      )}
     </li>
   );
 }
@@ -890,21 +1074,12 @@ function FolderQuickMenu({
     if (!next) onForceClose?.();
   };
   const [draft, setDraft] = useState('');
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (!rootRef.current) return;
-      if (!rootRef.current.contains(e.target as Node)) setOpen(false);
-    }
-    if (open) document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   return (
-    <div ref={rootRef} className="relative">
+    <>
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setOpen(!open)}
         title="クリックでフォルダを変更"
@@ -922,73 +1097,76 @@ function FolderQuickMenu({
           />
         </svg>
       </button>
-      {open && (
-        <div className="absolute left-0 z-30 mt-1 w-44 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg anim-fade-in">
-          <button
-            type="button"
-            onClick={() => {
-              onChange(null);
-              setOpen(false);
-            }}
-            className="block w-full px-3 py-2 text-left text-xs text-neutral-700 hover:bg-neutral-50"
-          >
-            📁 未分類へ
-          </button>
-          <div className="max-h-44 overflow-y-auto border-t border-neutral-100">
-            {options.length === 0 && (
-              <p className="px-3 py-2 text-[11px] text-neutral-400">
-                既存フォルダなし
-              </p>
-            )}
-            {options.map((o) => (
-              <button
-                key={o}
-                type="button"
-                onClick={() => {
-                  onChange(o);
+      <PortalMenu
+        anchorRef={buttonRef}
+        open={open}
+        onClose={() => setOpen(false)}
+        width={208}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            onChange(null);
+            setOpen(false);
+          }}
+          className="block w-full px-3 py-2 text-left text-xs text-neutral-700 hover:bg-neutral-50"
+        >
+          📁 未分類へ
+        </button>
+        <div className="max-h-44 overflow-y-auto border-t border-neutral-100">
+          {options.length === 0 && (
+            <p className="px-3 py-2 text-[11px] text-neutral-400">
+              既存フォルダなし
+            </p>
+          )}
+          {options.map((o) => (
+            <button
+              key={o}
+              type="button"
+              onClick={() => {
+                onChange(o);
+                setOpen(false);
+              }}
+              className={`block w-full truncate px-3 py-2 text-left text-xs transition hover:bg-neutral-50 ${
+                o === current ? 'font-medium text-neutral-900' : 'text-neutral-700'
+              }`}
+            >
+              📁 {o}
+            </button>
+          ))}
+        </div>
+        <div className="border-t border-neutral-100 p-2">
+          <div className="flex items-center gap-1">
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && draft.trim()) {
+                  onChange(draft.trim());
+                  setDraft('');
                   setOpen(false);
-                }}
-                className={`block w-full truncate px-3 py-2 text-left text-xs transition hover:bg-neutral-50 ${
-                  o === current ? 'font-medium text-neutral-900' : 'text-neutral-700'
-                }`}
-              >
-                📁 {o}
-              </button>
-            ))}
-          </div>
-          <div className="border-t border-neutral-100 p-2">
-            <div className="flex items-center gap-1">
-              <input
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && draft.trim()) {
-                    onChange(draft.trim());
-                    setDraft('');
-                    setOpen(false);
-                  }
-                }}
-                placeholder="新規フォルダ名"
-                className="flex-1 rounded-md border border-neutral-300 px-2 py-1 text-[11px] focus:border-neutral-900 focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  if (draft.trim()) {
-                    onChange(draft.trim());
-                    setDraft('');
-                    setOpen(false);
-                  }
-                }}
-                className="rounded-md bg-neutral-900 px-2 py-1 text-[11px] font-medium text-white hover:bg-neutral-700"
-              >
-                追加
-              </button>
-            </div>
+                }
+              }}
+              placeholder="新規フォルダ名"
+              className="flex-1 rounded-md border border-neutral-300 px-2 py-1 text-[11px] focus:border-neutral-900 focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                if (draft.trim()) {
+                  onChange(draft.trim());
+                  setDraft('');
+                  setOpen(false);
+                }
+              }}
+              className="rounded-md bg-neutral-900 px-2 py-1 text-[11px] font-medium text-white hover:bg-neutral-700"
+            >
+              追加
+            </button>
           </div>
         </div>
-      )}
-    </div>
+      </PortalMenu>
+    </>
   );
 }
 
@@ -1003,20 +1181,12 @@ function BulkFolderPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (!rootRef.current) return;
-      if (!rootRef.current.contains(e.target as Node)) setOpen(false);
-    }
-    if (open) document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, [open]);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   return (
-    <div ref={rootRef} className="relative">
+    <>
       <button
+        ref={buttonRef}
         type="button"
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
@@ -1024,61 +1194,65 @@ function BulkFolderPicker({
       >
         フォルダへ移動 ▾
       </button>
-      {open && (
-        <div className="absolute right-0 z-40 mt-1.5 w-52 overflow-hidden rounded-xl border border-neutral-200 bg-white text-neutral-900 shadow-lg anim-fade-in">
-          <div className="max-h-48 overflow-y-auto">
-            {options.length === 0 && (
-              <p className="px-3 py-2 text-[11px] text-neutral-400">
-                既存フォルダなし
-              </p>
-            )}
-            {options.map((o) => (
-              <button
-                key={o}
-                type="button"
-                onClick={() => {
-                  onMove(o);
+      <PortalMenu
+        anchorRef={buttonRef}
+        open={open}
+        onClose={() => setOpen(false)}
+        align="end"
+        width={224}
+      >
+        <div className="max-h-48 overflow-y-auto">
+          {options.length === 0 && (
+            <p className="px-3 py-2 text-[11px] text-neutral-400">
+              既存フォルダなし
+            </p>
+          )}
+          {options.map((o) => (
+            <button
+              key={o}
+              type="button"
+              onClick={() => {
+                onMove(o);
+                setOpen(false);
+              }}
+              className="block w-full truncate px-3 py-2 text-left text-xs text-neutral-700 transition hover:bg-neutral-50"
+            >
+              📁 {o}
+            </button>
+          ))}
+        </div>
+        <div className="border-t border-neutral-100 p-2">
+          <div className="flex items-center gap-1">
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && draft.trim()) {
+                  onMove(draft.trim());
+                  setDraft('');
                   setOpen(false);
-                }}
-                className="block w-full truncate px-3 py-2 text-left text-xs text-neutral-700 transition hover:bg-neutral-50"
-              >
-                📁 {o}
-              </button>
-            ))}
-          </div>
-          <div className="border-t border-neutral-100 p-2">
-            <div className="flex items-center gap-1">
-              <input
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && draft.trim()) {
-                    onMove(draft.trim());
-                    setDraft('');
-                    setOpen(false);
-                  }
-                }}
-                placeholder="新規フォルダ"
-                className="flex-1 rounded-md border border-neutral-300 px-2 py-1 text-[11px] focus:border-neutral-900 focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  if (draft.trim()) {
-                    onMove(draft.trim());
-                    setDraft('');
-                    setOpen(false);
-                  }
-                }}
-                className="rounded-md bg-neutral-900 px-2 py-1 text-[11px] font-medium text-white hover:bg-neutral-700"
-              >
-                追加
-              </button>
-            </div>
+                }
+              }}
+              placeholder="新規フォルダ"
+              className="flex-1 rounded-md border border-neutral-300 px-2 py-1 text-[11px] focus:border-neutral-900 focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                if (draft.trim()) {
+                  onMove(draft.trim());
+                  setDraft('');
+                  setOpen(false);
+                }
+              }}
+              className="rounded-md bg-neutral-900 px-2 py-1 text-[11px] font-medium text-white hover:bg-neutral-700"
+            >
+              追加
+            </button>
           </div>
         </div>
-      )}
-    </div>
+      </PortalMenu>
+    </>
   );
 }
 
@@ -1092,20 +1266,12 @@ function CardMenu({
   onMove?: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (!rootRef.current) return;
-      if (!rootRef.current.contains(e.target as Node)) setOpen(false);
-    }
-    if (open) document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, [open]);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   return (
-    <div ref={rootRef} className="relative shrink-0">
+    <div className="shrink-0">
       <button
+        ref={buttonRef}
         type="button"
         aria-label="素材の操作メニュー"
         onClick={() => setOpen((o) => !o)}
@@ -1117,42 +1283,46 @@ function CardMenu({
           <circle cx="11" cy="7" r="1.2" fill="currentColor" />
         </svg>
       </button>
-      {open && (
-        <div className="absolute right-0 z-30 mt-1.5 w-40 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg anim-fade-in">
-          {onMove && (
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onMove();
-              }}
-              className="block w-full px-3 py-2 text-left text-xs text-neutral-700 transition hover:bg-neutral-50"
-            >
-              📁 フォルダを移動
-            </button>
-          )}
+      <PortalMenu
+        anchorRef={buttonRef}
+        open={open}
+        onClose={() => setOpen(false)}
+        align="end"
+        width={160}
+      >
+        {onMove && (
           <button
             type="button"
             onClick={() => {
               setOpen(false);
-              onEdit();
+              onMove();
             }}
             className="block w-full px-3 py-2 text-left text-xs text-neutral-700 transition hover:bg-neutral-50"
           >
-            編集
+            📁 フォルダを移動
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              onDelete();
-            }}
-            className="block w-full px-3 py-2 text-left text-xs text-red-700 transition hover:bg-red-50"
-          >
-            削除
-          </button>
-        </div>
-      )}
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            onEdit();
+          }}
+          className="block w-full px-3 py-2 text-left text-xs text-neutral-700 transition hover:bg-neutral-50"
+        >
+          編集
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            onDelete();
+          }}
+          className="block w-full px-3 py-2 text-left text-xs text-red-700 transition hover:bg-red-50"
+        >
+          削除
+        </button>
+      </PortalMenu>
     </div>
   );
 }
