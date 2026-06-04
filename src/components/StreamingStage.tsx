@@ -88,10 +88,23 @@ export default function StreamingStage({
   const [muted, setMuted] = useState(false);
   const [level, setLevel] = useState(0); // mic level 0..1 for the visualizer
   const [textDraft, setTextDraft] = useState('');
+  // Session timer (seconds since the WebSocket opened).
+  const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
+  const [elapsedSec, setElapsedSec] = useState(0);
   // VAD bookkeeping for the "thinking" state.
   const userTalkingRef = useRef(false);
   const lastVoiceAtRef = useRef(0);
   const thinkingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (sessionStartedAt === null) return;
+    const tick = () => {
+      setElapsedSec(Math.floor((Date.now() - sessionStartedAt) / 1000));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [sessionStartedAt]);
 
   const sessionRef = useRef<Session | null>(null);
   const sessionOpenRef = useRef(false);
@@ -173,6 +186,8 @@ export default function StreamingStage({
     }
     speakingRef.current = false;
     setLevel(0);
+    setSessionStartedAt(null);
+    setElapsedSec(0);
     setStatus((s) => (s === 'error' ? s : 'ended'));
   }, []);
 
@@ -472,6 +487,9 @@ export default function StreamingStage({
             console.log('[live] session open');
             sessionOpenRef.current = true;
             reconnectAttemptsRef.current = 0;
+            // Start the session timer on the first successful open; on
+            // auto-reconnect we keep the existing timer running.
+            setSessionStartedAt((prev) => prev ?? Date.now());
             setStatus('listening');
           },
           onmessage: handleMessage,
@@ -703,6 +721,7 @@ export default function StreamingStage({
           level={level}
           muted={muted}
           isLive={isLive}
+          elapsedSec={elapsedSec}
           onToggleMute={() => setMuted((m) => !m)}
           onStop={stop}
           onStart={start}
@@ -878,6 +897,12 @@ export default function StreamingStage({
                 : status === 'thinking'
                   ? '考えています…'
                   : '接続中'}
+            <span
+              className="ml-1 font-mono text-[10px] tabular-nums text-white/70"
+              aria-label="経過時間"
+            >
+              {formatElapsed(elapsedSec)}
+            </span>
           </div>
         )}
 
@@ -978,6 +1003,7 @@ function CompactBar({
   level,
   muted,
   isLive,
+  elapsedSec,
   onToggleMute,
   onStop,
   onStart,
@@ -989,6 +1015,7 @@ function CompactBar({
   level: number;
   muted: boolean;
   isLive: boolean;
+  elapsedSec: number;
   onToggleMute: () => void;
   onStop: () => void;
   onStart: () => void;
@@ -1039,6 +1066,11 @@ function CompactBar({
                         : isLive
                           ? 'スタンバイ'
                           : '停止中'}
+            {isLive && (
+              <span className="ml-1 font-mono tabular-nums text-white/60">
+                {formatElapsed(elapsedSec)}
+              </span>
+            )}
           </span>
         </div>
         {/* Inline waveform */}
@@ -1111,6 +1143,13 @@ function CompactBar({
       </div>
     </div>
   );
+}
+
+function formatElapsed(totalSec: number): string {
+  const s = Math.max(0, Math.floor(totalSec));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
 }
 
 function base64ToInt16(b64: string): Int16Array {

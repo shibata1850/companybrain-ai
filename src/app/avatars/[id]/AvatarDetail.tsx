@@ -73,8 +73,11 @@ export default function AvatarDetail({ id }: { id: string }) {
   const [trainTextTitle, setTrainTextTitle] = useState('');
   const [trainingText, setTrainingText] = useState(false);
 
-  // Live transcript log.
+  // Live transcript log. Persisted in localStorage per-avatar so it
+  // survives navigation to the training-management page (and back).
+  const storageKey = `cb-transcript-${id}`;
   const [transcript, setTranscript] = useState<TranscriptMessage[]>([]);
+  const [transcriptLoaded, setTranscriptLoaded] = useState(false);
   const [transcriptOpen, setTranscriptOpen] = useState(true);
   const [partialUser, setPartialUser] = useState<string | null>(null);
   const [partialAgent, setPartialAgent] = useState<string | null>(null);
@@ -88,6 +91,78 @@ export default function AvatarDetail({ id }: { id: string }) {
     },
     [],
   );
+
+  // Hydrate from storage on mount.
+  useEffect(() => {
+    try {
+      const raw =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem(storageKey)
+          : null;
+      if (raw) {
+        const parsed = JSON.parse(raw) as TranscriptMessage[];
+        if (Array.isArray(parsed)) setTranscript(parsed);
+      }
+    } catch {
+      // ignore corrupted storage
+    }
+    setTranscriptLoaded(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist whenever the array changes (after the initial hydrate so we
+  // don't overwrite stored data with the empty initial state).
+  useEffect(() => {
+    if (!transcriptLoaded) return;
+    try {
+      // Bound localStorage to the last 500 messages.
+      const trimmed =
+        transcript.length > 500 ? transcript.slice(-500) : transcript;
+      window.localStorage.setItem(storageKey, JSON.stringify(trimmed));
+    } catch {
+      // quota exceeded or storage disabled — accept the loss
+    }
+  }, [transcript, transcriptLoaded, storageKey]);
+
+  function clearTranscript() {
+    setTranscript([]);
+    try {
+      window.localStorage.removeItem(storageKey);
+    } catch {
+      // ignore
+    }
+  }
+
+  function exportTranscript() {
+    if (transcript.length === 0) return;
+    const stamp = new Date().toISOString().slice(0, 10);
+    const lines: string[] = [`# ${data?.avatar.name ?? 'Brain'} との会話`, ''];
+    lines.push(`_書き出し日時: ${new Date().toLocaleString('ja-JP')}_`, '');
+    let lastDate = '';
+    for (const m of transcript) {
+      const d = new Date(m.at);
+      const day = d.toLocaleDateString('ja-JP');
+      if (day !== lastDate) {
+        lines.push('', `## ${day}`, '');
+        lastDate = day;
+      }
+      const who = m.role === 'user' ? 'あなた' : data?.avatar.name ?? 'Brain';
+      const time = d.toLocaleTimeString('ja-JP');
+      lines.push(`**${who}** _(${time})_  `);
+      lines.push(m.text, '');
+    }
+    const blob = new Blob([lines.join('\n')], {
+      type: 'text/markdown;charset=utf-8',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${data?.avatar.name ?? 'brain'}-${stamp}.md`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 
   // Collapsible streaming stage.
   const [stageMinimized, setStageMinimized] = useState(false);
@@ -495,7 +570,8 @@ export default function AvatarDetail({ id }: { id: string }) {
             partialAgent={partialAgent}
             open={transcriptOpen}
             onToggle={() => setTranscriptOpen((v) => !v)}
-            onClear={() => setTranscript([])}
+            onClear={clearTranscript}
+            onExport={exportTranscript}
           />
         </div>
 
@@ -970,6 +1046,7 @@ function TranscriptPanel({
   open,
   onToggle,
   onClear,
+  onExport,
 }: {
   avatarName: string;
   messages: TranscriptMessage[];
@@ -978,19 +1055,21 @@ function TranscriptPanel({
   open: boolean;
   onToggle: () => void;
   onClear: () => void;
+  onExport?: () => void;
 }) {
+  const [confirmingClear, setConfirmingClear] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    // Auto-scroll to the bottom as new content arrives.
     const el = scrollerRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, partialUser, partialAgent]);
 
   const totalLive = (partialUser ? 1 : 0) + (partialAgent ? 1 : 0);
+  const turns = Math.ceil(messages.length / 2);
 
   return (
     <section>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <button
           type="button"
           onClick={onToggle}
@@ -1014,19 +1093,74 @@ function TranscriptPanel({
           </svg>
           会話の文字起こし
           <span className="rounded-full bg-neutral-100 px-1.5 text-[10px] font-medium text-neutral-500">
-            {messages.length + totalLive}
+            {messages.length + totalLive}件
           </span>
+          {turns > 0 && (
+            <span className="text-[10px] text-neutral-400">
+              ・ {turns}往復
+            </span>
+          )}
         </button>
-        {messages.length > 0 && (
-          <button
-            type="button"
-            onClick={onClear}
-            className="text-[11px] text-neutral-400 transition hover:text-neutral-700"
-          >
-            消去
-          </button>
-        )}
+        <div className="flex items-center gap-3 text-[11px]">
+          {onExport && messages.length > 0 && (
+            <button
+              type="button"
+              onClick={onExport}
+              className="inline-flex items-center gap-1 text-neutral-500 transition hover:text-neutral-900"
+              title="Markdown としてダウンロード"
+            >
+              <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden>
+                <path
+                  d="M8 2v10m-4-4l4 4 4-4M2 14h12"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              書き出し
+            </button>
+          )}
+          {messages.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setConfirmingClear(true)}
+              className="text-neutral-400 transition hover:text-neutral-700"
+              title="会話を消去して新しく始める"
+            >
+              新しい会話
+            </button>
+          )}
+        </div>
       </div>
+
+      {confirmingClear && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 anim-fade-in">
+          <span>
+            現在の会話({messages.length}件)を消去して新しい会話を始めますか?
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirmingClear(false)}
+              className="rounded-full bg-white px-3 py-1 text-[11px] text-neutral-700"
+            >
+              キャンセル
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onClear();
+                setConfirmingClear(false);
+              }}
+              className="rounded-full bg-amber-600 px-3 py-1 text-[11px] font-medium text-white hover:bg-amber-500"
+            >
+              消去して新規開始
+            </button>
+          </div>
+        </div>
+      )}
 
       {open && (
         <div
