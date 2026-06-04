@@ -23,7 +23,9 @@ export async function GET(
 
   const { data: videos } = await db
     .from('training_videos')
-    .select('id, file_name, mime_type, status, summary, transcript, created_at')
+    .select(
+      'id, file_name, mime_type, status, summary, transcript, folder, created_at',
+    )
     .eq('avatar_id', params.id)
     .order('created_at', { ascending: false });
 

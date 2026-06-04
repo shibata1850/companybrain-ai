@@ -10,6 +10,7 @@ export const maxDuration = 120;
 type Body = {
   file_name?: string | null;
   transcript?: string | null;
+  folder?: string | null;
 };
 
 /**
@@ -36,6 +37,10 @@ export async function PATCH(
   const updates: Record<string, unknown> = {};
   if (typeof body.file_name === 'string') {
     updates.file_name = body.file_name.trim() || null;
+  }
+  if (body.folder !== undefined) {
+    updates.folder =
+      typeof body.folder === 'string' ? body.folder.trim() || null : null;
   }
   const transcriptChanged =
     typeof body.transcript === 'string' &&

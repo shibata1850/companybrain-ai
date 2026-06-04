@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import BrainSwitcher from '@/components/BrainSwitcher';
 import StreamingStage, {
   type TranscriptMessage,
@@ -24,6 +24,7 @@ type TrainingVideo = {
   status: string;
   summary: string | null;
   transcript: string | null;
+  folder: string | null;
   created_at: string;
 };
 
@@ -440,6 +441,7 @@ export default function AvatarDetail({ id }: { id: string }) {
 
         <div className="md:col-span-1">
           <TrainingPanel
+            avatarId={avatar.id}
             avatarName={avatar.name}
             videos={training_videos}
             trainFile={trainFile}
@@ -486,6 +488,7 @@ export default function AvatarDetail({ id }: { id: string }) {
  * =========================================================== */
 
 function TrainingPanel({
+  avatarId,
   avatarName,
   videos,
   trainFile,
@@ -499,6 +502,7 @@ function TrainingPanel({
   onSubmitText,
   submittingText,
 }: {
+  avatarId: string;
   avatarName: string;
   videos: TrainingVideo[];
   trainFile: File | null;
@@ -512,28 +516,30 @@ function TrainingPanel({
   onSubmitText: (e: React.FormEvent) => void;
   submittingText: boolean;
 }) {
-  const [mode, setMode] = useState<'video' | 'text'>('video');
+  const [mode, setMode] = useState<'video' | 'text'>('text');
+
+  // Compact folder summary derived from the videos list.
+  const folders = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const v of videos) {
+      const k = v.folder?.trim() || '未分類';
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+  }, [videos]);
+
   return (
     <aside className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-5">
-      <div>
-        <h2 className="text-sm font-semibold text-neutral-900">学習させる</h2>
-        <p className="mt-1 text-[11px] leading-relaxed text-neutral-500">
-          {avatarName} の発言や考え方を追加するほど、会話が本人らしくなります。
-        </p>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold text-neutral-900">学習させる</h2>
+          <p className="mt-1 text-[11px] leading-relaxed text-neutral-500">
+            {avatarName} の発言や考え方を追加するほど、会話が本人らしくなります。
+          </p>
+        </div>
       </div>
 
       <div className="flex rounded-full bg-neutral-100 p-0.5 text-xs">
-        <button
-          type="button"
-          onClick={() => setMode('video')}
-          className={`flex-1 rounded-full px-3 py-1 transition ${
-            mode === 'video'
-              ? 'bg-white text-neutral-900 shadow-sm'
-              : 'text-neutral-500 hover:text-neutral-900'
-          }`}
-        >
-          動画
-        </button>
         <button
           type="button"
           onClick={() => setMode('text')}
@@ -544,6 +550,17 @@ function TrainingPanel({
           }`}
         >
           テキスト
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode('video')}
+          className={`flex-1 rounded-full px-3 py-1 transition ${
+            mode === 'video'
+              ? 'bg-white text-neutral-900 shadow-sm'
+              : 'text-neutral-500 hover:text-neutral-900'
+          }`}
+        >
+          動画
         </button>
       </div>
 
@@ -594,19 +611,50 @@ function TrainingPanel({
         </form>
       )}
 
-      <div>
-        <p className="text-[10px] uppercase tracking-wider text-neutral-400">
-          学習素材 ({videos.length})
-        </p>
-        {videos.length === 0 ? (
+      <div className="border-t border-neutral-100 pt-3">
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] uppercase tracking-wider text-neutral-400">
+            学習素材 ({videos.length})
+          </p>
+          <Link
+            href={`/avatars/${avatarId}/training`}
+            className="inline-flex items-center gap-0.5 text-[11px] font-medium text-neutral-700 transition hover:text-neutral-900"
+          >
+            管理画面を開く
+            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+              <path
+                d="M3 2l4 3-4 3"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </Link>
+        </div>
+        {folders.length === 0 ? (
           <p className="mt-2 text-xs text-neutral-400">
             まだ学習素材がありません。
           </p>
         ) : (
-          <ul className="mt-2 max-h-96 space-y-2 overflow-y-auto pr-1">
-            {videos.map((v) => (
-              <TrainingMaterialCard key={v.id} material={v} />
+          <ul className="mt-2 space-y-1">
+            {folders.slice(0, 6).map(([name, count]) => (
+              <li
+                key={name}
+                className="flex items-center justify-between rounded-md px-2 py-1.5 text-[11px] text-neutral-700 hover:bg-neutral-50"
+              >
+                <span className="truncate">📁 {name}</span>
+                <span className="ml-2 shrink-0 rounded-full bg-neutral-100 px-1.5 text-[10px] text-neutral-500">
+                  {count}
+                </span>
+              </li>
             ))}
+            {folders.length > 6 && (
+              <li className="px-2 text-[10px] text-neutral-400">
+                + あと {folders.length - 6} フォルダ
+              </li>
+            )}
           </ul>
         )}
       </div>
