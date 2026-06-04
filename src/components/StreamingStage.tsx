@@ -277,7 +277,7 @@ export default function StreamingStage({
       });
 
       const session = await ai.live.connect({
-        model: tokenJson.model || 'gemini-live-2.5-flash-preview',
+        model: tokenJson.model || 'gemini-2.5-flash-native-audio-latest',
         config: {
           responseModalities: [Modality.AUDIO],
         },
