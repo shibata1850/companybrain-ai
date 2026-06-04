@@ -267,12 +267,10 @@ export default function StreamingStage({
 
       const ai = new GoogleGenAI({
         apiKey: tokenJson.token,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        httpOptions: { apiVersion: 'v1alpha' } as any,
       });
 
       const session = await ai.live.connect({
-        model: tokenJson.model || 'gemini-live-2.5-flash-preview',
+        model: tokenJson.model || 'gemini-2.0-flash-live-001',
         config: {
           responseModalities: [Modality.AUDIO],
         },
