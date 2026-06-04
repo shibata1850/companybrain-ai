@@ -215,25 +215,36 @@ export default function AvatarDetail({ id }: { id: string }) {
       </div>
 
       {/* Avatar identity card */}
-      <header className="flex items-center gap-4 rounded-2xl border border-neutral-200 bg-white p-4">
-        <button
-          type="button"
-          onClick={openFilePicker}
-          aria-label="写真を変更"
-          className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-full bg-neutral-100 ring-1 ring-neutral-200 transition hover:ring-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
-        >
-          {avatar.cover_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={avatar.cover_url}
-              alt={avatar.name}
-              className="h-full w-full object-cover"
-            />
-          ) : null}
-          <span className="pointer-events-none absolute inset-0 grid place-items-center bg-black/40 text-[10px] font-medium text-white opacity-0 transition group-hover:opacity-100">
-            写真変更
-          </span>
-        </button>
+      <header className="flex items-center gap-4 rounded-2xl border border-neutral-200 bg-gradient-to-br from-white to-neutral-50 p-4 shadow-sm">
+        <div className="relative shrink-0">
+          <div className="h-16 w-16 overflow-hidden rounded-full bg-neutral-100 ring-2 ring-white shadow">
+            {avatar.cover_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={avatar.cover_url}
+                alt={avatar.name}
+                className="h-full w-full object-cover"
+              />
+            ) : null}
+          </div>
+          <button
+            type="button"
+            onClick={openFilePicker}
+            aria-label="写真を変更"
+            className="absolute -bottom-1 -right-1 grid h-7 w-7 place-items-center rounded-full bg-neutral-900 text-white shadow-md transition hover:bg-neutral-700 focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:ring-offset-2"
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden>
+              <path
+                d="M11 1.5l3.5 3.5L5 14.5H1.5V11L11 1.5z"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-xl font-semibold tracking-tight">
             {avatar.name}
@@ -245,6 +256,23 @@ export default function AvatarDetail({ id }: { id: string }) {
           ) : (
             <p className="text-xs text-neutral-400">説明なし</p>
           )}
+          <button
+            type="button"
+            onClick={openFilePicker}
+            className="mt-1 inline-flex items-center gap-1 text-[11px] text-neutral-500 transition hover:text-neutral-900"
+          >
+            <svg width="10" height="10" viewBox="0 0 16 16" aria-hidden>
+              <path
+                d="M11 1.5l3.5 3.5L5 14.5H1.5V11L11 1.5z"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            写真を変更
+          </button>
         </div>
         <input
           ref={fileInputRef}
@@ -262,8 +290,8 @@ export default function AvatarDetail({ id }: { id: string }) {
       )}
 
       {/* Main two-column area: stage on the left, training panel on the right. */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-5 lg:col-span-2">
+      <div className="grid gap-6 md:grid-cols-3">
+        <div className="space-y-5 md:col-span-2">
           <StreamingStage
             avatarId={avatar.id}
             coverUrl={avatar.cover_url}
@@ -284,7 +312,7 @@ export default function AvatarDetail({ id }: { id: string }) {
           />
         </div>
 
-        <div className="lg:col-span-1">
+        <div className="md:col-span-1">
           <TrainingPanel
             avatarName={avatar.name}
             videos={training_videos}
@@ -845,8 +873,8 @@ function DetailSkeleton() {
         <div className="h-14 w-14 rounded-full anim-shimmer" />
         <div className="h-4 w-32 rounded anim-shimmer" />
       </div>
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-3 lg:col-span-2">
+      <div className="grid gap-6 md:grid-cols-3">
+        <div className="space-y-3 md:col-span-2">
           <div className="aspect-video w-full rounded-3xl anim-shimmer" />
         </div>
         <div className="h-80 rounded-2xl anim-shimmer" />
