@@ -34,19 +34,26 @@ const OUTPUT_SAMPLE_RATE = 24000;
  * /api/avatars/[id]/knowledge so Gemini can ground its answers in the
  * persona's training material.
  */
+export type TranscriptMessage = {
+  role: 'user' | 'agent';
+  text: string;
+  at: number;
+};
+
 export default function StreamingStage({
   avatarId,
   coverUrl,
   avatarName,
-  onUserTranscript,
-  onAgentTranscript,
+  onMessage,
 }: {
   avatarId: string;
   coverUrl: string | null;
   avatarName: string;
-  /** Optional hook the parent can use to log transcripts. */
-  onUserTranscript?: (text: string) => void;
-  onAgentTranscript?: (text: string) => void;
+  /**
+   * Fires once per completed turn (or on barge-in) with a full
+   * transcript message. Parent appends to its conversation log.
+   */
+  onMessage?: (m: TranscriptMessage) => void;
 }) {
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +65,17 @@ export default function StreamingStage({
   const manualStopRef = useRef(false);
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Active output buffer sources so we can stop them when the user
+  // barges in (server sends interrupted=true).
+  const activeSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
+  // Accumulators for the chat-format transcript — flushed on turn
+  // boundaries / interrupts.
+  const userBufRef = useRef('');
+  const agentBufRef = useRef('');
+  const onMessageRef = useRef(onMessage);
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+  }, [onMessage]);
   const inputCtxRef = useRef<AudioContext | null>(null);
   const outputCtxRef = useRef<AudioContext | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
@@ -137,55 +155,121 @@ export default function StreamingStage({
     const start = Math.max(ctx.currentTime, playheadRef.current);
     source.start(start);
     playheadRef.current = start + buffer.duration;
+    activeSourcesRef.current.add(source);
     if (!speakingRef.current) {
       speakingRef.current = true;
       setStatus('speaking');
     }
     source.onended = () => {
+      activeSourcesRef.current.delete(source);
       if (
         speakingRef.current &&
-        ctx.currentTime >= playheadRef.current - 0.05
+        ctx.currentTime >= playheadRef.current - 0.05 &&
+        activeSourcesRef.current.size === 0
       ) {
         speakingRef.current = false;
-        setStatus('listening');
+        setStatus((s) => (s === 'speaking' ? 'listening' : s));
       }
     };
   }
 
+  /**
+   * Stop every queued / playing buffer source and reset the playhead.
+   * Called when Gemini reports the user barged in.
+   */
+  function stopAllPlayback() {
+    for (const src of activeSourcesRef.current) {
+      try {
+        src.stop();
+      } catch {
+        // already stopped
+      }
+      try {
+        src.disconnect();
+      } catch {
+        // ignore
+      }
+    }
+    activeSourcesRef.current.clear();
+    if (outputCtxRef.current) {
+      playheadRef.current = outputCtxRef.current.currentTime;
+    }
+    speakingRef.current = false;
+  }
+
+  /**
+   * Push the accumulated user / agent transcripts to the parent as
+   * completed chat messages. Trims whitespace and skips empty strings.
+   */
+  function flushTranscripts() {
+    const u = userBufRef.current.trim();
+    if (u) {
+      onMessageRef.current?.({
+        role: 'user',
+        text: u,
+        at: Date.now(),
+      });
+    }
+    const a = agentBufRef.current.trim();
+    if (a) {
+      onMessageRef.current?.({
+        role: 'agent',
+        text: a,
+        at: Date.now(),
+      });
+    }
+    userBufRef.current = '';
+    agentBufRef.current = '';
+  }
+
   function handleMessage(message: LiveServerMessage) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sc = (message as any).serverContent as
+      | {
+          modelTurn?: {
+            parts?: Array<{
+              inlineData?: { data?: string; mimeType?: string };
+              text?: string;
+            }>;
+          };
+          interrupted?: boolean;
+          turnComplete?: boolean;
+          generationComplete?: boolean;
+          inputTranscription?: { text?: string };
+          outputTranscription?: { text?: string };
+        }
+      | undefined;
+
     // Audio + text from the model.
-    const parts =
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ((message as any).serverContent?.modelTurn?.parts as
-        | Array<{
-            inlineData?: { data?: string; mimeType?: string };
-            text?: string;
-          }>
-        | undefined) || [];
-    for (const p of parts) {
+    for (const p of sc?.modelTurn?.parts ?? []) {
       if (p.inlineData?.data && p.inlineData.mimeType?.startsWith('audio/')) {
         playAudioChunk(p.inlineData.data);
       }
       if (p.text) {
-        onAgentTranscript?.(p.text);
+        agentBufRef.current += p.text;
       }
     }
 
-    // Interruption signal — user started talking over the model.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if ((message as any).serverContent?.interrupted) {
-      playheadRef.current = outputCtxRef.current?.currentTime ?? 0;
-      speakingRef.current = false;
+    // Live transcription chunks for both sides.
+    const inputTx = sc?.inputTranscription?.text;
+    if (inputTx) userBufRef.current += inputTx;
+    const outputTx = sc?.outputTranscription?.text;
+    if (outputTx) agentBufRef.current += outputTx;
+
+    // Barge-in: user started talking over the model. Kill the queued
+    // audio so the agent goes silent immediately, then flush whatever
+    // transcript fragments we've collected so they show up as separate
+    // messages in the chat log.
+    if (sc?.interrupted) {
+      stopAllPlayback();
+      flushTranscripts();
       setStatus('listening');
     }
 
-    // Input transcription (if enabled by the model).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const inputTx = (message as any).serverContent?.inputTranscription?.text;
-    if (inputTx) onUserTranscript?.(inputTx);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const outputTx = (message as any).serverContent?.outputTranscription?.text;
-    if (outputTx) onAgentTranscript?.(outputTx);
+    // End of turn — push the completed transcripts as messages.
+    if (sc?.turnComplete || sc?.generationComplete) {
+      flushTranscripts();
+    }
 
     // Tool call — search the knowledge base and feed results back.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -530,7 +614,7 @@ export default function StreamingStage({
               onClick={start}
               className="rounded-full bg-white px-5 py-2 text-sm font-medium text-neutral-900 transition hover:bg-white/90"
             >
-              {status === 'ended' ? 'もう一度始める' : 'セッションを開始'}
+              始める
             </button>
           </div>
         )}

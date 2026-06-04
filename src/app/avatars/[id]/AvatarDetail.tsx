@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import BrainSwitcher from '@/components/BrainSwitcher';
-import StreamingStage from '@/components/StreamingStage';
+import StreamingStage, {
+  type TranscriptMessage,
+} from '@/components/StreamingStage';
 
 type Avatar = {
   id: string;
@@ -51,6 +53,12 @@ export default function AvatarDetail({ id }: { id: string }) {
   const [trainText, setTrainText] = useState('');
   const [trainTextTitle, setTrainTextTitle] = useState('');
   const [trainingText, setTrainingText] = useState(false);
+  const [transcript, setTranscript] = useState<TranscriptMessage[]>([]);
+  const [transcriptOpen, setTranscriptOpen] = useState(true);
+
+  const handleTranscriptMessage = useCallback((m: TranscriptMessage) => {
+    setTranscript((prev) => [...prev, m]);
+  }, []);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/avatars/${id}`, { cache: 'no-store' });
@@ -197,8 +205,17 @@ export default function AvatarDetail({ id }: { id: string }) {
           avatarId={avatar.id}
           coverUrl={avatar.cover_url}
           avatarName={avatar.name}
+          onMessage={handleTranscriptMessage}
         />
       </section>
+
+      <TranscriptPanel
+        avatarName={avatar.name}
+        messages={transcript}
+        open={transcriptOpen}
+        onToggle={() => setTranscriptOpen((v) => !v)}
+        onClear={() => setTranscript([])}
+      />
 
       <section className="mx-auto max-w-3xl text-center text-[11px] text-neutral-500">
         <p>
@@ -783,6 +800,98 @@ function AvatarMenu({
         </div>
       )}
     </div>
+  );
+}
+
+function TranscriptPanel({
+  avatarName,
+  messages,
+  open,
+  onToggle,
+  onClear,
+}: {
+  avatarName: string;
+  messages: TranscriptMessage[];
+  open: boolean;
+  onToggle: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <section className="mx-auto w-full max-w-3xl">
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="inline-flex items-center gap-1.5 text-xs text-neutral-600 hover:text-neutral-900"
+        >
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 10 10"
+            className={`transition ${open ? 'rotate-90' : ''}`}
+            aria-hidden
+          >
+            <path
+              d="M3 2l4 3-4 3"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          会話の文字起こし
+          <span className="rounded-full bg-neutral-100 px-1.5 text-[10px] font-medium text-neutral-500">
+            {messages.length}
+          </span>
+        </button>
+        {messages.length > 0 && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="text-[11px] text-neutral-400 hover:text-neutral-700"
+          >
+            消去
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <div className="mt-3 max-h-96 overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-3 anim-fade-in">
+          {messages.length === 0 ? (
+            <p className="py-4 text-center text-xs text-neutral-400">
+              セッションを開始して話しかけると、ここに会話が記録されます。
+            </p>
+          ) : (
+            <ul className="space-y-2.5">
+              {messages.map((m, i) => (
+                <li
+                  key={`${m.at}-${i}`}
+                  className={`flex ${
+                    m.role === 'user' ? 'justify-end' : 'justify-start'
+                  }`}
+                >
+                  <div
+                    className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
+                      m.role === 'user'
+                        ? 'rounded-br-md bg-neutral-900 text-white'
+                        : 'rounded-bl-md bg-neutral-100 text-neutral-900'
+                    }`}
+                  >
+                    <p className="text-[10px] uppercase tracking-wider opacity-60">
+                      {m.role === 'user' ? 'あなた' : avatarName}
+                    </p>
+                    <p className="mt-0.5 whitespace-pre-wrap leading-relaxed">
+                      {m.text}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 
