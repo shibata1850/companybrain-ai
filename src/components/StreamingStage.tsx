@@ -484,8 +484,6 @@ export default function StreamingStage({
               </p>
               <p className="mt-1 text-xs text-white/70">
                 マイクへのアクセスを許可してください。
-                <br />
-                セッション中はクレジットを消費します。
               </p>
             </div>
             <button
