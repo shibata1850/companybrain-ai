@@ -240,17 +240,20 @@ export default function StreamingStage({
         }
       | undefined;
 
-    // Audio + text from the model.
+    // Audio from the model. We deliberately ignore `parts[].text`
+    // here: on the native-audio models that field can carry the
+    // model's internal "thinking" / planning text, which leaks into
+    // the transcript as messages like "Crafting a Professional
+    // Response". The only authoritative record of what the user
+    // actually heard is `outputTranscription` below.
     for (const p of sc?.modelTurn?.parts ?? []) {
       if (p.inlineData?.data && p.inlineData.mimeType?.startsWith('audio/')) {
         playAudioChunk(p.inlineData.data);
       }
-      if (p.text) {
-        agentBufRef.current += p.text;
-      }
     }
 
-    // Live transcription chunks for both sides.
+    // Live transcription chunks for both sides — these are the only
+    // strings we trust for the chat log.
     const inputTx = sc?.inputTranscription?.text;
     if (inputTx) userBufRef.current += inputTx;
     const outputTx = sc?.outputTranscription?.text;
