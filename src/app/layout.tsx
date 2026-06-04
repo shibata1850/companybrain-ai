@@ -20,7 +20,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-white text-neutral-900">
         <NavProgress />
         <header className="sticky top-0 z-30 border-b border-neutral-200 bg-white/85 backdrop-blur">
-          <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
+          <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
             <Link
               href="/"
               className="group flex items-center gap-2 transition"
@@ -48,7 +48,7 @@ export default function RootLayout({
             </nav>
           </div>
         </header>
-        <main className="mx-auto max-w-6xl px-6 py-8">
+        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
           <PageTransition>{children}</PageTransition>
         </main>
       </body>

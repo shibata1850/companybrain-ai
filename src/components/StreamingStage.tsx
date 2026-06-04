@@ -570,7 +570,7 @@ export default function StreamingStage({
     status === 'speaking';
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-3">
+    <div className="w-full space-y-3">
       <div className="relative aspect-video w-full overflow-hidden rounded-3xl border border-neutral-200 bg-neutral-900">
         {coverUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
