@@ -14,6 +14,7 @@ type Avatar = {
   name: string;
   description: string | null;
   cover_url: string | null;
+  stage_url: string | null;
 };
 
 type TrainingVideo = {
@@ -51,10 +52,21 @@ export default function AvatarDetail({ id }: { id: string }) {
     setTranscript((prev) => [...prev, m]);
   }, []);
 
-  // Photo cropping flow.
+  // Photo cropping flow — supports both the round avatar thumbnail
+  // and the landscape streaming-stage backdrop.
+  type CropperKind = 'cover' | 'stage';
+  const [cropperKind, setCropperKind] = useState<CropperKind>('cover');
   const [cropperSrc, setCropperSrc] = useState<string | null>(null);
   const [cropperBusy, setCropperBusy] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const coverFileInputRef = useRef<HTMLInputElement>(null);
+  const stageFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Inline name / description editing.
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [editingDesc, setEditingDesc] = useState(false);
+  const [descDraft, setDescDraft] = useState('');
+  const [savingMeta, setSavingMeta] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/avatars/${id}`, { cache: 'no-store' });
@@ -136,8 +148,10 @@ export default function AvatarDetail({ id }: { id: string }) {
     }
   }
 
-  function openFilePicker() {
-    fileInputRef.current?.click();
+  function openFilePicker(kind: CropperKind) {
+    setCropperKind(kind);
+    if (kind === 'cover') coverFileInputRef.current?.click();
+    else stageFileInputRef.current?.click();
   }
 
   function onFilePicked(e: React.ChangeEvent<HTMLInputElement>) {
@@ -145,7 +159,6 @@ export default function AvatarDetail({ id }: { id: string }) {
     if (!f) return;
     const url = URL.createObjectURL(f);
     setCropperSrc(url);
-    // Reset so the same file can be picked again later.
     e.target.value = '';
   }
 
@@ -154,11 +167,15 @@ export default function AvatarDetail({ id }: { id: string }) {
     setError(null);
     try {
       const form = new FormData();
-      form.append('photo', new File([blob], 'cover.jpg', { type: 'image/jpeg' }));
-      const res = await fetch(`/api/avatars/${id}/photo`, {
-        method: 'POST',
-        body: form,
-      });
+      form.append(
+        'photo',
+        new File([blob], `${cropperKind}.jpg`, { type: 'image/jpeg' }),
+      );
+      const endpoint =
+        cropperKind === 'cover'
+          ? `/api/avatars/${id}/photo`
+          : `/api/avatars/${id}/stage-photo`;
+      const res = await fetch(endpoint, { method: 'POST', body: form });
       const json = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
       if (cropperSrc) URL.revokeObjectURL(cropperSrc);
@@ -174,6 +191,52 @@ export default function AvatarDetail({ id }: { id: string }) {
   function cancelCrop() {
     if (cropperSrc) URL.revokeObjectURL(cropperSrc);
     setCropperSrc(null);
+  }
+
+  async function saveMeta(updates: {
+    name?: string;
+    description?: string | null;
+  }) {
+    setSavingMeta(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/avatars/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      await load();
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      return false;
+    } finally {
+      setSavingMeta(false);
+    }
+  }
+
+  async function commitNameEdit() {
+    if (!editingName) return;
+    const next = nameDraft.trim();
+    if (!next || next === data?.avatar.name) {
+      setEditingName(false);
+      return;
+    }
+    const ok = await saveMeta({ name: next });
+    if (ok) setEditingName(false);
+  }
+
+  async function commitDescEdit() {
+    if (!editingDesc) return;
+    const next = descDraft.trim();
+    if (next === (data?.avatar.description ?? '')) {
+      setEditingDesc(false);
+      return;
+    }
+    const ok = await saveMeta({ description: next || null });
+    if (ok) setEditingDesc(false);
   }
 
   if (error && !data) {
@@ -229,8 +292,8 @@ export default function AvatarDetail({ id }: { id: string }) {
           </div>
           <button
             type="button"
-            onClick={openFilePicker}
-            aria-label="写真を変更"
+            onClick={() => openFilePicker('cover')}
+            aria-label="アバター写真を変更"
             className="absolute -bottom-1 -right-1 grid h-7 w-7 place-items-center rounded-full bg-neutral-900 text-white shadow-md transition hover:bg-neutral-700 focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:ring-offset-2"
           >
             <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden>
@@ -246,36 +309,97 @@ export default function AvatarDetail({ id }: { id: string }) {
           </button>
         </div>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-xl font-semibold tracking-tight">
-            {avatar.name}
-          </h1>
-          {avatar.description ? (
-            <p className="truncate text-sm text-neutral-500">
-              {avatar.description}
-            </p>
+          {editingName ? (
+            <input
+              autoFocus
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onBlur={commitNameEdit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void commitNameEdit();
+                } else if (e.key === 'Escape') {
+                  setEditingName(false);
+                }
+              }}
+              disabled={savingMeta}
+              className="w-full rounded-md border border-neutral-300 bg-white px-2 py-1 text-xl font-semibold tracking-tight focus:border-neutral-900 focus:outline-none"
+            />
           ) : (
-            <p className="text-xs text-neutral-400">説明なし</p>
+            <button
+              type="button"
+              onClick={() => {
+                setNameDraft(avatar.name);
+                setEditingName(true);
+              }}
+              className="block max-w-full truncate rounded-md text-left text-xl font-semibold tracking-tight transition hover:bg-neutral-100"
+              title="クリックで編集"
+            >
+              {avatar.name}
+            </button>
           )}
-          <button
-            type="button"
-            onClick={openFilePicker}
-            className="mt-1 inline-flex items-center gap-1 text-[11px] text-neutral-500 transition hover:text-neutral-900"
-          >
-            <svg width="10" height="10" viewBox="0 0 16 16" aria-hidden>
-              <path
-                d="M11 1.5l3.5 3.5L5 14.5H1.5V11L11 1.5z"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            写真を変更
-          </button>
+
+          {editingDesc ? (
+            <input
+              autoFocus
+              value={descDraft}
+              onChange={(e) => setDescDraft(e.target.value)}
+              onBlur={commitDescEdit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void commitDescEdit();
+                } else if (e.key === 'Escape') {
+                  setEditingDesc(false);
+                }
+              }}
+              disabled={savingMeta}
+              placeholder="説明(任意)"
+              className="mt-1 w-full rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm focus:border-neutral-900 focus:outline-none"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setDescDraft(avatar.description ?? '');
+                setEditingDesc(true);
+              }}
+              className="mt-0.5 block max-w-full truncate rounded-md text-left text-sm text-neutral-500 transition hover:bg-neutral-100"
+              title="クリックで編集"
+            >
+              {avatar.description || '+ 説明を追加'}
+            </button>
+          )}
+
+          <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-neutral-500">
+            <button
+              type="button"
+              onClick={() => openFilePicker('cover')}
+              className="inline-flex items-center gap-1 transition hover:text-neutral-900"
+            >
+              <PencilGlyph />
+              アバター写真
+            </button>
+            <button
+              type="button"
+              onClick={() => openFilePicker('stage')}
+              className="inline-flex items-center gap-1 transition hover:text-neutral-900"
+            >
+              <PencilGlyph />
+              ステージ背景
+            </button>
+          </div>
         </div>
         <input
-          ref={fileInputRef}
+          ref={coverFileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={onFilePicked}
+          className="hidden"
+        />
+        <input
+          ref={stageFileInputRef}
           type="file"
           accept="image/*"
           onChange={onFilePicked}
@@ -295,8 +419,10 @@ export default function AvatarDetail({ id }: { id: string }) {
           <StreamingStage
             avatarId={avatar.id}
             coverUrl={avatar.cover_url}
+            stageUrl={avatar.stage_url}
             avatarName={avatar.name}
             onMessage={handleTranscriptMessage}
+            onEditStage={() => openFilePicker('stage')}
           />
 
           <p className="text-center text-xs text-neutral-500">
@@ -336,6 +462,20 @@ export default function AvatarDetail({ id }: { id: string }) {
         busy={cropperBusy}
         onConfirm={saveCroppedPhoto}
         onCancel={cancelCrop}
+        aspect={cropperKind === 'stage' ? 16 / 9 : 1}
+        cropShape={cropperKind === 'stage' ? 'rect' : 'round'}
+        outputWidth={cropperKind === 'stage' ? 1280 : 512}
+        outputHeight={cropperKind === 'stage' ? 720 : 512}
+        title={
+          cropperKind === 'stage'
+            ? 'ステージ背景をトリミング'
+            : 'アバター写真をトリミング'
+        }
+        hint={
+          cropperKind === 'stage'
+            ? '16:9 の横長範囲を切り出します。'
+            : '丸く切り抜かれた範囲がアバター写真になります。'
+        }
       />
     </div>
   );
@@ -859,6 +999,21 @@ function AvatarMenu({
         </div>
       )}
     </div>
+  );
+}
+
+function PencilGlyph() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 16 16" aria-hidden>
+      <path
+        d="M11 1.5l3.5 3.5L5 14.5H1.5V11L11 1.5z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

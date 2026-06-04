@@ -43,12 +43,65 @@ export async function GET(
       .createSignedUrl(avatar.cover_image_path, 60 * 60);
     coverUrl = signed?.signedUrl ?? null;
   }
+  let stageUrl: string | null = null;
+  if (avatar.stage_image_path) {
+    const { data: signed } = await db.storage
+      .from(storageBucket())
+      .createSignedUrl(avatar.stage_image_path, 60 * 60);
+    stageUrl = signed?.signedUrl ?? null;
+  }
 
   return NextResponse.json({
-    avatar: { ...avatar, cover_url: coverUrl },
+    avatar: { ...avatar, cover_url: coverUrl, stage_url: stageUrl },
     training_videos: videos ?? [],
     generations: generations ?? [],
   });
+}
+
+/**
+ * PATCH updates editable avatar fields: name and description for now.
+ * Anything else in the body is ignored.
+ */
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  const body = (await req.json().catch(() => ({}))) as {
+    name?: string;
+    description?: string | null;
+  };
+  const updates: Record<string, unknown> = {};
+  if (typeof body.name === 'string') {
+    const trimmed = body.name.trim();
+    if (!trimmed) {
+      return NextResponse.json(
+        { error: 'name cannot be empty' },
+        { status: 400 },
+      );
+    }
+    updates.name = trimmed;
+  }
+  if (body.description !== undefined) {
+    updates.description =
+      typeof body.description === 'string'
+        ? body.description.trim() || null
+        : null;
+  }
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ ok: true });
+  }
+
+  const db = supabaseAdmin();
+  const { error } = await db
+    .from('avatars')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', params.id);
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  revalidatePath('/');
+  revalidatePath(`/avatars/${params.id}`);
+  return NextResponse.json({ ok: true });
 }
 
 /**

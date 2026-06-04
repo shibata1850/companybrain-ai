@@ -3,10 +3,14 @@
 import { useCallback, useRef, useState } from 'react';
 import Cropper, { type Area } from 'react-easy-crop';
 
+type Shape = 'round' | 'rect';
+
 /**
- * Square photo cropper. Accepts a source image (object URL or remote
- * URL) and returns a 512x512 cropped JPEG blob via onConfirm. Wraps
- * react-easy-crop for the actual pan/zoom UX.
+ * Configurable photo cropper. Defaults to a 512×512 round crop, but the
+ * caller can request a different aspect, a rectangular crop, and a
+ * different output resolution — used for the avatar's circular cover
+ * thumbnail (1:1 round) as well as the streaming stage's landscape
+ * 16:9 backdrop.
  */
 export default function PhotoCropper({
   src,
@@ -14,12 +18,24 @@ export default function PhotoCropper({
   onConfirm,
   onCancel,
   busy,
+  aspect = 1,
+  cropShape = 'round',
+  outputWidth = 512,
+  outputHeight = 512,
+  title = '写真をトリミング',
+  hint = 'ドラッグで位置調整・スライダーで拡大縮小できます。',
 }: {
   src: string;
   open: boolean;
   onConfirm: (blob: Blob) => void | Promise<void>;
   onCancel: () => void;
   busy?: boolean;
+  aspect?: number;
+  cropShape?: Shape;
+  outputWidth?: number;
+  outputHeight?: number;
+  title?: string;
+  hint?: string;
 }) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -32,7 +48,7 @@ export default function PhotoCropper({
   async function confirm() {
     const area = areaRef.current;
     if (!area) return;
-    const blob = await renderCroppedJpeg(src, area, 512);
+    const blob = await renderCroppedJpeg(src, area, outputWidth, outputHeight);
     await onConfirm(blob);
   }
 
@@ -42,21 +58,17 @@ export default function PhotoCropper({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 anim-fade-in">
       <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="border-b border-neutral-200 px-5 py-3">
-          <h2 className="text-sm font-semibold text-neutral-900">
-            写真をトリミング
-          </h2>
-          <p className="mt-0.5 text-[11px] text-neutral-500">
-            ドラッグで位置調整・スライダーで拡大縮小できます。
-          </p>
+          <h2 className="text-sm font-semibold text-neutral-900">{title}</h2>
+          <p className="mt-0.5 text-[11px] text-neutral-500">{hint}</p>
         </div>
         <div className="relative h-80 w-full bg-neutral-900">
           <Cropper
             image={src}
             crop={crop}
             zoom={zoom}
-            aspect={1}
-            cropShape="round"
-            showGrid={false}
+            aspect={aspect}
+            cropShape={cropShape}
+            showGrid={cropShape === 'rect'}
             onCropChange={setCrop}
             onZoomChange={setZoom}
             onCropComplete={onCropComplete}
@@ -100,19 +112,16 @@ export default function PhotoCropper({
   );
 }
 
-/**
- * Decode the source image, draw the chosen crop region onto an offscreen
- * canvas at `size`x`size`, return as a JPEG Blob.
- */
 async function renderCroppedJpeg(
   src: string,
   area: Area,
-  size: number,
+  outW: number,
+  outH: number,
 ): Promise<Blob> {
   const img = await loadImage(src);
   const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = outW;
+  canvas.height = outH;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('canvas context unavailable');
   ctx.imageSmoothingEnabled = true;
@@ -125,8 +134,8 @@ async function renderCroppedJpeg(
     area.height,
     0,
     0,
-    size,
-    size,
+    outW,
+    outH,
   );
   return await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(

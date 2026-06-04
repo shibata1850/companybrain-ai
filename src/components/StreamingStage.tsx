@@ -43,22 +43,29 @@ export type TranscriptMessage = {
 export default function StreamingStage({
   avatarId,
   coverUrl,
+  stageUrl,
   avatarName,
   onMessage,
+  onEditStage,
 }: {
   avatarId: string;
   coverUrl: string | null;
+  /** Wider 16:9 backdrop image; falls back to coverUrl if null. */
+  stageUrl?: string | null;
   avatarName: string;
   /**
    * Fires once per completed turn (or on barge-in) with a full
    * transcript message. Parent appends to its conversation log.
    */
   onMessage?: (m: TranscriptMessage) => void;
+  /** Fires when the user clicks the "背景を変更" affordance on the stage. */
+  onEditStage?: () => void;
 }) {
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
   const [level, setLevel] = useState(0); // mic level 0..1 for the visualizer
+  const [textDraft, setTextDraft] = useState('');
 
   const sessionRef = useRef<Session | null>(null);
   const sessionOpenRef = useRef(false);
@@ -564,6 +571,43 @@ export default function StreamingStage({
     }
   }
 
+  /**
+   * Send a typed message into the live session. Useful when the user
+   * doesn't want to (or can't) talk out loud. Mirrors the message into
+   * the transcript log immediately so it shows up in chat.
+   */
+  function sendTextMessage(text: string) {
+    const sess = sessionRef.current;
+    if (!sess || !sessionOpenRef.current) return;
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (sess as any).sendClientContent?.({
+        turns: [{ role: 'user', parts: [{ text: trimmed }] }],
+        turnComplete: true,
+      });
+    } catch (e) {
+      console.warn('[live] sendClientContent failed:', e);
+      return;
+    }
+    onMessageRef.current?.({
+      role: 'user',
+      text: trimmed,
+      at: Date.now(),
+    });
+    // Any agent audio that was already playing should be cut off so it
+    // doesn't talk over its new answer.
+    stopAllPlayback();
+  }
+
+  function onTextSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!textDraft.trim()) return;
+    sendTextMessage(textDraft);
+    setTextDraft('');
+  }
+
   const isLive =
     status === 'connected' ||
     status === 'listening' ||
@@ -572,10 +616,10 @@ export default function StreamingStage({
   return (
     <div className="w-full space-y-3">
       <div className="relative aspect-video w-full overflow-hidden rounded-3xl border border-neutral-200 bg-neutral-900">
-        {coverUrl ? (
+        {(stageUrl || coverUrl) ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={coverUrl}
+            src={stageUrl || coverUrl || ''}
             alt={avatarName}
             className="absolute inset-0 h-full w-full object-cover opacity-90"
           />
@@ -583,6 +627,27 @@ export default function StreamingStage({
           <div className="absolute inset-0 grid place-items-center text-white/30">
             no cover
           </div>
+        )}
+
+        {/* Edit-stage-background affordance, only visible while idle. */}
+        {!isLive && status !== 'connecting' && onEditStage && (
+          <button
+            type="button"
+            onClick={onEditStage}
+            className="absolute right-3 top-3 z-10 inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1 text-[11px] font-medium text-neutral-700 shadow-sm backdrop-blur transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-white"
+          >
+            <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden>
+              <path
+                d="M11 1.5l3.5 3.5L5 14.5H1.5V11L11 1.5z"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            背景を変更
+          </button>
         )}
 
         {/* Speaking pulse — radial glow that grows when the agent talks. */}
@@ -681,6 +746,27 @@ export default function StreamingStage({
           </div>
         )}
       </div>
+
+      {isLive && (
+        <form
+          onSubmit={onTextSubmit}
+          className="flex items-center gap-2 rounded-full border border-neutral-300 bg-white px-3 py-2 shadow-sm focus-within:border-neutral-900"
+        >
+          <input
+            value={textDraft}
+            onChange={(e) => setTextDraft(e.target.value)}
+            placeholder={`${avatarName} にテキストで質問…`}
+            className="flex-1 bg-transparent px-2 py-1 text-sm outline-none placeholder:text-neutral-400"
+          />
+          <button
+            type="submit"
+            disabled={!textDraft.trim()}
+            className="rounded-full bg-neutral-900 px-4 py-1.5 text-xs font-medium text-white transition hover:bg-neutral-700 disabled:opacity-40"
+          >
+            送信
+          </button>
+        </form>
+      )}
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
