@@ -272,26 +272,47 @@ export default function StreamingStage({
       });
 
       const session = await ai.live.connect({
-        model:
-          tokenJson.model || 'gemini-2.5-flash-preview-native-audio-dialog',
+        model: tokenJson.model || 'gemini-live-2.5-flash-preview',
         config: {
           responseModalities: [Modality.AUDIO],
         },
         callbacks: {
           onopen: () => {
+            console.log('[live] session open');
             setStatus('listening');
           },
           onmessage: handleMessage,
           onerror: (e: ErrorEvent | Event) => {
             const msg =
-              'message' in e
+              'message' in e && (e as ErrorEvent).message
                 ? (e as ErrorEvent).message
                 : 'streaming error';
+            console.error('[live] error event:', e);
             setError(msg);
             setStatus('error');
           },
-          onclose: () => {
-            setStatus((s) => (s === 'error' ? s : 'ended'));
+          onclose: (e: CloseEvent | Event) => {
+            // Surface the WebSocket close code / reason so we can tell
+            // whether it was a quota issue, an unsupported model, a
+            // permission denial, or a clean shutdown.
+            const ce = e as CloseEvent;
+            const reason = ce?.reason || '';
+            const code = ce?.code;
+            console.warn('[live] session closed', { code, reason });
+            setStatus((s) => {
+              if (s === 'error') return s;
+              // Anything other than a clean shutdown surfaces as an error
+              // so the user sees a hint instead of a silent end state.
+              if (code !== undefined && code !== 1000 && code !== 1005) {
+                setError(
+                  `セッションが切断されました${
+                    reason ? `: ${reason}` : ''
+                  }${code ? ` (code ${code})` : ''}`,
+                );
+                return 'error';
+              }
+              return 'ended';
+            });
           },
         },
       });
