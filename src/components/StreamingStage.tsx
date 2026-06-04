@@ -267,6 +267,11 @@ export default function StreamingStage({
 
       const ai = new GoogleGenAI({
         apiKey: tokenJson.token,
+        // The SDK explicitly requires v1alpha when using an ephemeral
+        // token — without this the constrained WebSocket session is
+        // rejected by the gateway.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        httpOptions: { apiVersion: 'v1alpha' } as any,
       });
 
       const session = await ai.live.connect({
