@@ -71,6 +71,7 @@ export async function PATCH(
   const body = (await req.json().catch(() => ({}))) as {
     name?: string;
     description?: string | null;
+    voice?: string | null;
   };
   const updates: Record<string, unknown> = {};
   if (typeof body.name === 'string') {
@@ -88,6 +89,10 @@ export async function PATCH(
       typeof body.description === 'string'
         ? body.description.trim() || null
         : null;
+  }
+  if (body.voice !== undefined) {
+    updates.voice =
+      typeof body.voice === 'string' ? body.voice.trim() || null : null;
   }
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ ok: true });

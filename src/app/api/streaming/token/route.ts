@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   const db = supabaseAdmin();
   const { data: avatar } = await db
     .from('avatars')
-    .select('id, name, description')
+    .select('id, name, description, voice')
     .eq('id', avatarId)
     .single();
   if (!avatar) {
@@ -103,11 +103,15 @@ ${styleSamples || '（参考発言なし。一般的な人柄として自然に�
     },
   ];
 
+  const voiceName =
+    (typeof avatar.voice === 'string' && avatar.voice.trim()) ||
+    env.geminiLiveVoice();
+
   const liveConfig = {
     responseModalities: [Modality.AUDIO],
     speechConfig: {
       voiceConfig: {
-        prebuiltVoiceConfig: { voiceName: env.geminiLiveVoice() },
+        prebuiltVoiceConfig: { voiceName },
       },
       languageCode: 'ja-JP',
     },
@@ -158,7 +162,7 @@ ${styleSamples || '（参考発言なし。一般的な人柄として自然に�
     return NextResponse.json({
       token: tokenString,
       model: env.geminiLiveModel(),
-      voice: env.geminiLiveVoice(),
+      voice: voiceName,
       avatar: { id: avatar.id, name: avatar.name },
     });
   } catch (e) {

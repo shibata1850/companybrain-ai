@@ -8,6 +8,7 @@ import StreamingStage, {
   type TranscriptMessage,
 } from '@/components/StreamingStage';
 import PhotoCropper from '@/components/PhotoCropper';
+import PortalMenu from '@/components/PortalMenu';
 
 type Avatar = {
   id: string;
@@ -15,7 +16,19 @@ type Avatar = {
   description: string | null;
   cover_url: string | null;
   stage_url: string | null;
+  voice: string | null;
 };
+
+const VOICES: Array<{ id: string; hint: string }> = [
+  { id: 'Kore', hint: '女性・落ち着いた' },
+  { id: 'Aoede', hint: '女性・優しい' },
+  { id: 'Leda', hint: '女性・明るい' },
+  { id: 'Charon', hint: '男性・深い' },
+  { id: 'Orus', hint: '男性・自然' },
+  { id: 'Puck', hint: '男性・明るい' },
+  { id: 'Fenrir', hint: '男性・力強い' },
+  { id: 'Zephyr', hint: '中性的・爽やか' },
+];
 
 type TrainingVideo = {
   id: string;
@@ -209,6 +222,7 @@ export default function AvatarDetail({ id }: { id: string }) {
   async function saveMeta(updates: {
     name?: string;
     description?: string | null;
+    voice?: string | null;
   }) {
     setSavingMeta(true);
     setError(null);
@@ -402,6 +416,13 @@ export default function AvatarDetail({ id }: { id: string }) {
               <PencilGlyph />
               ステージ背景
             </button>
+            <VoicePicker
+              current={avatar.voice}
+              onChange={async (v) => {
+                await saveMeta({ voice: v });
+              }}
+              disabled={savingMeta}
+            />
           </div>
         </div>
         <input
@@ -1121,6 +1142,100 @@ function PencilGlyph() {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+function VoicePicker({
+  current,
+  onChange,
+  disabled,
+}: {
+  current: string | null;
+  onChange: (next: string | null) => void | Promise<void>;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const label = current?.trim() || 'デフォルト';
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex items-center gap-1 rounded-full border border-neutral-300 bg-white px-2 py-0.5 text-[11px] font-medium text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900 disabled:opacity-40"
+        title="クリックで声を変更"
+      >
+        <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden>
+          <path
+            d="M6 3a2 2 0 0 1 4 0v6a2 2 0 1 1-4 0V3z"
+            fill="currentColor"
+          />
+          <path
+            d="M3 9a5 5 0 0 0 10 0M8 14v1.5"
+            stroke="currentColor"
+            strokeWidth="1.2"
+            fill="none"
+            strokeLinecap="round"
+          />
+        </svg>
+        声: {label}
+        <svg width="8" height="8" viewBox="0 0 10 10" aria-hidden>
+          <path
+            d="M2 4l3 3 3-3"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+      <PortalMenu
+        anchorRef={buttonRef}
+        open={open}
+        onClose={() => setOpen(false)}
+        width={232}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            void onChange(null);
+            setOpen(false);
+          }}
+          className={`block w-full px-3 py-2 text-left text-xs transition hover:bg-neutral-50 ${
+            !current ? 'font-medium text-neutral-900' : 'text-neutral-700'
+          }`}
+        >
+          デフォルト(環境設定)
+        </button>
+        <div className="max-h-72 overflow-y-auto border-t border-neutral-100">
+          {VOICES.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              onClick={() => {
+                void onChange(v.id);
+                setOpen(false);
+              }}
+              className={`flex w-full items-baseline justify-between gap-3 px-3 py-2 text-left text-xs transition hover:bg-neutral-50 ${
+                current === v.id
+                  ? 'bg-neutral-50 font-medium text-neutral-900'
+                  : 'text-neutral-700'
+              }`}
+            >
+              <span>🔊 {v.id}</span>
+              <span className="text-[10px] text-neutral-400">{v.hint}</span>
+            </button>
+          ))}
+        </div>
+        <div className="border-t border-neutral-100 px-3 py-2 text-[10px] leading-relaxed text-neutral-400">
+          変更は次のセッション開始から反映されます。
+        </div>
+      </PortalMenu>
+    </>
   );
 }
 
