@@ -17,7 +17,21 @@ type Avatar = {
   cover_url: string | null;
   stage_url: string | null;
   voice: string | null;
+  language: string | null;
 };
+
+const LANGUAGES: Array<{ id: string; label: string }> = [
+  { id: 'auto', label: '自動検出(多言語)' },
+  { id: 'ja-JP', label: '日本語' },
+  { id: 'en-US', label: 'English (US)' },
+  { id: 'en-GB', label: 'English (UK)' },
+  { id: 'zh-CN', label: '中文(简体)' },
+  { id: 'zh-TW', label: '中文(繁體)' },
+  { id: 'ko-KR', label: '한국어' },
+  { id: 'es-US', label: 'Español' },
+  { id: 'fr-FR', label: 'Français' },
+  { id: 'de-DE', label: 'Deutsch' },
+];
 
 const VOICES: Array<{ id: string; hint: string }> = [
   { id: 'Kore', hint: '女性・落ち着いた' },
@@ -223,6 +237,7 @@ export default function AvatarDetail({ id }: { id: string }) {
     name?: string;
     description?: string | null;
     voice?: string | null;
+    language?: string | null;
   }) {
     setSavingMeta(true);
     setError(null);
@@ -420,6 +435,13 @@ export default function AvatarDetail({ id }: { id: string }) {
               current={avatar.voice}
               onChange={async (v) => {
                 await saveMeta({ voice: v });
+              }}
+              disabled={savingMeta}
+            />
+            <LanguagePicker
+              current={avatar.language}
+              onChange={async (l) => {
+                await saveMeta({ language: l });
               }}
               disabled={savingMeta}
             />
@@ -1233,6 +1255,105 @@ function VoicePicker({
         </div>
         <div className="border-t border-neutral-100 px-3 py-2 text-[10px] leading-relaxed text-neutral-400">
           変更は次のセッション開始から反映されます。
+        </div>
+      </PortalMenu>
+    </>
+  );
+}
+
+function LanguagePicker({
+  current,
+  onChange,
+  disabled,
+}: {
+  current: string | null;
+  onChange: (next: string | null) => void | Promise<void>;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  const currentLabel = (() => {
+    if (!current || current === 'auto')
+      return LANGUAGES.find((l) => l.id === 'auto')!.label;
+    const hit = LANGUAGES.find((l) => l.id === current);
+    return hit?.label ?? current;
+  })();
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex items-center gap-1 rounded-full border border-neutral-300 bg-white px-2 py-0.5 text-[11px] font-medium text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900 disabled:opacity-40"
+        title="クリックで言語を変更"
+      >
+        <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden>
+          <circle
+            cx="8"
+            cy="8"
+            r="6"
+            stroke="currentColor"
+            strokeWidth="1.3"
+            fill="none"
+          />
+          <path
+            d="M2 8h12M8 2c2 2 2 10 0 12M8 2c-2 2-2 10 0 12"
+            stroke="currentColor"
+            strokeWidth="1.1"
+            fill="none"
+          />
+        </svg>
+        言語: {currentLabel}
+        <svg width="8" height="8" viewBox="0 0 10 10" aria-hidden>
+          <path
+            d="M2 4l3 3 3-3"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+      <PortalMenu
+        anchorRef={buttonRef}
+        open={open}
+        onClose={() => setOpen(false)}
+        width={232}
+      >
+        <div className="max-h-72 overflow-y-auto">
+          {LANGUAGES.map((l) => {
+            const isCurrent =
+              (current ?? 'auto') === l.id ||
+              (!current && l.id === 'auto');
+            return (
+              <button
+                key={l.id}
+                type="button"
+                onClick={() => {
+                  void onChange(l.id === 'auto' ? null : l.id);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-baseline justify-between gap-3 px-3 py-2 text-left text-xs transition hover:bg-neutral-50 ${
+                  isCurrent
+                    ? 'bg-neutral-50 font-medium text-neutral-900'
+                    : 'text-neutral-700'
+                }`}
+              >
+                <span>{l.label}</span>
+                <span className="text-[10px] text-neutral-400">{l.id}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="border-t border-neutral-100 px-3 py-2 text-[10px] leading-relaxed text-neutral-400">
+          言語を指定すると、その言語の認識精度が上がります。
+          <br />
+          多言語を混ぜて話すときは「自動検出」を選んでください。
+          次のセッション開始から反映されます。
         </div>
       </PortalMenu>
     </>

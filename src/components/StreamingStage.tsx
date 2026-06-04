@@ -547,6 +547,9 @@ export default function StreamingStage({
           channelCount: 1,
           echoCancellation: true,
           noiseSuppression: true,
+          // Boost soft speech so the model has a stronger signal to work
+          // with; helps a lot in quiet rooms and on built-in laptop mics.
+          autoGainControl: true,
         },
       });
       micStreamRef.current = stream;
