@@ -44,7 +44,6 @@ export const env = {
   // Ephemeral tokens are only served on v1alpha, so the model has to
   // be one of the v1alpha entries.
   geminiLiveModel: () =>
-    process.env.GEMINI_LIVE_MODEL ||
-    'gemini-2.5-flash-preview-native-audio-dialog',
+    process.env.GEMINI_LIVE_MODEL || 'gemini-live-2.5-flash-preview',
   geminiLiveVoice: () => process.env.GEMINI_LIVE_VOICE || 'Kore',
 };
