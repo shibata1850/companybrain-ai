@@ -47,6 +47,46 @@ export default function TrainingClient({ avatarId }: { avatarId: string }) {
   const [trainFileFolder, setTrainFileFolder] = useState('');
   const [trainingText, setTrainingText] = useState(false);
 
+  // Bulk selection for moving many materials at once.
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkMoving, setBulkMoving] = useState(false);
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
+  async function bulkMove(target: string | null) {
+    if (selectedIds.size === 0) return;
+    setBulkMoving(true);
+    setError(null);
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map((id) =>
+          fetch(`/api/training-videos/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder: target }),
+          }),
+        ),
+      );
+      await load();
+      clearSelection();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBulkMoving(false);
+    }
+  }
+
   // Ad-hoc folder creation from the sidebar.
   const [newFolder, setNewFolder] = useState('');
   const [addingFolder, setAddingFolder] = useState(false);
@@ -441,7 +481,51 @@ export default function TrainingClient({ avatarId }: { avatarId: string }) {
             <span className="text-[11px] text-neutral-500">
               {visibleMaterials.length} 件表示
             </span>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectionMode((s) => !s);
+                clearSelection();
+              }}
+              className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                selectionMode
+                  ? 'bg-neutral-900 text-white hover:bg-neutral-700'
+                  : 'border border-neutral-300 bg-white text-neutral-700 hover:border-neutral-900'
+              }`}
+            >
+              {selectionMode ? '選択モード解除' : '選択して一括移動'}
+            </button>
           </div>
+
+          {/* Bulk-action bar (appears when one or more cards are selected) */}
+          {selectionMode && selectedIds.size > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-neutral-900 bg-neutral-900 px-4 py-2 text-white anim-fade-in">
+              <span className="text-xs">{selectedIds.size} 件選択中</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <BulkFolderPicker
+                  options={folderOptions}
+                  disabled={bulkMoving}
+                  onMove={bulkMove}
+                />
+                <button
+                  type="button"
+                  onClick={() => bulkMove(null)}
+                  disabled={bulkMoving}
+                  className="rounded-full bg-white/15 px-3 py-1 text-[11px] font-medium transition hover:bg-white/25 disabled:opacity-40"
+                >
+                  未分類へ
+                </button>
+                <button
+                  type="button"
+                  onClick={clearSelection}
+                  disabled={bulkMoving}
+                  className="rounded-full bg-white/0 px-3 py-1 text-[11px] underline-offset-2 transition hover:underline disabled:opacity-40"
+                >
+                  選択解除
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Material grid */}
           {visibleMaterials.length === 0 ? (
@@ -457,6 +541,9 @@ export default function TrainingClient({ avatarId }: { avatarId: string }) {
                   key={m.id}
                   material={m}
                   folderOptions={folderOptions}
+                  selectionMode={selectionMode}
+                  selected={selectedIds.has(m.id)}
+                  onToggleSelected={() => toggleSelected(m.id)}
                   onReload={load}
                 />
               ))}
@@ -545,10 +632,16 @@ function FolderPicker({
 function MaterialCard({
   material,
   folderOptions,
+  selectionMode = false,
+  selected = false,
+  onToggleSelected,
   onReload,
 }: {
   material: Material;
   folderOptions: string[];
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelected?: () => void;
   onReload: () => Promise<void> | void;
 }) {
   const router = useRouter();
@@ -557,6 +650,7 @@ function MaterialCard({
   const [title, setTitle] = useState(material.file_name ?? '');
   const [transcript, setTranscript] = useState(material.transcript ?? '');
   const [folder, setFolder] = useState(material.folder ?? '');
+  const [movePickerOpen, setMovePickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [removed, setRemoved] = useState(false);
@@ -678,11 +772,22 @@ function MaterialCard({
 
   return (
     <li
-      className={`rounded-xl border border-neutral-200 bg-white p-4 transition ${
-        deleting ? 'anim-fade-out' : ''
-      }`}
+      className={`relative rounded-xl border bg-white p-4 transition ${
+        selected
+          ? 'border-neutral-900 ring-2 ring-neutral-900/10'
+          : 'border-neutral-200'
+      } ${deleting ? 'anim-fade-out' : ''}`}
     >
       <div className="flex items-start justify-between gap-2">
+        {selectionMode && (
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelected}
+            aria-label="この素材を選択"
+            className="mt-1 h-4 w-4 shrink-0 accent-neutral-900"
+          />
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
             <span
@@ -698,6 +803,8 @@ function MaterialCard({
               current={material.folder}
               options={folderOptions}
               onChange={quickMoveFolder}
+              forceOpen={movePickerOpen}
+              onForceClose={() => setMovePickerOpen(false)}
             />
           </div>
           <p className="mt-1.5 truncate text-sm font-medium text-neutral-900">
@@ -710,6 +817,7 @@ function MaterialCard({
           )}
         </div>
         <CardMenu
+          onMove={() => setMovePickerOpen(true)}
           onEdit={() => setMode('edit')}
           onDelete={() => setConfirmDelete(true)}
         />
@@ -766,12 +874,21 @@ function FolderQuickMenu({
   current,
   options,
   onChange,
+  forceOpen,
+  onForceClose,
 }: {
   current: string | null;
   options: string[];
   onChange: (next: string | null) => void;
+  forceOpen?: boolean;
+  onForceClose?: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [openSelf, setOpenSelf] = useState(false);
+  const open = openSelf || !!forceOpen;
+  const setOpen = (next: boolean) => {
+    setOpenSelf(next);
+    if (!next) onForceClose?.();
+  };
   const [draft, setDraft] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -782,16 +899,28 @@ function FolderQuickMenu({
     }
     if (open) document.addEventListener('mousedown', onClick);
     return () => document.removeEventListener('mousedown', onClick);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   return (
     <div ref={rootRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-medium text-neutral-600 transition hover:bg-neutral-200"
+        onClick={() => setOpen(!open)}
+        title="クリックでフォルダを変更"
+        className="inline-flex items-center gap-1 rounded-full border border-neutral-300 bg-white px-2 py-0.5 text-[11px] font-medium text-neutral-700 transition hover:border-neutral-900 hover:bg-neutral-50"
       >
         📁 {current?.trim() || '未分類'}
+        <svg width="8" height="8" viewBox="0 0 10 10" aria-hidden>
+          <path
+            d="M2 4l3 3 3-3"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
       </button>
       {open && (
         <div className="absolute left-0 z-30 mt-1 w-44 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg anim-fade-in">
@@ -863,12 +992,104 @@ function FolderQuickMenu({
   );
 }
 
+function BulkFolderPicker({
+  options,
+  disabled,
+  onMove,
+}: {
+  options: string[];
+  disabled?: boolean;
+  onMove: (target: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState('');
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (!rootRef.current) return;
+      if (!rootRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+        className="rounded-full bg-white px-3 py-1 text-[11px] font-medium text-neutral-900 transition hover:bg-white/90 disabled:opacity-40"
+      >
+        フォルダへ移動 ▾
+      </button>
+      {open && (
+        <div className="absolute right-0 z-40 mt-1.5 w-52 overflow-hidden rounded-xl border border-neutral-200 bg-white text-neutral-900 shadow-lg anim-fade-in">
+          <div className="max-h-48 overflow-y-auto">
+            {options.length === 0 && (
+              <p className="px-3 py-2 text-[11px] text-neutral-400">
+                既存フォルダなし
+              </p>
+            )}
+            {options.map((o) => (
+              <button
+                key={o}
+                type="button"
+                onClick={() => {
+                  onMove(o);
+                  setOpen(false);
+                }}
+                className="block w-full truncate px-3 py-2 text-left text-xs text-neutral-700 transition hover:bg-neutral-50"
+              >
+                📁 {o}
+              </button>
+            ))}
+          </div>
+          <div className="border-t border-neutral-100 p-2">
+            <div className="flex items-center gap-1">
+              <input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && draft.trim()) {
+                    onMove(draft.trim());
+                    setDraft('');
+                    setOpen(false);
+                  }
+                }}
+                placeholder="新規フォルダ"
+                className="flex-1 rounded-md border border-neutral-300 px-2 py-1 text-[11px] focus:border-neutral-900 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (draft.trim()) {
+                    onMove(draft.trim());
+                    setDraft('');
+                    setOpen(false);
+                  }
+                }}
+                className="rounded-md bg-neutral-900 px-2 py-1 text-[11px] font-medium text-white hover:bg-neutral-700"
+              >
+                追加
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CardMenu({
   onEdit,
   onDelete,
+  onMove,
 }: {
   onEdit: () => void;
   onDelete: () => void;
+  onMove?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -897,7 +1118,19 @@ function CardMenu({
         </svg>
       </button>
       {open && (
-        <div className="absolute right-0 z-30 mt-1.5 w-36 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg anim-fade-in">
+        <div className="absolute right-0 z-30 mt-1.5 w-40 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg anim-fade-in">
+          {onMove && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onMove();
+              }}
+              className="block w-full px-3 py-2 text-left text-xs text-neutral-700 transition hover:bg-neutral-50"
+            >
+              📁 フォルダを移動
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
