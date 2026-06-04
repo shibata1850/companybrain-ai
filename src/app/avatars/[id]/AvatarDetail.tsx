@@ -49,9 +49,21 @@ export default function AvatarDetail({ id }: { id: string }) {
   // Live transcript log.
   const [transcript, setTranscript] = useState<TranscriptMessage[]>([]);
   const [transcriptOpen, setTranscriptOpen] = useState(true);
+  const [partialUser, setPartialUser] = useState<string | null>(null);
+  const [partialAgent, setPartialAgent] = useState<string | null>(null);
   const handleTranscriptMessage = useCallback((m: TranscriptMessage) => {
     setTranscript((prev) => [...prev, m]);
   }, []);
+  const handlePartial = useCallback(
+    (role: 'user' | 'agent', text: string | null) => {
+      if (role === 'user') setPartialUser(text);
+      else setPartialAgent(text);
+    },
+    [],
+  );
+
+  // Collapsible streaming stage.
+  const [stageMinimized, setStageMinimized] = useState(false);
 
   // Photo cropping flow — supports both the round avatar thumbnail
   // and the landscape streaming-stage backdrop.
@@ -423,7 +435,10 @@ export default function AvatarDetail({ id }: { id: string }) {
             stageUrl={avatar.stage_url}
             avatarName={avatar.name}
             onMessage={handleTranscriptMessage}
+            onPartial={handlePartial}
             onEditStage={() => openFilePicker('stage')}
+            minimized={stageMinimized}
+            onToggleMinimized={() => setStageMinimized((v) => !v)}
           />
 
           <p className="text-center text-xs text-neutral-500">
@@ -433,6 +448,8 @@ export default function AvatarDetail({ id }: { id: string }) {
           <TranscriptPanel
             avatarName={avatar.name}
             messages={transcript}
+            partialUser={partialUser}
+            partialAgent={partialAgent}
             open={transcriptOpen}
             onToggle={() => setTranscriptOpen((v) => !v)}
             onClear={() => setTranscript([])}
@@ -905,16 +922,29 @@ function MaterialMenu({
 function TranscriptPanel({
   avatarName,
   messages,
+  partialUser,
+  partialAgent,
   open,
   onToggle,
   onClear,
 }: {
   avatarName: string;
   messages: TranscriptMessage[];
+  partialUser?: string | null;
+  partialAgent?: string | null;
   open: boolean;
   onToggle: () => void;
   onClear: () => void;
 }) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // Auto-scroll to the bottom as new content arrives.
+    const el = scrollerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages, partialUser, partialAgent]);
+
+  const totalLive = (partialUser ? 1 : 0) + (partialAgent ? 1 : 0);
+
   return (
     <section>
       <div className="flex items-center justify-between">
@@ -941,7 +971,7 @@ function TranscriptPanel({
           </svg>
           会話の文字起こし
           <span className="rounded-full bg-neutral-100 px-1.5 text-[10px] font-medium text-neutral-500">
-            {messages.length}
+            {messages.length + totalLive}
           </span>
         </button>
         {messages.length > 0 && (
@@ -956,8 +986,11 @@ function TranscriptPanel({
       </div>
 
       {open && (
-        <div className="mt-3 max-h-96 overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-3 anim-fade-in">
-          {messages.length === 0 ? (
+        <div
+          ref={scrollerRef}
+          className="mt-3 max-h-[28rem] overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-3 anim-fade-in"
+        >
+          {messages.length === 0 && !partialUser && !partialAgent ? (
             <p className="py-4 text-center text-xs text-neutral-400">
               セッションを開始して話しかけると、ここに会話が記録されます。
             </p>
@@ -986,6 +1019,32 @@ function TranscriptPanel({
                   </div>
                 </li>
               ))}
+              {partialUser && (
+                <li className="flex justify-end">
+                  <div className="max-w-[80%] rounded-2xl rounded-br-md bg-neutral-900 px-3 py-2 text-sm text-white opacity-80">
+                    <p className="text-[10px] uppercase tracking-wider opacity-60">
+                      あなた(入力中)
+                    </p>
+                    <p className="mt-0.5 whitespace-pre-wrap leading-relaxed">
+                      {partialUser}
+                      <span className="ml-0.5 inline-block h-3 w-[2px] animate-pulse bg-white" />
+                    </p>
+                  </div>
+                </li>
+              )}
+              {partialAgent && (
+                <li className="flex justify-start">
+                  <div className="max-w-[80%] rounded-2xl rounded-bl-md bg-neutral-100 px-3 py-2 text-sm text-neutral-900 opacity-80">
+                    <p className="text-[10px] uppercase tracking-wider opacity-60">
+                      {avatarName}(話し中)
+                    </p>
+                    <p className="mt-0.5 whitespace-pre-wrap leading-relaxed">
+                      {partialAgent}
+                      <span className="ml-0.5 inline-block h-3 w-[2px] animate-pulse bg-neutral-900" />
+                    </p>
+                  </div>
+                </li>
+              )}
             </ul>
           )}
         </div>

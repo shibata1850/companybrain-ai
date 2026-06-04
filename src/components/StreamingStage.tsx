@@ -13,10 +13,19 @@ type Status =
   | 'connecting'
   | 'connected'
   | 'listening'
+  | 'thinking'
   | 'speaking'
   | 'reconnecting'
   | 'ended'
   | 'error';
+
+// Mic RMS threshold above which we consider the user "actively talking".
+const MIC_VOICE_THRESHOLD = 0.06;
+// How long the mic has to stay below the threshold after the user was
+// talking before we flip to "thinking".
+const SILENCE_AFTER_SPEECH_MS = 450;
+// If the model never responds in this window, fall back to listening.
+const THINKING_FALLBACK_MS = 15000;
 
 // Transient close codes worth auto-retrying. 1011 is Gemini's
 // "Internal error encountered" — common on long preview-model sessions.
@@ -46,7 +55,10 @@ export default function StreamingStage({
   stageUrl,
   avatarName,
   onMessage,
+  onPartial,
   onEditStage,
+  minimized = false,
+  onToggleMinimized,
 }: {
   avatarId: string;
   coverUrl: string | null;
@@ -58,14 +70,28 @@ export default function StreamingStage({
    * transcript message. Parent appends to its conversation log.
    */
   onMessage?: (m: TranscriptMessage) => void;
+  /**
+   * Streams in-progress transcript text as it arrives. Called with
+   * (role, text) on each chunk and (role, null) when that role's
+   * partial should be cleared (e.g. turn complete).
+   */
+  onPartial?: (role: 'user' | 'agent', text: string | null) => void;
   /** Fires when the user clicks the "背景を変更" affordance on the stage. */
   onEditStage?: () => void;
+  /** When true, the stage collapses to a slim status bar. */
+  minimized?: boolean;
+  /** Fires when the user toggles the minimise button on the stage. */
+  onToggleMinimized?: () => void;
 }) {
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
   const [level, setLevel] = useState(0); // mic level 0..1 for the visualizer
   const [textDraft, setTextDraft] = useState('');
+  // VAD bookkeeping for the "thinking" state.
+  const userTalkingRef = useRef(false);
+  const lastVoiceAtRef = useRef(0);
+  const thinkingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sessionRef = useRef<Session | null>(null);
   const sessionOpenRef = useRef(false);
@@ -83,6 +109,10 @@ export default function StreamingStage({
   useEffect(() => {
     onMessageRef.current = onMessage;
   }, [onMessage]);
+  const onPartialRef = useRef(onPartial);
+  useEffect(() => {
+    onPartialRef.current = onPartial;
+  }, [onPartial]);
   const inputCtxRef = useRef<AudioContext | null>(null);
   const outputCtxRef = useRef<AudioContext | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
@@ -104,6 +134,11 @@ export default function StreamingStage({
       clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
     }
+    if (thinkingTimerRef.current) {
+      clearTimeout(thinkingTimerRef.current);
+      thinkingTimerRef.current = null;
+    }
+    userTalkingRef.current = false;
     try {
       processorRef.current?.disconnect();
     } catch {
@@ -166,6 +201,10 @@ export default function StreamingStage({
     if (!speakingRef.current) {
       speakingRef.current = true;
       setStatus('speaking');
+      if (thinkingTimerRef.current) {
+        clearTimeout(thinkingTimerRef.current);
+        thinkingTimerRef.current = null;
+      }
     }
     source.onended = () => {
       activeSourcesRef.current.delete(source);
@@ -248,6 +287,8 @@ export default function StreamingStage({
     }
     userBufRef.current = '';
     agentBufRef.current = '';
+    onPartialRef.current?.('user', null);
+    onPartialRef.current?.('agent', null);
   }
 
   function handleMessage(message: LiveServerMessage) {
@@ -281,11 +322,19 @@ export default function StreamingStage({
     }
 
     // Live transcription chunks for both sides — these are the only
-    // strings we trust for the chat log.
+    // strings we trust for the chat log. Also forward the cleaned
+    // partial to the parent so the chat panel can render it live
+    // instead of waiting for the turn to finish.
     const inputTx = sc?.inputTranscription?.text;
-    if (inputTx) userBufRef.current += inputTx;
+    if (inputTx) {
+      userBufRef.current += inputTx;
+      onPartialRef.current?.('user', cleanTranscript(userBufRef.current));
+    }
     const outputTx = sc?.outputTranscription?.text;
-    if (outputTx) agentBufRef.current += outputTx;
+    if (outputTx) {
+      agentBufRef.current += outputTx;
+      onPartialRef.current?.('agent', cleanTranscript(agentBufRef.current));
+    }
 
     // Barge-in: user started talking over the model. Kill the queued
     // audio so the agent goes silent immediately, then flush whatever
@@ -559,7 +608,36 @@ export default function StreamingStage({
           sum += v * v;
         }
         const rms = Math.sqrt(sum / buf.length);
-        setLevel(Math.min(1, rms * 4));
+        const scaled = Math.min(1, rms * 4);
+        setLevel(scaled);
+
+        // VAD-ish bookkeeping: notice when the user starts and stops
+        // talking so we can transition into "thinking" once they go
+        // silent and the model hasn't started speaking yet.
+        const now = performance.now();
+        if (!mutedRef.current && scaled > MIC_VOICE_THRESHOLD) {
+          userTalkingRef.current = true;
+          lastVoiceAtRef.current = now;
+          if (thinkingTimerRef.current) {
+            clearTimeout(thinkingTimerRef.current);
+            thinkingTimerRef.current = null;
+          }
+        } else if (
+          userTalkingRef.current &&
+          now - lastVoiceAtRef.current > SILENCE_AFTER_SPEECH_MS
+        ) {
+          userTalkingRef.current = false;
+          if (!speakingRef.current && sessionOpenRef.current) {
+            setStatus((s) => (s === 'listening' ? 'thinking' : s));
+            // Safety net: if the model never responds, drop back to
+            // listening so the UI doesn't hang on "thinking".
+            if (thinkingTimerRef.current)
+              clearTimeout(thinkingTimerRef.current);
+            thinkingTimerRef.current = setTimeout(() => {
+              setStatus((s) => (s === 'thinking' ? 'listening' : s));
+            }, THINKING_FALLBACK_MS);
+          }
+        }
         rafRef.current = requestAnimationFrame(tick);
       };
       tick();
@@ -611,11 +689,75 @@ export default function StreamingStage({
   const isLive =
     status === 'connected' ||
     status === 'listening' ||
+    status === 'thinking' ||
     status === 'speaking';
+
+  if (minimized) {
+    return (
+      <div className="w-full space-y-3">
+        <CompactBar
+          status={status}
+          level={level}
+          muted={muted}
+          isLive={isLive}
+          onToggleMute={() => setMuted((m) => !m)}
+          onStop={stop}
+          onStart={start}
+          onExpand={onToggleMinimized}
+          avatarName={avatarName}
+          coverUrl={coverUrl}
+        />
+        {isLive && (
+          <form
+            onSubmit={onTextSubmit}
+            className="flex items-center gap-2 rounded-full border border-neutral-300 bg-white px-3 py-2 shadow-sm focus-within:border-neutral-900"
+          >
+            <input
+              value={textDraft}
+              onChange={(e) => setTextDraft(e.target.value)}
+              placeholder={`${avatarName} にテキストで質問…`}
+              className="flex-1 bg-transparent px-2 py-1 text-sm outline-none placeholder:text-neutral-400"
+            />
+            <button
+              type="submit"
+              disabled={!textDraft.trim()}
+              className="rounded-full bg-neutral-900 px-4 py-1.5 text-xs font-medium text-white transition hover:bg-neutral-700 disabled:opacity-40"
+            >
+              送信
+            </button>
+          </form>
+        )}
+        {error && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+            {error}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="w-full space-y-3">
       <div className="relative aspect-video w-full overflow-hidden rounded-3xl border border-neutral-200 bg-neutral-900">
+        {/* Minimise toggle — collapses the stage into a thin status bar. */}
+        {onToggleMinimized && (
+          <button
+            type="button"
+            onClick={onToggleMinimized}
+            aria-label="ステージを隠す"
+            className="absolute left-3 top-3 z-10 inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1 text-[11px] font-medium text-neutral-700 shadow-sm backdrop-blur transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-white"
+          >
+            <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
+              <path
+                d="M2 5h8M2 8h8"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+              />
+            </svg>
+            ステージを隠す
+          </button>
+        )}
         {(stageUrl || coverUrl) ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -656,7 +798,9 @@ export default function StreamingStage({
         )}
 
         {/* Mic-level halo — subtle ring that breathes with the user voice. */}
-        {(status === 'listening' || status === 'speaking') && (
+        {(status === 'listening' ||
+          status === 'thinking' ||
+          status === 'speaking') && (
           <div
             className="pointer-events-none absolute inset-0 rounded-3xl ring-inset transition-[box-shadow] duration-100"
             style={{
@@ -665,6 +809,49 @@ export default function StreamingStage({
               }px rgba(255,255,255,${0.15 + level * 0.25})`,
             }}
           />
+        )}
+
+        {/* Voice-activity bars: vibrating mini-equaliser at the bottom of
+            the stage so the user can see at a glance that their mic is
+            being heard. Visible whenever the session is active and not
+            yet in the thinking/speaking flow. */}
+        {(status === 'listening' || status === 'thinking') && !muted && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-6 flex h-8 items-end justify-center gap-1">
+            {Array.from({ length: 7 }).map((_, i) => {
+              // Bell-shaped multiplier so middle bars react more.
+              const m = 1 - Math.abs(i - 3) * 0.18;
+              const h = 4 + Math.min(28, level * 60 * m);
+              return (
+                <span
+                  key={i}
+                  className="w-1 rounded-full bg-white/85 shadow-[0_0_8px_rgba(255,255,255,0.35)] transition-[height] duration-75"
+                  style={{ height: `${h}px` }}
+                />
+              );
+            })}
+          </div>
+        )}
+
+        {/* Thinking overlay — three bouncing dots when the agent is
+            processing the user's last turn. */}
+        {status === 'thinking' && (
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 bg-neutral-900/35 text-white backdrop-blur-[2px]">
+            <div className="flex items-end gap-1.5">
+              <span
+                className="h-2.5 w-2.5 animate-bounce rounded-full bg-white"
+                style={{ animationDelay: '0ms' }}
+              />
+              <span
+                className="h-2.5 w-2.5 animate-bounce rounded-full bg-white"
+                style={{ animationDelay: '120ms' }}
+              />
+              <span
+                className="h-2.5 w-2.5 animate-bounce rounded-full bg-white"
+                style={{ animationDelay: '240ms' }}
+              />
+            </div>
+            <p className="text-xs font-medium tracking-wide">考えています…</p>
+          </div>
         )}
 
         {/* Status pill */}
@@ -676,14 +863,18 @@ export default function StreamingStage({
                   ? 'animate-pulse bg-emerald-400'
                   : status === 'listening'
                     ? 'bg-emerald-400'
-                    : 'bg-amber-400'
+                    : status === 'thinking'
+                      ? 'animate-pulse bg-indigo-300'
+                      : 'bg-amber-400'
               }`}
             />
             {status === 'speaking'
               ? '話しています…'
               : status === 'listening'
                 ? '聞いています'
-                : '接続中'}
+                : status === 'thinking'
+                  ? '考えています…'
+                  : '接続中'}
           </div>
         )}
 
@@ -778,6 +969,146 @@ export default function StreamingStage({
 }
 
 // ---- helpers ----
+
+function CompactBar({
+  status,
+  level,
+  muted,
+  isLive,
+  onToggleMute,
+  onStop,
+  onStart,
+  onExpand,
+  avatarName,
+  coverUrl,
+}: {
+  status: Status;
+  level: number;
+  muted: boolean;
+  isLive: boolean;
+  onToggleMute: () => void;
+  onStop: () => void;
+  onStart: () => void;
+  onExpand?: () => void;
+  avatarName: string;
+  coverUrl: string | null;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-neutral-200 bg-neutral-900 px-3 py-2 text-white shadow-sm">
+      {coverUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={coverUrl}
+          alt={avatarName}
+          className="h-8 w-8 shrink-0 rounded-full object-cover ring-2 ring-white/30"
+        />
+      ) : (
+        <span className="h-8 w-8 shrink-0 rounded-full bg-white/10" />
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 text-[11px]">
+          <span
+            className={`inline-block h-2 w-2 rounded-full ${
+              status === 'speaking'
+                ? 'animate-pulse bg-emerald-400'
+                : status === 'listening'
+                  ? 'bg-emerald-400'
+                  : status === 'thinking'
+                    ? 'animate-pulse bg-indigo-300'
+                    : status === 'idle' || status === 'ended'
+                      ? 'bg-neutral-500'
+                      : 'bg-amber-400'
+            }`}
+          />
+          <span className="truncate">
+            {status === 'speaking'
+              ? '話しています…'
+              : status === 'listening'
+                ? '聞いています'
+                : status === 'thinking'
+                  ? '考えています…'
+                  : status === 'connecting'
+                    ? '接続中…'
+                    : status === 'reconnecting'
+                      ? '再接続中…'
+                      : status === 'error'
+                        ? 'エラー'
+                        : isLive
+                          ? 'スタンバイ'
+                          : '停止中'}
+          </span>
+        </div>
+        {/* Inline waveform */}
+        {(status === 'listening' || status === 'thinking') && !muted && (
+          <div className="mt-1 flex h-3 items-end gap-0.5">
+            {Array.from({ length: 9 }).map((_, i) => {
+              const m = 1 - Math.abs(i - 4) * 0.15;
+              const h = 2 + Math.min(10, level * 22 * m);
+              return (
+                <span
+                  key={i}
+                  className="w-[3px] rounded-full bg-white/70 transition-[height] duration-75"
+                  style={{ height: `${h}px` }}
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        {isLive ? (
+          <>
+            <button
+              type="button"
+              onClick={onToggleMute}
+              className={`rounded-full px-2.5 py-1 text-[10px] font-medium transition ${
+                muted
+                  ? 'bg-red-500 text-white hover:bg-red-400'
+                  : 'bg-white/15 text-white hover:bg-white/25'
+              }`}
+            >
+              {muted ? 'マイクOFF' : 'マイクON'}
+            </button>
+            <button
+              type="button"
+              onClick={onStop}
+              className="rounded-full bg-white/15 px-2.5 py-1 text-[10px] font-medium transition hover:bg-white/25"
+            >
+              終了
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={onStart}
+            className="rounded-full bg-white px-3 py-1 text-[10px] font-medium text-neutral-900 transition hover:bg-white/90"
+          >
+            始める
+          </button>
+        )}
+        {onExpand && (
+          <button
+            type="button"
+            onClick={onExpand}
+            aria-label="ステージを表示"
+            className="grid h-7 w-7 place-items-center rounded-full bg-white/15 transition hover:bg-white/25"
+          >
+            <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
+              <path
+                d="M3 5l3-3 3 3M3 7l3 3 3-3"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function base64ToInt16(b64: string): Int16Array {
   const bin = atob(b64);
