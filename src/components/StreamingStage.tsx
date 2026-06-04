@@ -48,6 +48,7 @@ export default function StreamingStage({
   const [level, setLevel] = useState(0); // mic level 0..1 for the visualizer
 
   const sessionRef = useRef<Session | null>(null);
+  const sessionOpenRef = useRef(false);
   const inputCtxRef = useRef<AudioContext | null>(null);
   const outputCtxRef = useRef<AudioContext | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
@@ -63,6 +64,7 @@ export default function StreamingStage({
   }, [muted]);
 
   const stop = useCallback(async () => {
+    sessionOpenRef.current = false;
     try {
       processorRef.current?.disconnect();
     } catch {
@@ -275,13 +277,16 @@ export default function StreamingStage({
       });
 
       const session = await ai.live.connect({
-        model: tokenJson.model || 'gemini-2.0-flash-live-001',
+        model:
+          tokenJson.model ||
+          'gemini-2.5-flash-preview-native-audio-dialog',
         config: {
           responseModalities: [Modality.AUDIO],
         },
         callbacks: {
           onopen: () => {
             console.log('[live] session open');
+            sessionOpenRef.current = true;
             setStatus('listening');
           },
           onmessage: handleMessage,
@@ -291,10 +296,12 @@ export default function StreamingStage({
                 ? (e as ErrorEvent).message
                 : 'streaming error';
             console.error('[live] error event:', e);
+            sessionOpenRef.current = false;
             setError(msg);
             setStatus('error');
           },
           onclose: (e: CloseEvent | Event) => {
+            sessionOpenRef.current = false;
             // Surface the WebSocket close code / reason so we can tell
             // whether it was a quota issue, an unsupported model, a
             // permission denial, or a clean shutdown.
@@ -357,6 +364,10 @@ export default function StreamingStage({
       processorRef.current = processor;
       processor.onaudioprocess = (e) => {
         if (mutedRef.current) return;
+        // Once the WebSocket has closed there's no point converting
+        // and base64-encoding more audio — and the SDK throws on each
+        // attempt, which we saw as a CLOSED-state spam loop.
+        if (!sessionOpenRef.current || !sessionRef.current) return;
         const input = e.inputBuffer.getChannelData(0);
         const pcm = new Int16Array(input.length);
         for (let i = 0; i < input.length; i++) {
@@ -373,7 +384,8 @@ export default function StreamingStage({
             },
           });
         } catch {
-          // session probably closed; ignore.
+          // session probably closed; latch the flag so we stop trying.
+          sessionOpenRef.current = false;
         }
       };
       source.connect(analyser);

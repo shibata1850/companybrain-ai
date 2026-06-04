@@ -37,7 +37,14 @@ export const env = {
   // Gemini Live API — the real-time voice conversation engine.
   // Available voices (multi-lingual incl. Japanese):
   //   Aoede / Charon / Fenrir / Kore / Leda / Orus / Puck / Zephyr.
+  // The Live API has two model families served on two API versions:
+  //   - v1main / v1beta: gemini-2.0-flash-live-001, etc.
+  //   - v1alpha       : gemini-2.5-flash-preview-native-audio-dialog,
+  //                     gemini-live-2.5-flash-preview
+  // Ephemeral tokens are only served on v1alpha, so the model has to
+  // be one of the v1alpha entries.
   geminiLiveModel: () =>
-    process.env.GEMINI_LIVE_MODEL || 'gemini-2.0-flash-live-001',
+    process.env.GEMINI_LIVE_MODEL ||
+    'gemini-2.5-flash-preview-native-audio-dialog',
   geminiLiveVoice: () => process.env.GEMINI_LIVE_VOICE || 'Kore',
 };
