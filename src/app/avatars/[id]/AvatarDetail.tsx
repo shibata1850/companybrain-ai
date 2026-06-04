@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import BrainSwitcher from '@/components/BrainSwitcher';
 import StreamingStage, {
   type TranscriptMessage,
+  type TranscriptSource,
 } from '@/components/StreamingStage';
 import PhotoCropper from '@/components/PhotoCropper';
 import PortalMenu from '@/components/PortalMenu';
@@ -14,11 +15,49 @@ type Avatar = {
   id: string;
   name: string;
   description: string | null;
+  persona_prompt: string | null;
   cover_url: string | null;
   stage_url: string | null;
   voice: string | null;
   language: string | null;
 };
+
+type ChatThread = {
+  id: string;
+  title: string | null;
+  createdAt: number;
+  updatedAt: number;
+  messages: TranscriptMessage[];
+};
+type ChatStore = { threads: ChatThread[]; currentId: string | null };
+
+function newThreadId() {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+  return `t_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function makeThread(): ChatThread {
+  const now = Date.now();
+  return {
+    id: newThreadId(),
+    title: null,
+    createdAt: now,
+    updatedAt: now,
+    messages: [],
+  };
+}
+
+function threadTitle(t: ChatThread): string {
+  if (t.title) return t.title;
+  const firstUser = t.messages.find((m) => m.role === 'user');
+  if (firstUser) {
+    const trimmed = firstUser.text.trim().replace(/\s+/g, ' ');
+    return trimmed.length > 28 ? trimmed.slice(0, 28) + '…' : trimmed;
+  }
+  return '新しい会話';
+}
 
 const LANGUAGES: Array<{ id: string; label: string }> = [
   { id: 'auto', label: '自動検出(多言語)' },
@@ -73,17 +112,52 @@ export default function AvatarDetail({ id }: { id: string }) {
   const [trainTextTitle, setTrainTextTitle] = useState('');
   const [trainingText, setTrainingText] = useState(false);
 
-  // Live transcript log. Persisted in localStorage per-avatar so it
-  // survives navigation to the training-management page (and back).
-  const storageKey = `cb-transcript-${id}`;
-  const [transcript, setTranscript] = useState<TranscriptMessage[]>([]);
-  const [transcriptLoaded, setTranscriptLoaded] = useState(false);
+  // Live transcript log. Persisted as a collection of threads so the
+  // operator can keep multiple conversations per brain, switch between
+  // them, and revisit pinned answers / notes / ratings later.
+  const storageKey = `cb-threads-${id}`;
+  const legacyStorageKey = `cb-transcript-${id}`;
+  const [chatStore, setChatStore] = useState<ChatStore>({
+    threads: [],
+    currentId: null,
+  });
+  const [chatLoaded, setChatLoaded] = useState(false);
   const [transcriptOpen, setTranscriptOpen] = useState(true);
   const [partialUser, setPartialUser] = useState<string | null>(null);
   const [partialAgent, setPartialAgent] = useState<string | null>(null);
+
+  const currentThread = useMemo(
+    () =>
+      chatStore.threads.find((t) => t.id === chatStore.currentId) ?? null,
+    [chatStore],
+  );
+  const transcript = currentThread?.messages ?? [];
+
   const handleTranscriptMessage = useCallback((m: TranscriptMessage) => {
-    setTranscript((prev) => [...prev, m]);
+    setChatStore((prev) => {
+      let store = prev;
+      // No active thread yet — open one implicitly on the first message.
+      if (
+        !store.currentId ||
+        !store.threads.some((t) => t.id === store.currentId)
+      ) {
+        const fresh = makeThread();
+        store = {
+          threads: [...store.threads, fresh],
+          currentId: fresh.id,
+        };
+      }
+      return {
+        ...store,
+        threads: store.threads.map((t) =>
+          t.id === store.currentId
+            ? { ...t, messages: [...t.messages, m], updatedAt: Date.now() }
+            : t,
+        ),
+      };
+    });
   }, []);
+
   const handlePartial = useCallback(
     (role: 'user' | 'agent', text: string | null) => {
       if (role === 'user') setPartialUser(text);
@@ -92,7 +166,8 @@ export default function AvatarDetail({ id }: { id: string }) {
     [],
   );
 
-  // Hydrate from storage on mount.
+  // Hydrate from storage on mount, migrating the older single-thread
+  // format if it's still around.
   useEffect(() => {
     try {
       const raw =
@@ -100,56 +175,178 @@ export default function AvatarDetail({ id }: { id: string }) {
           ? window.localStorage.getItem(storageKey)
           : null;
       if (raw) {
-        const parsed = JSON.parse(raw) as TranscriptMessage[];
-        if (Array.isArray(parsed)) setTranscript(parsed);
+        const parsed = JSON.parse(raw) as ChatStore;
+        if (parsed && Array.isArray(parsed.threads)) {
+          setChatStore({
+            threads: parsed.threads.map((t) => ({
+              id: t.id || newThreadId(),
+              title: t.title ?? null,
+              createdAt: t.createdAt ?? Date.now(),
+              updatedAt: t.updatedAt ?? Date.now(),
+              messages: Array.isArray(t.messages)
+                ? t.messages.map((m) => ({
+                    ...m,
+                    id: m.id || newThreadId(),
+                  }))
+                : [],
+            })),
+            currentId:
+              parsed.currentId &&
+              parsed.threads.some((t) => t.id === parsed.currentId)
+                ? parsed.currentId
+                : parsed.threads[0]?.id ?? null,
+          });
+        }
+      } else {
+        const legacy = window.localStorage.getItem(legacyStorageKey);
+        if (legacy) {
+          const arr = JSON.parse(legacy) as TranscriptMessage[];
+          if (Array.isArray(arr) && arr.length > 0) {
+            const migrated = makeThread();
+            migrated.title = '以前の会話';
+            migrated.messages = arr.map((m) => ({
+              ...m,
+              id: m.id || newThreadId(),
+            }));
+            migrated.updatedAt =
+              arr[arr.length - 1]?.at ?? Date.now();
+            setChatStore({ threads: [migrated], currentId: migrated.id });
+          }
+          window.localStorage.removeItem(legacyStorageKey);
+        }
       }
     } catch {
       // ignore corrupted storage
     }
-    setTranscriptLoaded(true);
+    setChatLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Persist whenever the array changes (after the initial hydrate so we
-  // don't overwrite stored data with the empty initial state).
+  // Persist whenever the store changes (after initial hydrate).
   useEffect(() => {
-    if (!transcriptLoaded) return;
+    if (!chatLoaded) return;
     try {
-      // Bound localStorage to the last 500 messages.
-      const trimmed =
-        transcript.length > 500 ? transcript.slice(-500) : transcript;
+      const trimmed: ChatStore = {
+        currentId: chatStore.currentId,
+        threads: chatStore.threads.map((t) => ({
+          ...t,
+          messages:
+            t.messages.length > 500 ? t.messages.slice(-500) : t.messages,
+        })),
+      };
       window.localStorage.setItem(storageKey, JSON.stringify(trimmed));
     } catch {
       // quota exceeded or storage disabled — accept the loss
     }
-  }, [transcript, transcriptLoaded, storageKey]);
+  }, [chatStore, chatLoaded, storageKey]);
 
-  function clearTranscript() {
-    setTranscript([]);
-    try {
-      window.localStorage.removeItem(storageKey);
-    } catch {
-      // ignore
-    }
-  }
+  const newThread = useCallback(() => {
+    setChatStore((prev) => {
+      const fresh = makeThread();
+      return {
+        threads: [...prev.threads, fresh],
+        currentId: fresh.id,
+      };
+    });
+  }, []);
+
+  const switchThread = useCallback((threadId: string) => {
+    setChatStore((prev) =>
+      prev.threads.some((t) => t.id === threadId)
+        ? { ...prev, currentId: threadId }
+        : prev,
+    );
+  }, []);
+
+  const deleteThread = useCallback((threadId: string) => {
+    setChatStore((prev) => {
+      const remaining = prev.threads.filter((t) => t.id !== threadId);
+      const nextCurrent =
+        prev.currentId === threadId
+          ? remaining[remaining.length - 1]?.id ?? null
+          : prev.currentId;
+      return { threads: remaining, currentId: nextCurrent };
+    });
+  }, []);
+
+  const renameThread = useCallback((threadId: string, title: string) => {
+    const trimmed = title.trim();
+    setChatStore((prev) => ({
+      ...prev,
+      threads: prev.threads.map((t) =>
+        t.id === threadId ? { ...t, title: trimmed || null } : t,
+      ),
+    }));
+  }, []);
+
+  const updateMessage = useCallback(
+    (messageId: string, patch: Partial<TranscriptMessage>) => {
+      setChatStore((prev) => ({
+        ...prev,
+        threads: prev.threads.map((t) =>
+          t.id !== prev.currentId
+            ? t
+            : {
+                ...t,
+                messages: t.messages.map((m) =>
+                  m.id === messageId ? { ...m, ...patch } : m,
+                ),
+              },
+        ),
+      }));
+    },
+    [],
+  );
+
+  const clearCurrentThread = useCallback(() => {
+    setChatStore((prev) => ({
+      ...prev,
+      threads: prev.threads.map((t) =>
+        t.id === prev.currentId
+          ? { ...t, messages: [], updatedAt: Date.now(), title: null }
+          : t,
+      ),
+    }));
+  }, []);
 
   function exportTranscript() {
-    if (transcript.length === 0) return;
+    if (!currentThread || currentThread.messages.length === 0) return;
     const stamp = new Date().toISOString().slice(0, 10);
-    const lines: string[] = [`# ${data?.avatar.name ?? 'Brain'} との会話`, ''];
+    const brainName = data?.avatar.name ?? 'Brain';
+    const title = threadTitle(currentThread);
+    const lines: string[] = [`# ${brainName} との会話`, ''];
+    lines.push(`_スレッド: ${title}_`);
     lines.push(`_書き出し日時: ${new Date().toLocaleString('ja-JP')}_`, '');
     let lastDate = '';
-    for (const m of transcript) {
+    for (const m of currentThread.messages) {
       const d = new Date(m.at);
       const day = d.toLocaleDateString('ja-JP');
       if (day !== lastDate) {
         lines.push('', `## ${day}`, '');
         lastDate = day;
       }
-      const who = m.role === 'user' ? 'あなた' : data?.avatar.name ?? 'Brain';
+      const who = m.role === 'user' ? 'あなた' : brainName;
       const time = d.toLocaleTimeString('ja-JP');
-      lines.push(`**${who}** _(${time})_  `);
+      const flags: string[] = [];
+      if (m.pinned) flags.push('📌');
+      if (m.rating === 'up') flags.push('👍');
+      if (m.rating === 'down') flags.push('👎');
+      const flagStr = flags.length > 0 ? ` ${flags.join(' ')}` : '';
+      lines.push(`**${who}** _(${time})_${flagStr}  `);
       lines.push(m.text, '');
+      if (m.note) {
+        lines.push(`> 📝 メモ: ${m.note}`, '');
+      }
+      if (m.sources && m.sources.length > 0) {
+        lines.push('<details><summary>参照した素材</summary>', '');
+        for (const s of m.sources) {
+          lines.push(`- **${s.query}**`);
+          for (const c of s.chunks) {
+            lines.push(`  - ${c.replace(/\n+/g, ' ').slice(0, 200)}`);
+          }
+        }
+        lines.push('', '</details>', '');
+      }
     }
     const blob = new Blob([lines.join('\n')], {
       type: 'text/markdown;charset=utf-8',
@@ -157,7 +354,7 @@ export default function AvatarDetail({ id }: { id: string }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${data?.avatar.name ?? 'brain'}-${stamp}.md`;
+    a.download = `${brainName}-${title}-${stamp}.md`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -313,6 +510,7 @@ export default function AvatarDetail({ id }: { id: string }) {
     description?: string | null;
     voice?: string | null;
     language?: string | null;
+    persona_prompt?: string | null;
   }) {
     setSavingMeta(true);
     setError(null);
@@ -520,6 +718,13 @@ export default function AvatarDetail({ id }: { id: string }) {
               }}
               disabled={savingMeta}
             />
+            <PersonaPromptButton
+              current={avatar.persona_prompt}
+              onSave={async (next) => {
+                await saveMeta({ persona_prompt: next });
+              }}
+              disabled={savingMeta}
+            />
           </div>
         </div>
         <input
@@ -565,12 +770,19 @@ export default function AvatarDetail({ id }: { id: string }) {
 
           <TranscriptPanel
             avatarName={avatar.name}
+            threads={chatStore.threads}
+            currentThreadId={chatStore.currentId}
             messages={transcript}
             partialUser={partialUser}
             partialAgent={partialAgent}
             open={transcriptOpen}
             onToggle={() => setTranscriptOpen((v) => !v)}
-            onClear={clearTranscript}
+            onNewThread={newThread}
+            onSwitchThread={switchThread}
+            onRenameThread={renameThread}
+            onDeleteThread={deleteThread}
+            onClearCurrent={clearCurrentThread}
+            onUpdateMessage={updateMessage}
             onExport={exportTranscript}
           />
         </div>
@@ -1040,42 +1252,58 @@ function MaterialMenu({
 
 function TranscriptPanel({
   avatarName,
+  threads,
+  currentThreadId,
   messages,
   partialUser,
   partialAgent,
   open,
   onToggle,
-  onClear,
+  onNewThread,
+  onSwitchThread,
+  onRenameThread,
+  onDeleteThread,
+  onClearCurrent,
+  onUpdateMessage,
   onExport,
 }: {
   avatarName: string;
+  threads: ChatThread[];
+  currentThreadId: string | null;
   messages: TranscriptMessage[];
   partialUser?: string | null;
   partialAgent?: string | null;
   open: boolean;
   onToggle: () => void;
-  onClear: () => void;
+  onNewThread: () => void;
+  onSwitchThread: (id: string) => void;
+  onRenameThread: (id: string, title: string) => void;
+  onDeleteThread: (id: string) => void;
+  onClearCurrent: () => void;
+  onUpdateMessage: (id: string, patch: Partial<TranscriptMessage>) => void;
   onExport?: () => void;
 }) {
-  const [confirmingClear, setConfirmingClear] = useState(false);
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [showPinnedOnly, setShowPinnedOnly] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const threadButtonRef = useRef<HTMLButtonElement>(null);
+  const [threadMenuOpen, setThreadMenuOpen] = useState(false);
 
-  // Filter the persisted log on the search term; partials stay visible.
   const filteredMessages = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return messages;
-    return messages.filter((m) => m.text.toLowerCase().includes(q));
-  }, [messages, search]);
+    let base = messages;
+    if (showPinnedOnly) base = base.filter((m) => m.pinned);
+    if (!q) return base;
+    return base.filter((m) => m.text.toLowerCase().includes(q));
+  }, [messages, search, showPinnedOnly]);
 
   useEffect(() => {
     const el = scrollerRef.current;
-    if (el && !search) el.scrollTop = el.scrollHeight;
-  }, [messages, partialUser, partialAgent, search]);
+    if (el && !search && !showPinnedOnly) el.scrollTop = el.scrollHeight;
+  }, [messages, partialUser, partialAgent, search, showPinnedOnly]);
 
-  // Focus the search input as soon as it opens; "/" hotkey opens it too.
   useEffect(() => {
     if (searchOpen) {
       searchInputRef.current?.focus();
@@ -1104,45 +1332,113 @@ function TranscriptPanel({
   const totalLive = (partialUser ? 1 : 0) + (partialAgent ? 1 : 0);
   const turns = Math.ceil(messages.length / 2);
   const hiddenByFilter =
-    search.trim() && messages.length > filteredMessages.length
+    (search.trim() || showPinnedOnly) &&
+    messages.length > filteredMessages.length
       ? messages.length - filteredMessages.length
       : 0;
+  const pinnedCount = messages.filter((m) => m.pinned).length;
+
+  const currentThread = threads.find((t) => t.id === currentThreadId) ?? null;
+  const currentLabel = currentThread
+    ? threadTitle(currentThread)
+    : '新しい会話';
 
   return (
     <section>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={onToggle}
-          className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900"
-        >
-          <svg
-            width="10"
-            height="10"
-            viewBox="0 0 10 10"
-            className={`transition ${open ? 'rotate-90' : ''}`}
-            aria-hidden
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onToggle}
+            className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900"
           >
-            <path
-              d="M3 2l4 3-4 3"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          会話の文字起こし
-          <span className="rounded-full bg-neutral-100 px-1.5 text-[10px] font-medium text-neutral-500">
-            {messages.length + totalLive}件
-          </span>
-          {turns > 0 && (
-            <span className="text-[10px] text-neutral-400">
-              ・ {turns}往復
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 10 10"
+              className={`transition ${open ? 'rotate-90' : ''}`}
+              aria-hidden
+            >
+              <path
+                d="M3 2l4 3-4 3"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            会話
+            <span className="rounded-full bg-neutral-100 px-1.5 text-[10px] font-medium text-neutral-500">
+              {messages.length + totalLive}件
             </span>
-          )}
-        </button>
+            {turns > 0 && (
+              <span className="text-[10px] text-neutral-400">
+                ・ {turns}往復
+              </span>
+            )}
+          </button>
+          <button
+            ref={threadButtonRef}
+            type="button"
+            onClick={() => setThreadMenuOpen((o) => !o)}
+            className="inline-flex max-w-[14rem] items-center gap-1 truncate rounded-full border border-neutral-300 bg-white px-2 py-0.5 text-[11px] text-neutral-700 transition hover:border-neutral-900"
+            title="スレッドを切り替え"
+          >
+            <span className="truncate">📂 {currentLabel}</span>
+            {threads.length > 1 && (
+              <span className="rounded bg-neutral-100 px-1 text-[10px] text-neutral-500">
+                {threads.length}
+              </span>
+            )}
+            <svg width="8" height="8" viewBox="0 0 10 10" aria-hidden>
+              <path
+                d="M2 4l3 3 3-3"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+          <PortalMenu
+            anchorRef={threadButtonRef}
+            open={threadMenuOpen}
+            onClose={() => setThreadMenuOpen(false)}
+            width={288}
+          >
+            <ThreadList
+              threads={threads}
+              currentThreadId={currentThreadId}
+              onSwitch={(id) => {
+                onSwitchThread(id);
+                setThreadMenuOpen(false);
+              }}
+              onRename={onRenameThread}
+              onDelete={onDeleteThread}
+              onNew={() => {
+                onNewThread();
+                setThreadMenuOpen(false);
+              }}
+            />
+          </PortalMenu>
+        </div>
         <div className="flex items-center gap-3 text-[11px]">
+          {pinnedCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowPinnedOnly((v) => !v)}
+              className={`inline-flex items-center gap-1 transition ${
+                showPinnedOnly
+                  ? 'text-amber-600'
+                  : 'text-neutral-500 hover:text-neutral-900'
+              }`}
+              title="ピン留めだけ表示"
+            >
+              📌 {pinnedCount}
+            </button>
+          )}
           {messages.length > 0 && (
             <button
               type="button"
@@ -1197,45 +1493,16 @@ function TranscriptPanel({
               書き出し
             </button>
           )}
-          {messages.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setConfirmingClear(true)}
-              className="text-neutral-400 transition hover:text-neutral-700"
-              title="会話を消去して新しく始める"
-            >
-              新しい会話
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={onNewThread}
+            className="text-neutral-500 transition hover:text-neutral-900"
+            title="新しいスレッドを始める"
+          >
+            ＋新規
+          </button>
         </div>
       </div>
-
-      {confirmingClear && (
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 anim-fade-in">
-          <span>
-            現在の会話({messages.length}件)を消去して新しい会話を始めますか?
-          </span>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setConfirmingClear(false)}
-              className="rounded-full bg-white px-3 py-1 text-[11px] text-neutral-700"
-            >
-              キャンセル
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onClear();
-                setConfirmingClear(false);
-              }}
-              className="rounded-full bg-amber-600 px-3 py-1 text-[11px] font-medium text-white hover:bg-amber-500"
-            >
-              消去して新規開始
-            </button>
-          </div>
-        </div>
-      )}
 
       {searchOpen && open && (
         <div className="mt-2 flex items-center gap-2 rounded-full border border-neutral-300 bg-white px-3 py-1.5 anim-fade-in">
@@ -1300,38 +1567,31 @@ function TranscriptPanel({
           className="mt-3 max-h-[28rem] overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-3 anim-fade-in"
         >
           {messages.length === 0 && !partialUser && !partialAgent ? (
-            <p className="py-4 text-center text-xs text-neutral-400">
-              セッションを開始して話しかけると、ここに会話が記録されます。
-            </p>
+            <div className="space-y-3 py-6 text-center">
+              <p className="text-xs text-neutral-400">
+                セッションを開始して話しかけると、ここに会話が記録されます。
+              </p>
+              {threads.length > 1 && (
+                <p className="text-[10px] text-neutral-400">
+                  過去のスレッドは📂から呼び出せます。
+                </p>
+              )}
+            </div>
           ) : (
             <ul className="space-y-2.5">
               {hiddenByFilter > 0 && (
                 <li className="rounded-md bg-neutral-50 px-3 py-1.5 text-center text-[10px] text-neutral-500">
-                  検索でヒットしなかったメッセージ {hiddenByFilter} 件を非表示中
+                  非表示中: {hiddenByFilter} 件
                 </li>
               )}
-              {filteredMessages.map((m, i) => (
-                <li
-                  key={`${m.at}-${i}`}
-                  className={`flex ${
-                    m.role === 'user' ? 'justify-end' : 'justify-start'
-                  }`}
-                >
-                  <div
-                    className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
-                      m.role === 'user'
-                        ? 'rounded-br-md bg-neutral-900 text-white'
-                        : 'rounded-bl-md bg-neutral-100 text-neutral-900'
-                    }`}
-                  >
-                    <p className="text-[10px] uppercase tracking-wider opacity-60">
-                      {m.role === 'user' ? 'あなた' : avatarName}
-                    </p>
-                    <p className="mt-0.5 whitespace-pre-wrap leading-relaxed">
-                      <Highlight text={m.text} term={search} />
-                    </p>
-                  </div>
-                </li>
+              {filteredMessages.map((m) => (
+                <MessageRow
+                  key={m.id}
+                  m={m}
+                  avatarName={avatarName}
+                  search={search}
+                  onUpdate={(patch) => onUpdateMessage(m.id, patch)}
+                />
               ))}
               {partialUser && (
                 <li className="flex justify-end">
@@ -1361,9 +1621,365 @@ function TranscriptPanel({
               )}
             </ul>
           )}
+          {messages.length > 0 && (
+            <div className="mt-3 border-t border-neutral-100 pt-2 text-right">
+              <button
+                type="button"
+                onClick={onClearCurrent}
+                className="text-[10px] text-neutral-400 hover:text-red-600"
+                title="このスレッドの内容を空にする"
+              >
+                このスレッドを空にする
+              </button>
+            </div>
+          )}
         </div>
       )}
     </section>
+  );
+}
+
+function ThreadList({
+  threads,
+  currentThreadId,
+  onSwitch,
+  onRename,
+  onDelete,
+  onNew,
+}: {
+  threads: ChatThread[];
+  currentThreadId: string | null;
+  onSwitch: (id: string) => void;
+  onRename: (id: string, title: string) => void;
+  onDelete: (id: string) => void;
+  onNew: () => void;
+}) {
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const sorted = useMemo(
+    () => [...threads].sort((a, b) => b.updatedAt - a.updatedAt),
+    [threads],
+  );
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onNew}
+        className="block w-full border-b border-neutral-100 px-3 py-2 text-left text-xs font-medium text-neutral-900 hover:bg-neutral-50"
+      >
+        ＋ 新しい会話を始める
+      </button>
+      {sorted.length === 0 && (
+        <p className="px-3 py-3 text-[11px] text-neutral-400">
+          スレッドはまだありません。
+        </p>
+      )}
+      {sorted.map((t) => {
+        const isCurrent = t.id === currentThreadId;
+        const isRenaming = renamingId === t.id;
+        const isConfirming = confirmDeleteId === t.id;
+        return (
+          <div
+            key={t.id}
+            className={`group border-b border-neutral-100 px-3 py-2 text-xs last:border-b-0 ${
+              isCurrent ? 'bg-neutral-50' : 'hover:bg-neutral-50'
+            }`}
+          >
+            {isRenaming ? (
+              <input
+                autoFocus
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={() => {
+                  onRename(t.id, draft);
+                  setRenamingId(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    onRename(t.id, draft);
+                    setRenamingId(null);
+                  } else if (e.key === 'Escape') {
+                    setRenamingId(null);
+                  }
+                }}
+                className="w-full rounded border border-neutral-300 px-2 py-1 text-xs focus:border-neutral-900 focus:outline-none"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => onSwitch(t.id)}
+                className="block w-full text-left"
+              >
+                <span
+                  className={`block truncate ${
+                    isCurrent ? 'font-medium text-neutral-900' : 'text-neutral-700'
+                  }`}
+                >
+                  {threadTitle(t)}
+                </span>
+                <span className="block text-[10px] text-neutral-400">
+                  {t.messages.length}件 ・{' '}
+                  {new Date(t.updatedAt).toLocaleString('ja-JP', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+              </button>
+            )}
+            {!isRenaming && (
+              <div className="mt-1 flex items-center gap-2 text-[10px] text-neutral-400 opacity-0 transition group-hover:opacity-100">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDraft(t.title ?? threadTitle(t));
+                    setRenamingId(t.id);
+                  }}
+                  className="hover:text-neutral-900"
+                >
+                  名前を変更
+                </button>
+                <span>·</span>
+                {isConfirming ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="hover:text-neutral-900"
+                    >
+                      取消
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onDelete(t.id);
+                        setConfirmDeleteId(null);
+                      }}
+                      className="font-medium text-red-600"
+                    >
+                      削除を実行
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setConfirmDeleteId(t.id);
+                    }}
+                    className="hover:text-red-600"
+                  >
+                    削除
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MessageRow({
+  m,
+  avatarName,
+  search,
+  onUpdate,
+}: {
+  m: TranscriptMessage;
+  avatarName: string;
+  search: string;
+  onUpdate: (patch: Partial<TranscriptMessage>) => void;
+}) {
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteDraft, setNoteDraft] = useState(m.note ?? '');
+  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const isUser = m.role === 'user';
+  const hasSources = !!m.sources && m.sources.length > 0;
+
+  return (
+    <li className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+      <div
+        className={`group max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
+          isUser
+            ? 'rounded-br-md bg-neutral-900 text-white'
+            : 'rounded-bl-md bg-neutral-100 text-neutral-900'
+        }`}
+      >
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="text-[10px] uppercase tracking-wider opacity-60">
+            {isUser ? 'あなた' : avatarName}
+          </p>
+          <span className="text-[10px] opacity-50">
+            {new Date(m.at).toLocaleTimeString('ja-JP', {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </span>
+        </div>
+        <p className="mt-0.5 whitespace-pre-wrap leading-relaxed">
+          <Highlight text={m.text} term={search} />
+        </p>
+        {m.note && (
+          <div
+            className={`mt-1.5 rounded-md px-2 py-1 text-[11px] ${
+              isUser
+                ? 'bg-white/10 text-white/80'
+                : 'bg-amber-50 text-amber-900'
+            }`}
+          >
+            📝 {m.note}
+          </div>
+        )}
+        {hasSources && sourcesOpen && (
+          <div className="mt-2 space-y-1.5 rounded-md bg-white/5 p-2 text-[11px] leading-relaxed">
+            {m.sources!.map((s, si) => (
+              <div key={si}>
+                <p className={isUser ? 'text-white/80' : 'text-neutral-500'}>
+                  🔍 {s.query}
+                </p>
+                <ul className="ml-3 list-disc space-y-0.5">
+                  {s.chunks.slice(0, 4).map((c, ci) => (
+                    <li
+                      key={ci}
+                      className={
+                        isUser ? 'text-white/70' : 'text-neutral-700'
+                      }
+                    >
+                      {c.length > 180 ? c.slice(0, 180) + '…' : c}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+        {noteOpen && (
+          <div className="mt-2 space-y-1">
+            <textarea
+              value={noteDraft}
+              onChange={(e) => setNoteDraft(e.target.value)}
+              placeholder="このメッセージへのメモ"
+              className={`w-full rounded-md border px-2 py-1 text-[11px] focus:outline-none ${
+                isUser
+                  ? 'border-white/20 bg-white/10 text-white placeholder:text-white/40'
+                  : 'border-neutral-300 bg-white text-neutral-900 placeholder:text-neutral-400'
+              }`}
+              rows={2}
+            />
+            <div className="flex justify-end gap-1.5 text-[10px]">
+              <button
+                type="button"
+                onClick={() => {
+                  setNoteDraft(m.note ?? '');
+                  setNoteOpen(false);
+                }}
+                className="opacity-60 hover:opacity-100"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onUpdate({ note: noteDraft.trim() || undefined });
+                  setNoteOpen(false);
+                }}
+                className="font-medium"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        )}
+        <div
+          className={`mt-1.5 flex items-center gap-2 text-[11px] opacity-0 transition group-hover:opacity-100 ${
+            m.pinned || m.rating || m.note ? 'opacity-100' : ''
+          }`}
+        >
+          <button
+            type="button"
+            onClick={() => onUpdate({ pinned: !m.pinned })}
+            className={`transition ${
+              m.pinned
+                ? 'text-amber-400'
+                : isUser
+                  ? 'text-white/50 hover:text-white'
+                  : 'text-neutral-400 hover:text-neutral-900'
+            }`}
+            title={m.pinned ? 'ピンを外す' : 'ピン留め'}
+          >
+            📌
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setNoteDraft(m.note ?? '');
+              setNoteOpen((v) => !v);
+            }}
+            className={`transition ${
+              m.note
+                ? isUser
+                  ? 'text-white'
+                  : 'text-amber-700'
+                : isUser
+                  ? 'text-white/50 hover:text-white'
+                  : 'text-neutral-400 hover:text-neutral-900'
+            }`}
+            title="メモを追加"
+          >
+            📝
+          </button>
+          {!isUser && (
+            <>
+              <button
+                type="button"
+                onClick={() =>
+                  onUpdate({ rating: m.rating === 'up' ? null : 'up' })
+                }
+                className={`transition ${
+                  m.rating === 'up'
+                    ? 'text-green-600'
+                    : 'text-neutral-400 hover:text-green-600'
+                }`}
+                title="良い回答"
+              >
+                👍
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onUpdate({ rating: m.rating === 'down' ? null : 'down' })
+                }
+                className={`transition ${
+                  m.rating === 'down'
+                    ? 'text-red-600'
+                    : 'text-neutral-400 hover:text-red-600'
+                }`}
+                title="改善が必要"
+              >
+                👎
+              </button>
+              {hasSources && (
+                <button
+                  type="button"
+                  onClick={() => setSourcesOpen((v) => !v)}
+                  className="text-neutral-400 transition hover:text-neutral-900"
+                  title="参照した素材を表示"
+                >
+                  🔍 {m.sources!.reduce((sum, s) => sum + s.chunks.length, 0)}
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </li>
   );
 }
 
@@ -1463,6 +2079,104 @@ function PencilGlyph() {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+function PersonaPromptButton({
+  current,
+  onSave,
+  disabled,
+}: {
+  current: string | null;
+  onSave: (next: string | null) => void | Promise<void>;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(current ?? '');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) setDraft(current ?? '');
+  }, [open, current]);
+
+  async function commit() {
+    setSaving(true);
+    try {
+      const next = draft.trim();
+      await onSave(next || null);
+      setOpen(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition disabled:opacity-40 ${
+          current
+            ? 'border-amber-300 bg-amber-50 text-amber-800 hover:border-amber-600'
+            : 'border-neutral-300 bg-white text-neutral-600 hover:border-neutral-900 hover:text-neutral-900'
+        }`}
+        title={current ?? '振る舞いの指示(ロール/制約)を設定'}
+      >
+        🎭 ペルソナ{current ? '(設定済み)' : ''}
+      </button>
+      {open && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4 anim-fade-in"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setOpen(false);
+          }}
+        >
+          <div className="w-full max-w-xl rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="text-sm font-semibold text-neutral-900">
+              🎭 ペルソナ設定
+            </h3>
+            <p className="mt-1 text-[11px] leading-relaxed text-neutral-500">
+              ブレインがどう振る舞うかをここで指示できます。
+              口調・専門領域・避けてほしい話題などを書いておくと、
+              次のセッションから反映されます。説明欄
+              (description) には影響しません。
+            </p>
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder={
+                '例: 一人称は「俺」。新人社員に話しかけるような口調で、専門用語には必ず短い注釈を添えること。社外秘の話題は答えず「上長に確認してください」と返す。'
+              }
+              rows={10}
+              className="mt-3 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+            />
+            <div className="mt-3 flex items-center justify-between">
+              <p className="text-[10px] text-neutral-400">
+                空にすると元のデフォルトに戻ります。
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="rounded-full bg-neutral-100 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-200"
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void commit()}
+                  disabled={saving}
+                  className="rounded-full bg-neutral-900 px-3 py-1 text-xs font-medium text-white transition hover:bg-neutral-700 disabled:opacity-50"
+                >
+                  {saving ? '保存中…' : '保存'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

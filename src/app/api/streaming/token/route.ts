@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   const db = supabaseAdmin();
   const { data: avatar } = await db
     .from('avatars')
-    .select('id, name, description, voice, language')
+    .select('id, name, description, voice, language, persona_prompt')
     .eq('id', avatarId)
     .single();
   if (!avatar) {
@@ -54,8 +54,14 @@ export async function POST(req: NextRequest) {
     .map((c, i) => `${i + 1}. ${c.content}`)
     .join('\n\n');
 
+  const personaOverride =
+    typeof avatar.persona_prompt === 'string'
+      ? avatar.persona_prompt.trim()
+      : '';
+
   const systemInstruction = `あなたは「${avatar.name}」という人物として、ユーザーと自然な対話を行ってください。
 ${avatar.description ? `\nプロフィール: ${avatar.description}\n` : ''}
+${personaOverride ? `\n# 振る舞いの指示(運用者から)\n${personaOverride}\n` : ''}
 以下は、その人が過去に話した発言の抜粋です。
 これは「口調・価値観・考え方・性格の癖」を読み取るための参考資料であり、知識の上限ではありません。
 

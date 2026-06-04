@@ -73,6 +73,7 @@ export async function PATCH(
     description?: string | null;
     voice?: string | null;
     language?: string | null;
+    persona_prompt?: string | null;
   };
   const updates: Record<string, unknown> = {};
   if (typeof body.name === 'string') {
@@ -99,6 +100,12 @@ export async function PATCH(
     updates.language =
       typeof body.language === 'string'
         ? body.language.trim() || null
+        : null;
+  }
+  if (body.persona_prompt !== undefined) {
+    updates.persona_prompt =
+      typeof body.persona_prompt === 'string'
+        ? body.persona_prompt.trim() || null
         : null;
   }
   if (Object.keys(updates).length === 0) {

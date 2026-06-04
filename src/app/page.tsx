@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type Avatar = {
   id: string;
@@ -18,6 +18,17 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState('');
+
+  const filteredAvatars = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return avatars;
+    return avatars.filter((a) => {
+      if (a.name.toLowerCase().includes(q)) return true;
+      if (a.description && a.description.toLowerCase().includes(q)) return true;
+      return false;
+    });
+  }, [avatars, search]);
 
   const load = useCallback(async () => {
     try {
@@ -97,17 +108,72 @@ export default function HomePage() {
       )}
 
       {!loading && avatars.length > 0 && (
-        <div className="grid grid-cols-1 gap-4 anim-stagger sm:grid-cols-2 lg:grid-cols-3">
-          {avatars.map((a) => (
-            <BrainCard
-              key={a.id}
-              avatar={a}
-              busy={busyId === a.id}
-              removing={removingIds.has(a.id)}
-              onTrash={() => moveToTrash(a.id)}
+        <>
+          <div className="flex items-center gap-2 rounded-full border border-neutral-300 bg-white px-3 py-1.5">
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 16 16"
+              aria-hidden
+              className="text-neutral-400"
+            >
+              <circle
+                cx="7"
+                cy="7"
+                r="4.5"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                fill="none"
+              />
+              <path
+                d="M10.5 10.5L14 14"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                fill="none"
+                strokeLinecap="round"
+              />
+            </svg>
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="名前や説明で絞り込み…"
+              className="flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-400"
             />
-          ))}
-        </div>
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="text-[11px] text-neutral-400 hover:text-neutral-900"
+              >
+                ×
+              </button>
+            )}
+            <span className="text-[11px] text-neutral-400">
+              {search
+                ? `${filteredAvatars.length} / ${avatars.length}`
+                : `${avatars.length} 件`}
+            </span>
+          </div>
+
+          {filteredAvatars.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 p-12 text-center text-sm text-neutral-500 anim-fade-in">
+              「{search}」に一致するブレインがありません。
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 anim-stagger sm:grid-cols-2 lg:grid-cols-3">
+              {filteredAvatars.map((a) => (
+                <BrainCard
+                  key={a.id}
+                  avatar={a}
+                  busy={busyId === a.id}
+                  removing={removingIds.has(a.id)}
+                  onTrash={() => moveToTrash(a.id)}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

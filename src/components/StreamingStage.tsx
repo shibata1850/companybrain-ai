@@ -43,11 +43,30 @@ const OUTPUT_SAMPLE_RATE = 24000;
  * /api/avatars/[id]/knowledge so Gemini can ground its answers in the
  * persona's training material.
  */
+export type TranscriptSource = {
+  query: string;
+  chunks: string[];
+};
+
 export type TranscriptMessage = {
+  id: string;
   role: 'user' | 'agent';
   text: string;
   at: number;
+  pinned?: boolean;
+  note?: string;
+  rating?: 'up' | 'down' | null;
+  /** Knowledge-base lookups Gemini performed while producing this
+   * agent turn. Empty / undefined for user messages. */
+  sources?: TranscriptSource[];
 };
+
+function newMessageId() {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+  return `m_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
 
 export default function StreamingStage({
   avatarId,
@@ -118,6 +137,9 @@ export default function StreamingStage({
   // boundaries / interrupts.
   const userBufRef = useRef('');
   const agentBufRef = useRef('');
+  // Knowledge-base lookups Gemini ran during the in-progress turn —
+  // attached to the next agent message when the turn flushes.
+  const turnSourcesRef = useRef<TranscriptSource[]>([]);
   const onMessageRef = useRef(onMessage);
   useEffect(() => {
     onMessageRef.current = onMessage;
@@ -287,6 +309,7 @@ export default function StreamingStage({
     const u = cleanTranscript(userBufRef.current);
     if (u) {
       onMessageRef.current?.({
+        id: newMessageId(),
         role: 'user',
         text: u,
         at: Date.now(),
@@ -294,14 +317,18 @@ export default function StreamingStage({
     }
     const a = cleanTranscript(agentBufRef.current);
     if (a) {
+      const sources = turnSourcesRef.current;
       onMessageRef.current?.({
+        id: newMessageId(),
         role: 'agent',
         text: a,
         at: Date.now(),
+        sources: sources.length > 0 ? sources : undefined,
       });
     }
     userBufRef.current = '';
     agentBufRef.current = '';
+    turnSourcesRef.current = [];
     onPartialRef.current?.('user', null);
     onPartialRef.current?.('agent', null);
   }
@@ -412,10 +439,14 @@ export default function StreamingStage({
             results?: string[];
             error?: string;
           };
+          const results = json.results || [];
+          if (results.length > 0) {
+            turnSourcesRef.current.push({ query, chunks: results });
+          }
           responses.push({
             id: call.id,
             name: call.name,
-            response: { results: json.results || [], error: json.error },
+            response: { results, error: json.error },
           });
         } catch (e) {
           responses.push({
@@ -704,6 +735,7 @@ export default function StreamingStage({
       return;
     }
     onMessageRef.current?.({
+      id: newMessageId(),
       role: 'user',
       text: trimmed,
       at: Date.now(),
