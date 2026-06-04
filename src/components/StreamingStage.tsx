@@ -14,8 +14,14 @@ type Status =
   | 'connected'
   | 'listening'
   | 'speaking'
+  | 'reconnecting'
   | 'ended'
   | 'error';
+
+// Transient close codes worth auto-retrying. 1011 is Gemini's
+// "Internal error encountered" — common on long preview-model sessions.
+const RETRYABLE_CLOSE_CODES = new Set([1006, 1011, 1012, 1013, 1014]);
+const MAX_AUTO_RECONNECTS = 3;
 
 const INPUT_SAMPLE_RATE = 16000;
 const OUTPUT_SAMPLE_RATE = 24000;
@@ -49,6 +55,9 @@ export default function StreamingStage({
 
   const sessionRef = useRef<Session | null>(null);
   const sessionOpenRef = useRef(false);
+  const manualStopRef = useRef(false);
+  const reconnectAttemptsRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputCtxRef = useRef<AudioContext | null>(null);
   const outputCtxRef = useRef<AudioContext | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
@@ -64,7 +73,12 @@ export default function StreamingStage({
   }, [muted]);
 
   const stop = useCallback(async () => {
+    manualStopRef.current = true;
     sessionOpenRef.current = false;
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
     try {
       processorRef.current?.disconnect();
     } catch {
@@ -250,7 +264,15 @@ export default function StreamingStage({
 
   async function start() {
     setError(null);
-    setStatus('connecting');
+    // Manual start (user clicked the button) — clear the reconnect
+    // counter so a future hiccup gets its own fresh budget. The
+    // reconnect path calls start() directly without resetting these.
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    manualStopRef.current = false;
+    setStatus((s) => (s === 'reconnecting' ? s : 'connecting'));
     try {
       const tokenRes = await fetch('/api/streaming/token', {
         method: 'POST',
@@ -285,6 +307,7 @@ export default function StreamingStage({
           onopen: () => {
             console.log('[live] session open');
             sessionOpenRef.current = true;
+            reconnectAttemptsRef.current = 0;
             setStatus('listening');
           },
           onmessage: handleMessage,
@@ -300,27 +323,43 @@ export default function StreamingStage({
           },
           onclose: (e: CloseEvent | Event) => {
             sessionOpenRef.current = false;
-            // Surface the WebSocket close code / reason so we can tell
-            // whether it was a quota issue, an unsupported model, a
-            // permission denial, or a clean shutdown.
             const ce = e as CloseEvent;
             const reason = ce?.reason || '';
             const code = ce?.code;
             console.warn('[live] session closed', { code, reason });
-            setStatus((s) => {
-              if (s === 'error') return s;
-              // Anything other than a clean shutdown surfaces as an error
-              // so the user sees a hint instead of a silent end state.
-              if (code !== undefined && code !== 1000 && code !== 1005) {
-                setError(
-                  `セッションが切断されました${
-                    reason ? `: ${reason}` : ''
-                  }${code ? ` (code ${code})` : ''}`,
-                );
-                return 'error';
-              }
-              return 'ended';
-            });
+
+            // Clean shutdown / user clicked end / dev unmount.
+            if (
+              manualStopRef.current ||
+              code === undefined ||
+              code === 1000 ||
+              code === 1005
+            ) {
+              setStatus((s) => (s === 'error' ? s : 'ended'));
+              return;
+            }
+
+            // Transient server hiccup — auto-reconnect.
+            if (
+              RETRYABLE_CLOSE_CODES.has(code) &&
+              reconnectAttemptsRef.current < MAX_AUTO_RECONNECTS
+            ) {
+              reconnectAttemptsRef.current += 1;
+              setStatus('reconnecting');
+              const delayMs = 800 * reconnectAttemptsRef.current;
+              reconnectTimerRef.current = setTimeout(() => {
+                void start();
+              }, delayMs);
+              return;
+            }
+
+            // Out of retries, or non-recoverable error.
+            setError(
+              `セッションが切断されました${
+                reason ? `: ${reason}` : ''
+              }${code ? ` (code ${code})` : ''}`,
+            );
+            setStatus('error');
           },
         },
       });
@@ -500,6 +539,13 @@ export default function StreamingStage({
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-neutral-900/70 text-white">
             <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-white" />
             <p className="text-sm">接続中…</p>
+          </div>
+        )}
+
+        {status === 'reconnecting' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-neutral-900/80 text-white">
+            <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-amber-300" />
+            <p className="text-sm">回線が一瞬切れました…再接続しています</p>
           </div>
         )}
 
