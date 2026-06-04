@@ -101,11 +101,11 @@ export async function transcribeVideo(
  *
  * Models change name and availability often, so we try the configured
  * model first and then fall back through a list of known-working ones.
+ * The deprecated `embedding-001` was removed — it 404s on v1beta now.
  */
 const EMBEDDING_FALLBACKS = [
   'gemini-embedding-001',
   'text-embedding-004',
-  'embedding-001',
 ];
 
 export async function embedTexts(texts: string[]): Promise<number[][]> {
@@ -116,7 +116,7 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
     ...EMBEDDING_FALLBACKS.filter((m) => m !== preferred),
   ];
 
-  let lastError: unknown = null;
+  const attempts: Array<{ model: string; error: string }> = [];
   for (const modelName of candidates) {
     try {
       const vectors: number[][] = [];
@@ -128,20 +128,27 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
         });
         const values = response.embeddings?.[0]?.values;
         if (!values) throw new Error('no embedding values returned');
+        if (values.length !== 768) {
+          throw new Error(
+            `expected 768-dim vector, got ${values.length}-dim`,
+          );
+        }
         vectors.push(values);
       }
       return vectors;
     } catch (e) {
-      lastError = e;
-      console.warn(
-        `[gemini] embedding model "${modelName}" failed:`,
-        e instanceof Error ? e.message : String(e),
-      );
+      const message = e instanceof Error ? e.message : String(e);
+      attempts.push({ model: modelName, error: message });
+      console.warn(`[gemini] embedding model "${modelName}" failed:`, message);
     }
   }
-  throw lastError instanceof Error
-    ? lastError
-    : new Error('All embedding models failed');
+  const summary = attempts
+    .map((a) => `• ${a.model}: ${a.error}`)
+    .join('\n');
+  throw new Error(
+    `すべての埋め込みモデルが失敗しました。\n${summary}\n\n` +
+      `/api/debug/embedding-models で利用可能なモデルを確認してください。`,
+  );
 }
 
 export type AnswerLength = 'short' | 'standard' | 'detailed';
