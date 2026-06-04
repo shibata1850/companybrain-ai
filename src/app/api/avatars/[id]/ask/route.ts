@@ -42,11 +42,12 @@ export async function POST(
     return NextResponse.json({ error: 'avatar not found' }, { status: 404 });
   }
 
-  // Persist a draft row up-front so the client can show it even if the
-  // Gemini call fails.
+  // Conversation log row. status='spoken' means the answer has been (or
+  // is about to be) spoken live by the streaming avatar — no separate
+  // video render step in this flow.
   const { data: gen, error: genErr } = await db
     .from('generations')
-    .insert({ avatar_id: avatarId, question, status: 'draft' })
+    .insert({ avatar_id: avatarId, question, status: 'spoken' })
     .select('id')
     .single();
   if (genErr || !gen) {
@@ -79,7 +80,7 @@ export async function POST(
       .from('generations')
       .update({
         answer,
-        status: 'draft',
+        status: 'spoken',
         updated_at: new Date().toISOString(),
       })
       .eq('id', generationId);

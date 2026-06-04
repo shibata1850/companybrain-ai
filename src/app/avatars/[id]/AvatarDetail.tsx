@@ -2,17 +2,16 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import BrainSwitcher from '@/components/BrainSwitcher';
 import { MicButton } from '@/components/MicButton';
+import StreamingStage from '@/components/StreamingStage';
 
 type Avatar = {
   id: string;
   name: string;
   description: string | null;
   cover_url: string | null;
-  heygen_photo_id: string | null;
-  heygen_voice_id: string | null;
 };
 
 type TrainingVideo = {
@@ -29,25 +28,9 @@ type Generation = {
   id: string;
   question: string;
   answer: string | null;
-  status: string; // draft | rendering | ready | error
-  video_url: string | null;
-  thumbnail_url: string | null;
+  status: string;
   error_message: string | null;
   created_at: string;
-};
-
-type AnswerLength = 'short' | 'standard' | 'detailed';
-
-const LENGTH_LABEL: Record<AnswerLength, string> = {
-  short: '短く',
-  standard: '標準',
-  detailed: '詳しく',
-};
-
-const LENGTH_COST_HINT: Record<AnswerLength, string> = {
-  short: '15〜20秒・約 $0.25〜0.35',
-  standard: '25〜35秒・約 $0.45〜0.55',
-  detailed: '60〜90秒・約 $1.00〜1.50',
 };
 
 type DetailResponse = {
@@ -56,7 +39,14 @@ type DetailResponse = {
   generations: Generation[];
 };
 
+type AnswerLength = 'short' | 'standard' | 'detailed';
 type Tab = 'history' | 'training';
+
+const LENGTH_LABEL: Record<AnswerLength, string> = {
+  short: '短く',
+  standard: '標準',
+  detailed: '詳しく',
+};
 
 export default function AvatarDetail({ id }: { id: string }) {
   const router = useRouter();
@@ -64,15 +54,17 @@ export default function AvatarDetail({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
   const [question, setQuestion] = useState('');
   const [asking, setAsking] = useState(false);
+  const [askLength, setAskLength] = useState<AnswerLength>('standard');
+  const [tab, setTab] = useState<Tab>('history');
+  const [deleting, setDeleting] = useState(false);
   const [trainFile, setTrainFile] = useState<File | null>(null);
   const [training, setTraining] = useState(false);
   const [trainText, setTrainText] = useState('');
   const [trainTextTitle, setTrainTextTitle] = useState('');
   const [trainingText, setTrainingText] = useState(false);
-  const [askLength, setAskLength] = useState<AnswerLength>('standard');
-  const [tab, setTab] = useState<Tab>('history');
-  const [focusedId, setFocusedId] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [sessionActive, setSessionActive] = useState(false);
+
+  const speakRef = useRef<((text: string) => Promise<void>) | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/avatars/${id}`, { cache: 'no-store' });
@@ -90,69 +82,46 @@ export default function AvatarDetail({ id }: { id: string }) {
     );
   }, [load]);
 
-  // Polling — see commit history for why this uses a string key not the array.
-  const pendingKey = useMemo(() => {
-    if (!data) return '';
-    return data.generations
-      .filter((g) => g.status !== 'ready' && g.status !== 'error')
-      .map((g) => g.id)
-      .sort()
-      .join(',');
-  }, [data]);
+  function handleAvatarReady(speak: (text: string) => Promise<void>) {
+    speakRef.current = speak;
+    setSessionActive(true);
+  }
 
-  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-  useEffect(() => {
-    if (!pendingKey) return;
-    const pendingIds = pendingKey.split(',');
-    pollTimer.current = setInterval(async () => {
-      for (const gid of pendingIds) {
-        try {
-          await fetch(`/api/generations/${gid}`, { cache: 'no-store' });
-        } catch {
-          // ignore
-        }
-      }
-      await load();
-    }, 5000);
-    return () => {
-      if (pollTimer.current) clearInterval(pollTimer.current);
-    };
-  }, [pendingKey, load]);
-
-  async function refresh() {
-    if (!data) return;
-    for (const g of data.generations) {
-      if (g.status !== 'ready' && g.status !== 'error') {
-        try {
-          await fetch(`/api/generations/${g.id}`, { cache: 'no-store' });
-        } catch {
-          // ignore
-        }
-      }
+  function handleStatusChange(s: string) {
+    if (s === 'ended' || s === 'error' || s === 'idle') {
+      setSessionActive(false);
+      speakRef.current = null;
     }
-    await load();
   }
 
   async function ask(e: React.FormEvent) {
     e.preventDefault();
     if (!question.trim()) return;
+    if (!sessionActive) {
+      setError('まず動画上の「セッションを開始」を押してください。');
+      return;
+    }
     setAsking(true);
     setError(null);
+    const q = question;
+    setQuestion('');
     try {
       const res = await fetch(`/api/avatars/${id}/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question, length: askLength }),
+        body: JSON.stringify({ question: q, length: askLength }),
       });
       const json = (await res.json()) as {
-        id?: string;
+        answer?: string;
         error?: string;
       };
-      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-      setQuestion('');
-      // Make the new draft the focused item so the preview appears in
-      // the hero immediately.
-      if (json.id) setFocusedId(json.id);
+      if (!res.ok || !json.answer) {
+        throw new Error(json.error || `HTTP ${res.status}`);
+      }
+      // Pipe the persona's answer to the live avatar so it speaks.
+      if (speakRef.current) {
+        await speakRef.current(json.answer);
+      }
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -173,6 +142,29 @@ export default function AvatarDetail({ id }: { id: string }) {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setDeleting(false);
+    }
+  }
+
+  async function addTrainingVideo(e: React.FormEvent) {
+    e.preventDefault();
+    if (!trainFile) return;
+    const form = new FormData();
+    form.append('video', trainFile);
+    setTraining(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/avatars/${id}/train`, {
+        method: 'POST',
+        body: form,
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      setTrainFile(null);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setTraining(false);
     }
   }
 
@@ -202,29 +194,6 @@ export default function AvatarDetail({ id }: { id: string }) {
     }
   }
 
-  async function addTrainingVideo(e: React.FormEvent) {
-    e.preventDefault();
-    if (!trainFile) return;
-    const form = new FormData();
-    form.append('video', trainFile);
-    setTraining(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/avatars/${id}/train`, {
-        method: 'POST',
-        body: form,
-      });
-      const json = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-      setTrainFile(null);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setTraining(false);
-    }
-  }
-
   if (error && !data) {
     return (
       <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 anim-fade-in">
@@ -236,17 +205,6 @@ export default function AvatarDetail({ id }: { id: string }) {
     return <DetailSkeleton />;
   }
   const { avatar, training_videos, generations } = data;
-
-  // Decide which generation owns the hero player.
-  // Priority: explicit selection > active draft awaiting approval >
-  //           rendering > ready > anything.
-  const focused =
-    (focusedId && generations.find((g) => g.id === focusedId)) ||
-    generations.find((g) => g.status === 'draft') ||
-    generations.find((g) => g.status === 'rendering') ||
-    generations.find((g) => g.status === 'ready') ||
-    generations[0] ||
-    null;
 
   return (
     <div className="space-y-8">
@@ -296,19 +254,15 @@ export default function AvatarDetail({ id }: { id: string }) {
         </div>
       </header>
 
-      {/* Hero video */}
       <section>
-        <div key={focused?.id ?? 'empty'} className="anim-fade-in">
-          <HeroStage
-            generation={focused}
-            coverUrl={avatar.cover_url}
-            avatarName={avatar.name}
-            onChanged={load}
-          />
-        </div>
+        <StreamingStage
+          coverUrl={avatar.cover_url}
+          avatarName={avatar.name}
+          onAvatarReady={handleAvatarReady}
+          onStatusChange={handleStatusChange}
+        />
       </section>
 
-      {/* Subtle question input */}
       <section>
         <form
           onSubmit={ask}
@@ -317,19 +271,24 @@ export default function AvatarDetail({ id }: { id: string }) {
           <input
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            placeholder={`${avatar.name} に質問する…`}
-            className="flex-1 bg-transparent px-2 py-1 text-sm outline-none placeholder:text-neutral-400"
+            placeholder={
+              sessionActive
+                ? `${avatar.name} に話しかける…`
+                : 'まずセッションを開始してください'
+            }
+            disabled={!sessionActive || asking}
+            className="flex-1 bg-transparent px-2 py-1 text-sm outline-none placeholder:text-neutral-400 disabled:opacity-60"
           />
           <MicButton
-            disabled={asking}
+            disabled={!sessionActive || asking}
             onTranscript={(text) => setQuestion(text)}
           />
           <button
             type="submit"
-            disabled={asking || !question.trim()}
+            disabled={!sessionActive || asking || !question.trim()}
             className="rounded-full bg-neutral-900 px-4 py-1.5 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
           >
-            {asking ? '回答生成中…' : '回答を作る'}
+            {asking ? '応答準備中…' : '送信'}
           </button>
         </form>
         <div className="mx-auto mt-2 flex max-w-3xl items-center justify-center gap-2 text-[11px] text-neutral-500">
@@ -350,13 +309,7 @@ export default function AvatarDetail({ id }: { id: string }) {
               </button>
             ))}
           </div>
-          <span className="text-neutral-400">
-            ({LENGTH_COST_HINT[askLength]})
-          </span>
         </div>
-        <p className="mx-auto mt-1 max-w-3xl text-center text-[11px] text-neutral-400">
-          送信時はテキストのみ生成(無料)。内容を確認してから動画化できます。
-        </p>
         {error && (
           <p className="mx-auto mt-2 max-w-3xl text-center text-xs text-red-600">
             {error}
@@ -364,7 +317,6 @@ export default function AvatarDetail({ id }: { id: string }) {
         )}
       </section>
 
-      {/* Tabs */}
       <section>
         <div className="flex items-center justify-between border-b border-neutral-200">
           <div className="flex gap-6">
@@ -372,36 +324,19 @@ export default function AvatarDetail({ id }: { id: string }) {
               active={tab === 'history'}
               onClick={() => setTab('history')}
             >
-              回答履歴
-              <Pill>{generations.length}</Pill>
+              会話履歴 <Pill>{generations.length}</Pill>
             </TabButton>
             <TabButton
               active={tab === 'training'}
               onClick={() => setTab('training')}
             >
-              学習させる
-              <Pill>{training_videos.length}</Pill>
+              学習させる <Pill>{training_videos.length}</Pill>
             </TabButton>
           </div>
-          {tab === 'history' && pendingKey && (
-            <button
-              type="button"
-              onClick={refresh}
-              className="text-xs text-neutral-500 hover:text-neutral-900"
-            >
-              手動で更新
-            </button>
-          )}
         </div>
 
         <div key={tab} className="pt-5 anim-fade-in-up">
-          {tab === 'history' && (
-            <HistoryList
-              generations={generations}
-              focusedId={focused?.id ?? null}
-              onSelect={setFocusedId}
-            />
-          )}
+          {tab === 'history' && <HistoryList generations={generations} />}
           {tab === 'training' && (
             <TrainingPanel
               avatarName={avatar.name}
@@ -424,304 +359,40 @@ export default function AvatarDetail({ id }: { id: string }) {
   );
 }
 
-function HeroStage({
-  generation,
-  coverUrl,
-  avatarName,
-  onChanged,
-}: {
-  generation: Generation | null;
-  coverUrl: string | null;
-  avatarName: string;
-  onChanged: () => void;
-}) {
-  // Delegate the draft case to a dedicated panel so the JSX stays readable.
-  if (generation && generation.status === 'draft') {
-    return (
-      <DraftStage generation={generation} onChanged={onChanged} />
-    );
-  }
-  return (
-    <HeroStageImpl
-      generation={generation}
-      coverUrl={coverUrl}
-      avatarName={avatarName}
-    />
-  );
-}
-
-function HeroStageImpl({
-  generation,
-  coverUrl,
-  avatarName,
-}: {
-  generation: Generation | null;
-  coverUrl: string | null;
-  avatarName: string;
-}) {
-  // No generations at all yet.
-  if (!generation) {
-    return (
-      <div className="relative mx-auto aspect-video w-full max-w-3xl overflow-hidden rounded-3xl border border-neutral-200 bg-neutral-50">
-        {coverUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={coverUrl}
-            alt={avatarName}
-            className="h-full w-full object-cover opacity-90"
-          />
-        ) : null}
-        <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/40 via-transparent">
-          <div className="w-full p-6 text-white">
-            <p className="text-sm font-medium">質問してみましょう</p>
-            <p className="mt-1 text-xs text-white/70">
-              下のフォームに質問を入力すると、{avatarName} が答える動画が
-              生成されます。
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Ready: show the actual video.
-  if (generation.status === 'ready' && generation.video_url) {
-    return (
-      <div className="mx-auto w-full max-w-3xl space-y-3">
-        <div className="overflow-hidden rounded-3xl border border-neutral-200 bg-black">
-          <video
-            key={generation.id}
-            controls
-            preload="metadata"
-            src={generation.video_url}
-            poster={generation.thumbnail_url ?? undefined}
-            className="aspect-video w-full bg-black"
-          />
-        </div>
-        <div className="px-1">
-          <p className="text-xs uppercase tracking-wider text-neutral-400">
-            質問
-          </p>
-          <p className="mt-1 text-sm font-medium">{generation.question}</p>
-          <AnswerDisclosure answer={generation.answer} />
-        </div>
-      </div>
-    );
-  }
-
-  // Error.
-  if (generation.status === 'error') {
-    return (
-      <div className="mx-auto w-full max-w-3xl space-y-3">
-        <div className="flex aspect-video w-full items-center justify-center overflow-hidden rounded-3xl border border-red-200 bg-red-50 px-8 text-center text-sm text-red-700">
-          動画の生成に失敗しました
-          <br />
-          <span className="text-xs">
-            {generation.error_message || '不明なエラー'}
-          </span>
-        </div>
-        <div className="px-1">
-          <p className="text-xs uppercase tracking-wider text-neutral-400">
-            質問
-          </p>
-          <p className="mt-1 text-sm font-medium">{generation.question}</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Rendering / answering.
-  const elapsedSec = Math.max(
-    0,
-    Math.round((Date.now() - new Date(generation.created_at).getTime()) / 1000),
-  );
-  const elapsedLabel =
-    elapsedSec < 60
-      ? `${elapsedSec}秒経過`
-      : `${Math.floor(elapsedSec / 60)}分${elapsedSec % 60}秒経過`;
-
-  return (
-    <div className="mx-auto w-full max-w-3xl space-y-3">
-      <div className="relative aspect-video w-full overflow-hidden rounded-3xl border border-neutral-200 bg-neutral-900">
-        {coverUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={coverUrl}
-            alt={avatarName}
-            className="h-full w-full object-cover opacity-40"
-          />
-        ) : null}
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white">
-          <div className="flex items-center gap-2">
-            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-white" />
-            <span className="text-sm font-medium">動画を生成中</span>
-          </div>
-          <p className="text-xs text-white/70">
-            {generation.status === 'answering'
-              ? 'Gemini が回答を考えています'
-              : `動画をレンダリング中 — ${elapsedLabel}`}
-          </p>
-        </div>
-      </div>
-      <div className="px-1">
-        <p className="text-xs uppercase tracking-wider text-neutral-400">
-          質問
-        </p>
-        <p className="mt-1 text-sm font-medium">{generation.question}</p>
-        <AnswerDisclosure answer={generation.answer} />
-      </div>
-    </div>
-  );
-}
-
-function AnswerDisclosure({ answer }: { answer: string | null }) {
-  const [open, setOpen] = useState(false);
-  if (!answer) return null;
-  return (
-    <div className="mt-3">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1 rounded-full border border-neutral-300 bg-white px-3 py-1 text-[11px] text-neutral-600 hover:border-neutral-900"
-      >
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 10 10"
-          className={`transition ${open ? 'rotate-90' : ''}`}
-          aria-hidden
-        >
-          <path
-            d="M3 2l4 3-4 3"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            fill="none"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        {open ? '回答テキストを閉じる' : '回答テキストを見る'}
-      </button>
-      {open && (
-        <p className="mt-2 whitespace-pre-wrap rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-sm leading-relaxed text-neutral-700">
-          {answer}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function HistoryList({
-  generations,
-  focusedId,
-  onSelect,
-}: {
-  generations: Generation[];
-  focusedId: string | null;
-  onSelect: (id: string) => void;
-}) {
+function HistoryList({ generations }: { generations: Generation[] }) {
   if (generations.length === 0) {
     return (
       <p className="py-6 text-center text-sm text-neutral-400">
-        まだ質問がありません。
+        まだ会話がありません。
       </p>
     );
   }
   return (
-    <ul className="grid grid-cols-1 gap-3 anim-stagger sm:grid-cols-2">
+    <ul className="space-y-3 anim-stagger">
       {generations.map((g) => (
-        <HistoryItem
+        <li
           key={g.id}
-          generation={g}
-          focused={g.id === focusedId}
-          onSelect={() => onSelect(g.id)}
-        />
-      ))}
-    </ul>
-  );
-}
-
-function HistoryItem({
-  generation,
-  focused,
-  onSelect,
-}: {
-  generation: Generation;
-  focused: boolean;
-  onSelect: () => void;
-}) {
-  const [openAnswer, setOpenAnswer] = useState(false);
-  return (
-    <li
-      className={`flex flex-col gap-2 rounded-xl border p-3 transition ${
-        focused
-          ? 'border-neutral-900 bg-neutral-50'
-          : 'border-neutral-200 bg-white hover:border-neutral-400'
-      }`}
-    >
-      <button
-        type="button"
-        onClick={onSelect}
-        className="flex w-full gap-3 text-left"
-      >
-        <div className="relative h-16 w-24 flex-none overflow-hidden rounded-lg bg-neutral-100">
-          {generation.thumbnail_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={generation.thumbnail_url}
-              alt=""
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="grid h-full place-items-center text-[10px] text-neutral-400">
-              <StatusGlyph status={generation.status} />
-            </div>
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="line-clamp-2 text-sm font-medium text-neutral-900">
-            {generation.question}
+          className="rounded-xl border border-neutral-200 bg-white p-4"
+        >
+          <p className="text-[11px] text-neutral-400">
+            {new Date(g.created_at).toLocaleString('ja-JP')}
           </p>
-          <p className="mt-1 text-[11px] text-neutral-400">
-            {new Date(generation.created_at).toLocaleString('ja-JP')}
+          <p className="mt-1 text-sm font-medium text-neutral-900">
+            Q. {g.question}
           </p>
-          <StatusBadge status={generation.status} />
-        </div>
-      </button>
-
-      {generation.answer && (
-        <div className="pl-[6.75rem]">
-          <button
-            type="button"
-            onClick={() => setOpenAnswer((v) => !v)}
-            className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[11px] text-neutral-600 transition hover:border-neutral-900"
-          >
-            <svg
-              width="10"
-              height="10"
-              viewBox="0 0 10 10"
-              className={`transition ${openAnswer ? 'rotate-90' : ''}`}
-              aria-hidden
-            >
-              <path
-                d="M3 2l4 3-4 3"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            {openAnswer ? '回答テキストを閉じる' : '回答テキストを見る'}
-          </button>
-          {openAnswer && (
-            <p className="mt-2 max-h-60 overflow-y-auto whitespace-pre-wrap rounded-lg border border-neutral-200 bg-white p-3 text-xs leading-relaxed text-neutral-700 anim-fade-in">
-              {generation.answer}
+          {g.answer && (
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-neutral-700">
+              A. {g.answer}
             </p>
           )}
-        </div>
-      )}
-    </li>
+          {g.status === 'error' && (
+            <p className="mt-2 text-xs text-red-600">
+              {g.error_message || '応答生成に失敗しました'}
+            </p>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -763,7 +434,7 @@ function TrainingPanel({
             </p>
             <p className="mt-1 text-xs text-neutral-500">
               {avatarName} の発言や知識を追加するほど、回答が本人らしく
-              なります。顔と声は最初の動画で確定しています。
+              なります。
             </p>
           </div>
           <div className="flex shrink-0 rounded-full bg-neutral-100 p-0.5 text-xs">
@@ -817,14 +488,14 @@ function TrainingPanel({
               type="text"
               value={trainTextTitle}
               onChange={(e) => onChangeTextTitle(e.target.value)}
-              placeholder="タイトル(任意): 営業方針 / 業務マニュアル など"
+              placeholder="タイトル(任意)"
               className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
             />
             <textarea
               value={trainText}
               onChange={(e) => onChangeText(e.target.value)}
               rows={6}
-              placeholder={`${avatarName} の考え方や知識をテキストで貼り付けてください。\n例: 議事録、メモ、ブログ記事、社内資料の本文 など`}
+              placeholder={`${avatarName} の考え方や知識をテキストで貼り付けてください。`}
               className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm leading-relaxed focus:border-neutral-900 focus:outline-none"
             />
             <div className="flex items-center justify-between">
@@ -863,283 +534,6 @@ function TrainingPanel({
   );
 }
 
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`-mb-px flex items-center gap-1.5 border-b-2 px-1 pb-3 text-sm transition ${
-        active
-          ? 'border-neutral-900 text-neutral-900'
-          : 'border-transparent text-neutral-500 hover:text-neutral-900'
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function Pill({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="rounded-full bg-neutral-100 px-1.5 text-[10px] font-medium text-neutral-500">
-      {children}
-    </span>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; cls: string }> = {
-    draft: {
-      label: '下書き',
-      cls: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
-    },
-    ready: {
-      label: '完成',
-      cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-    },
-    rendering: {
-      label: '動画化中',
-      cls: 'bg-amber-50 text-amber-700 ring-amber-200',
-    },
-    answering: {
-      label: '回答作成中',
-      cls: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
-    },
-    pending: {
-      label: '待機中',
-      cls: 'bg-neutral-100 text-neutral-600 ring-neutral-200',
-    },
-    processing: {
-      label: '処理中',
-      cls: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
-    },
-    error: {
-      label: 'エラー',
-      cls: 'bg-red-50 text-red-700 ring-red-200',
-    },
-  };
-  const s = map[status] || {
-    label: status,
-    cls: 'bg-neutral-100 text-neutral-600 ring-neutral-200',
-  };
-  return (
-    <span
-      className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${s.cls}`}
-    >
-      {s.label}
-    </span>
-  );
-}
-
-function StatusGlyph({ status }: { status: string }) {
-  if (status === 'error') return <span>!</span>;
-  if (status === 'ready') return <span>▶</span>;
-  if (status === 'draft') return <span>✎</span>;
-  return <span className="animate-pulse">●</span>;
-}
-
-function DraftStage({
-  generation,
-  onChanged,
-}: {
-  generation: Generation;
-  onChanged: () => void;
-}) {
-  const [text, setText] = useState(generation.answer ?? '');
-  const [busy, setBusy] = useState<'regen' | 'render' | 'discard' | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const lastSyncedAnswer = useRef(generation.answer ?? '');
-
-  // If the server overwrites the answer (e.g. user clicked regenerate),
-  // pull the new text into the textarea — but don't clobber unsaved
-  // edits the user is in the middle of typing.
-  useEffect(() => {
-    if (generation.answer !== lastSyncedAnswer.current) {
-      setText(generation.answer ?? '');
-      lastSyncedAnswer.current = generation.answer ?? '';
-    }
-  }, [generation.answer]);
-
-  const dirty = text !== (generation.answer ?? '');
-
-  async function regenerate(length: AnswerLength) {
-    setBusy('regen');
-    setError(null);
-    try {
-      const res = await fetch(
-        `/api/generations/${generation.id}/regenerate`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ length }),
-        },
-      );
-      const json = (await res.json()) as { answer?: string; error?: string };
-      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-      if (json.answer) {
-        setText(json.answer);
-        lastSyncedAnswer.current = json.answer;
-      }
-      onChanged();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function saveEdit() {
-    if (!dirty) return;
-    setBusy('regen');
-    setError(null);
-    try {
-      const res = await fetch(`/api/generations/${generation.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answer: text }),
-      });
-      const json = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-      lastSyncedAnswer.current = text;
-      onChanged();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function render() {
-    if (dirty) {
-      // Save edits first so the rendered video matches what the user sees.
-      await saveEdit();
-    }
-    setBusy('render');
-    setError(null);
-    try {
-      const res = await fetch(`/api/generations/${generation.id}/render`, {
-        method: 'POST',
-      });
-      const json = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-      onChanged();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function discard() {
-    if (
-      !window.confirm('この下書きを破棄します。よろしいですか？')
-    ) {
-      return;
-    }
-    setBusy('discard');
-    setError(null);
-    try {
-      const res = await fetch(`/api/generations/${generation.id}`, {
-        method: 'DELETE',
-      });
-      const json = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-      onChanged();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setBusy(null);
-    }
-  }
-
-  return (
-    <div className="mx-auto w-full max-w-3xl space-y-3">
-      <div className="rounded-3xl border border-indigo-200 bg-indigo-50/40 p-5">
-        <div className="flex items-center justify-between">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100 px-2.5 py-0.5 text-[11px] font-medium text-indigo-700">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-indigo-500" />
-            回答プレビュー(下書き)
-          </span>
-          <span className="text-[11px] text-neutral-500">
-            {text.length} 文字
-          </span>
-        </div>
-        <p className="mt-3 text-xs uppercase tracking-wider text-neutral-500">
-          質問
-        </p>
-        <p className="mt-1 text-sm font-medium text-neutral-900">
-          {generation.question}
-        </p>
-        <p className="mt-4 text-xs uppercase tracking-wider text-neutral-500">
-          回答(編集可能)
-        </p>
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={Math.max(4, Math.min(12, Math.ceil(text.length / 50)))}
-          className="mt-1 w-full rounded-xl border border-neutral-300 bg-white p-3 text-sm leading-relaxed focus:border-neutral-900 focus:outline-none"
-          placeholder="回答テキスト"
-        />
-
-        <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-neutral-600">
-          <span>長さを変えて再生成:</span>
-          {(['short', 'standard', 'detailed'] as AnswerLength[]).map((L) => (
-            <button
-              key={L}
-              type="button"
-              onClick={() => regenerate(L)}
-              disabled={busy !== null}
-              className="rounded-full border border-neutral-300 bg-white px-2.5 py-1 transition hover:border-neutral-900 disabled:opacity-40"
-            >
-              {busy === 'regen' ? '生成中…' : LENGTH_LABEL[L]}
-            </button>
-          ))}
-          <span className="text-neutral-400">
-            ※ 再生成は無料(Gemini のみ)
-          </span>
-        </div>
-
-        {error && (
-          <p className="mt-3 text-xs text-red-600">{error}</p>
-        )}
-
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-indigo-200/60 pt-4">
-          <p className="text-[11px] text-neutral-500">
-            {dirty
-              ? '⚠ 編集が保存されていません。動画化時に自動保存されます。'
-              : 'この内容で動画にすると動画生成のクレジットを消費します。'}
-          </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={discard}
-              disabled={busy !== null}
-              className="rounded-full border border-neutral-300 bg-white px-4 py-1.5 text-xs text-neutral-700 transition hover:border-neutral-900 disabled:opacity-40"
-            >
-              {busy === 'discard' ? '破棄中…' : '破棄'}
-            </button>
-            <button
-              type="button"
-              onClick={render}
-              disabled={busy !== null || text.trim().length === 0}
-              className="rounded-full bg-indigo-600 px-4 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-500 disabled:opacity-40"
-            >
-              {busy === 'render' ? '動画化を開始中…' : '動画にする'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function TrainingMaterialCard({ material }: { material: TrainingVideo }) {
   const router = useRouter();
   const [mode, setMode] = useState<'view' | 'edit'>('view');
@@ -1161,10 +555,7 @@ function TrainingMaterialCard({ material }: { material: TrainingVideo }) {
       const res = await fetch(`/api/training-videos/${material.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          file_name: title,
-          transcript,
-        }),
+        body: JSON.stringify({ file_name: title, transcript }),
       });
       const json = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
@@ -1202,24 +593,12 @@ function TrainingMaterialCard({ material }: { material: TrainingVideo }) {
   if (mode === 'edit') {
     return (
       <li className="rounded-xl border border-neutral-300 bg-white p-3 anim-fade-in">
-        <div className="flex items-center gap-2">
-          <span
-            className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${
-              isText
-                ? 'bg-amber-50 text-amber-700 ring-amber-200'
-                : 'bg-sky-50 text-sky-700 ring-sky-200'
-            }`}
-          >
-            {isText ? 'テキスト' : '動画'}
-          </span>
-          <span className="text-xs text-neutral-400">編集中</span>
-        </div>
         <input
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="タイトル"
-          className="mt-2 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+          className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
         />
         <textarea
           value={transcript}
@@ -1228,36 +607,24 @@ function TrainingMaterialCard({ material }: { material: TrainingVideo }) {
           placeholder="本文・文字起こし"
           className="mt-2 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm leading-relaxed focus:border-neutral-900 focus:outline-none"
         />
-        {error && (
-          <p className="mt-2 text-xs text-red-600">{error}</p>
-        )}
-        <div className="mt-3 flex items-center justify-between">
-          <p className="text-[11px] text-neutral-400">
-            本文を変更すると、保存時に自動で再ベクトル化されます。
-          </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setMode('view');
-                setTitle(material.file_name ?? '');
-                setTranscript(material.transcript ?? '');
-                setError(null);
-              }}
-              disabled={saving}
-              className="rounded-full border border-neutral-300 px-3 py-1.5 text-xs text-neutral-700 transition hover:border-neutral-900"
-            >
-              キャンセル
-            </button>
-            <button
-              type="button"
-              onClick={save}
-              disabled={saving}
-              className="rounded-full bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-neutral-700 disabled:opacity-40"
-            >
-              {saving ? '保存中…' : '保存'}
-            </button>
-          </div>
+        {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+        <div className="mt-3 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setMode('view')}
+            disabled={saving}
+            className="rounded-full border border-neutral-300 px-3 py-1.5 text-xs text-neutral-700 hover:border-neutral-900"
+          >
+            キャンセル
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving}
+            className="rounded-full bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
+          >
+            {saving ? '保存中…' : '保存'}
+          </button>
         </div>
       </li>
     );
@@ -1308,22 +675,6 @@ function TrainingMaterialCard({ material }: { material: TrainingVideo }) {
           onClick={() => setExpanded((v) => !v)}
           className="mt-2 inline-flex items-center gap-1 text-[11px] text-neutral-500 hover:text-neutral-900"
         >
-          <svg
-            width="10"
-            height="10"
-            viewBox="0 0 10 10"
-            className={`transition ${expanded ? 'rotate-90' : ''}`}
-            aria-hidden
-          >
-            <path
-              d="M3 2l4 3-4 3"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
           {expanded ? '本文を閉じる' : '本文を見る'}
         </button>
       )}
@@ -1357,10 +708,6 @@ function TrainingMaterialCard({ material }: { material: TrainingVideo }) {
           </div>
         </div>
       )}
-
-      {error && (
-        <p className="mt-2 text-xs text-red-600">{error}</p>
-      )}
     </li>
   );
 }
@@ -1390,7 +737,7 @@ function MaterialMenu({
         type="button"
         aria-label="素材の操作メニュー"
         onClick={() => setOpen((o) => !o)}
-        className="grid h-7 w-7 place-items-center rounded-full text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
+        className="grid h-7 w-7 place-items-center rounded-full text-neutral-500 hover:bg-neutral-100"
       >
         <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
           <circle cx="3" cy="7" r="1.2" fill="currentColor" />
@@ -1406,7 +753,7 @@ function MaterialMenu({
               setOpen(false);
               onEdit();
             }}
-            className="block w-full px-3 py-2 text-left text-xs text-neutral-700 transition hover:bg-neutral-50"
+            className="block w-full px-3 py-2 text-left text-xs text-neutral-700 hover:bg-neutral-50"
           >
             編集
           </button>
@@ -1416,7 +763,7 @@ function MaterialMenu({
               setOpen(false);
               onDelete();
             }}
-            className="block w-full px-3 py-2 text-left text-xs text-red-700 transition hover:bg-red-50"
+            className="block w-full px-3 py-2 text-left text-xs text-red-700 hover:bg-red-50"
           >
             削除
           </button>
@@ -1426,24 +773,71 @@ function MaterialMenu({
   );
 }
 
-function DetailSkeleton() {
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="space-y-8 anim-fade-in">
-      <div className="flex items-center justify-between">
-        <div className="h-3 w-16 rounded anim-shimmer" />
-        <div className="h-7 w-40 rounded-full anim-shimmer" />
-      </div>
-      <div className="flex items-center gap-3">
-        <div className="h-10 w-10 rounded-full anim-shimmer" />
-        <div className="h-4 w-32 rounded anim-shimmer" />
-      </div>
-      <div className="mx-auto aspect-video w-full max-w-3xl rounded-3xl anim-shimmer" />
-      <div className="mx-auto h-10 w-full max-w-3xl rounded-full anim-shimmer" />
-      <div className="flex gap-6 border-b border-neutral-200 pb-3">
-        <div className="h-4 w-16 rounded anim-shimmer" />
-        <div className="h-4 w-16 rounded anim-shimmer" />
-      </div>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`-mb-px flex items-center gap-1.5 border-b-2 px-1 pb-3 text-sm transition ${
+        active
+          ? 'border-neutral-900 text-neutral-900'
+          : 'border-transparent text-neutral-500 hover:text-neutral-900'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Pill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded-full bg-neutral-100 px-1.5 text-[10px] font-medium text-neutral-500">
+      {children}
+    </span>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; cls: string }> = {
+    spoken: {
+      label: '応答済み',
+      cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+    },
+    ready: {
+      label: '完成',
+      cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+    },
+    pending: {
+      label: '待機中',
+      cls: 'bg-neutral-100 text-neutral-600 ring-neutral-200',
+    },
+    processing: {
+      label: '処理中',
+      cls: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
+    },
+    error: {
+      label: 'エラー',
+      cls: 'bg-red-50 text-red-700 ring-red-200',
+    },
+  };
+  const s = map[status] || {
+    label: status,
+    cls: 'bg-neutral-100 text-neutral-600 ring-neutral-200',
+  };
+  return (
+    <span
+      className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${s.cls}`}
+    >
+      {s.label}
+    </span>
   );
 }
 
@@ -1481,7 +875,7 @@ function AvatarMenu({
         </svg>
       </button>
       {open && (
-        <div className="absolute right-0 z-40 mt-1.5 w-48 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg">
+        <div className="absolute right-0 z-40 mt-1.5 w-48 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg anim-fade-in">
           <button
             type="button"
             onClick={() => {
@@ -1495,6 +889,23 @@ function AvatarMenu({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function DetailSkeleton() {
+  return (
+    <div className="space-y-8 anim-fade-in">
+      <div className="flex items-center justify-between">
+        <div className="h-3 w-16 rounded anim-shimmer" />
+        <div className="h-7 w-40 rounded-full anim-shimmer" />
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="h-10 w-10 rounded-full anim-shimmer" />
+        <div className="h-4 w-32 rounded anim-shimmer" />
+      </div>
+      <div className="mx-auto aspect-video w-full max-w-3xl rounded-3xl anim-shimmer" />
+      <div className="mx-auto h-10 w-full max-w-3xl rounded-full anim-shimmer" />
     </div>
   );
 }

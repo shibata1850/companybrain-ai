@@ -3,8 +3,6 @@ import { revalidatePath } from 'next/cache';
 import { randomUUID } from 'node:crypto';
 import { storageBucket, supabaseAdmin } from '@/lib/supabase';
 import { extractFrameAndAudio } from '@/lib/media';
-import { uploadImage as didUploadImage } from '@/lib/did';
-import { env } from '@/lib/env';
 import { processTrainingVideo } from '@/lib/processing';
 
 export const runtime = 'nodejs';
@@ -124,29 +122,13 @@ export async function POST(req: NextRequest) {
       upsert: true,
     });
 
-  // 6. Upload the face image to D-ID. The returned URL is what /talks
-  //    accepts as `source_url`.
-  let sourceUrl: string;
-  try {
-    const up = await didUploadImage(frame, 'image/jpeg');
-    sourceUrl = up.url;
-  } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    return NextResponse.json(
-      { error: `D-ID image upload failed: ${message}` },
-      { status: 500 },
-    );
-  }
-
-  // For D-ID we reuse the existing columns to avoid a migration:
-  //   heygen_photo_id -> D-ID source image URL
-  //   heygen_voice_id -> Microsoft Azure voice id (e.g. ja-JP-NanamiNeural)
-  const voiceId = env.didVoiceId();
+  // 6. We're using HeyGen's stock Interactive Avatar for streaming, so
+  //    there's no per-brain Photo Avatar to register. The face we
+  //    extracted is kept as the cover image for the UI; the actual
+  //    streaming avatar is configured globally via env.
   await db
     .from('avatars')
     .update({
-      heygen_photo_id: sourceUrl,
-      heygen_voice_id: voiceId,
       cover_image_path: coverPath,
     })
     .eq('id', avatarId);
