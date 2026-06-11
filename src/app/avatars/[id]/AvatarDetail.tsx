@@ -2222,9 +2222,12 @@ function PersonaPromptButton({
             ? 'border-amber-300 bg-amber-50 text-amber-800 hover:border-amber-600'
             : 'border-neutral-300 bg-white text-neutral-600 hover:border-neutral-900 hover:text-neutral-900'
         }`}
-        title={current ?? '振る舞いの指示(ロール/制約)を設定'}
+        title={
+          current ??
+          '回答のルール(口調・専門分野・答えてはいけないこと等)を設定'
+        }
       >
-        🎭 ペルソナ{current ? '(設定済み)' : ''}
+        📋 回答ルール{current ? '(設定済み)' : ''}
       </button>
       {open && (
         <div
@@ -2235,13 +2238,13 @@ function PersonaPromptButton({
         >
           <div className="w-full max-w-xl rounded-2xl bg-white p-5 shadow-xl">
             <h3 className="text-sm font-semibold text-neutral-900">
-              🎭 ペルソナ設定
+              📋 回答ルールの設定
             </h3>
             <p className="mt-1 text-[11px] leading-relaxed text-neutral-500">
-              ブレインがどう振る舞うかをここで指示できます。
-              口調・専門領域・避けてほしい話題などを書いておくと、
-              次のセッションから反映されます。説明欄
-              (description) には影響しません。
+              このブレインの「話し方」と「答え方のルール」をここに書きます。
+              口調(です・ます調/くだけた話し方)、得意分野、答えてはいけない
+              話題、答えるときの決まりごと(例:必ず根拠を示す)などを自由な
+              文章で指示できます。保存すると次の会話開始から反映されます。
             </p>
             <textarea
               value={draft}
@@ -2254,7 +2257,7 @@ function PersonaPromptButton({
             />
             <div className="mt-3 flex items-center justify-between">
               <p className="text-[10px] text-neutral-400">
-                空にすると元のデフォルトに戻ります。
+                空にして保存すると、標準の振る舞いに戻ります。
               </p>
               <div className="flex gap-2">
                 <button
