@@ -14,6 +14,7 @@ type Status =
   | 'connected'
   | 'listening'
   | 'thinking'
+  | 'searching'
   | 'speaking'
   | 'reconnecting'
   | 'ended'
@@ -117,6 +118,12 @@ export default function StreamingStage({
   onToggleMinimized?: () => void;
 }) {
   const [status, setStatus] = useState<Status>('idle');
+  // Mirror status in a ref so event handlers (which capture stale state)
+  // can read the current value without being recreated on every change.
+  const statusRef = useRef<Status>('idle');
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
   const [error, setError] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
   const [level, setLevel] = useState(0); // mic level 0..1 for the visualizer
@@ -402,9 +409,21 @@ export default function StreamingStage({
     // transcript fragments we've collected so they show up as separate
     // messages in the chat log.
     if (sc?.interrupted) {
-      stopAllPlayback();
-      flushTranscripts();
-      setStatus('listening');
+      // The server fires `interrupted` whenever it thinks the user
+      // started talking — that can be background noise during a long
+      // tool call, with no real intent to barge in. Ignore the signal
+      // while the agent is still searching so a half-built answer
+      // doesn't get truncated before it has a chance to be spoken.
+      if (statusRef.current === 'searching' && !agentBufRef.current) {
+        // Drop any stray user transcript fragment so the next real
+        // turn starts clean.
+        userBufRef.current = '';
+        onPartialRef.current?.('user', null);
+      } else {
+        stopAllPlayback();
+        flushTranscripts();
+        setStatus('listening');
+      }
     }
 
     // End of turn — push the completed transcripts as messages.
@@ -437,6 +456,15 @@ export default function StreamingStage({
   ) {
     const sess = sessionRef.current;
     if (!sess) return;
+    // Surface "資料を検索中…" so the user can see retrieval is in flight.
+    // Without this signal, the user thinks the session froze, talks
+    // again, and the new audio triggers an interrupted event that
+    // truncates the answer the model was about to produce.
+    setStatus((s) =>
+      s === 'reconnecting' || s === 'error' || s === 'ended'
+        ? s
+        : 'searching',
+    );
     const responses: Array<{
       id?: string;
       name?: string;
@@ -448,11 +476,17 @@ export default function StreamingStage({
           typeof call.args?.query === 'string'
             ? (call.args.query as string)
             : '';
+        // Hard cap each retrieval so a slow embedding API or cold
+        // Vercel function can't leave the model waiting indefinitely
+        // (the 2-minute "session freeze" reported by the user).
+        const abort = new AbortController();
+        const timer = setTimeout(() => abort.abort(), 15000);
         try {
           const res = await fetch(`/api/avatars/${avatarId}/knowledge`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query }),
+            signal: abort.signal,
           });
           const json = (await res.json()) as {
             results?: string[];
@@ -468,11 +502,21 @@ export default function StreamingStage({
             response: { results, error: json.error },
           });
         } catch (e) {
+          const aborted =
+            e instanceof DOMException && e.name === 'AbortError';
           responses.push({
             id: call.id,
             name: call.name,
-            response: { error: e instanceof Error ? e.message : String(e) },
+            response: {
+              error: aborted
+                ? 'search timed out after 15s'
+                : e instanceof Error
+                  ? e.message
+                  : String(e),
+            },
           });
+        } finally {
+          clearTimeout(timer);
         }
       } else {
         responses.push({
@@ -489,6 +533,9 @@ export default function StreamingStage({
     } catch (e) {
       console.warn('[live] sendToolResponse failed:', e);
     }
+    // Tool results delivered — drop the "searching" badge so the next
+    // status update (speaking / listening) lands cleanly.
+    setStatus((s) => (s === 'searching' ? 'thinking' : s));
   }
 
   async function start() {
@@ -839,6 +886,7 @@ export default function StreamingStage({
     status === 'connected' ||
     status === 'listening' ||
     status === 'thinking' ||
+    status === 'searching' ||
     status === 'speaking';
 
   // Keyboard shortcuts. Skip when the user is typing in an input.
@@ -1042,9 +1090,9 @@ export default function StreamingStage({
           </div>
         )}
 
-        {/* Thinking overlay — three bouncing dots when the agent is
-            processing the user's last turn. */}
-        {status === 'thinking' && (
+        {/* Thinking / searching overlay — three bouncing dots while the
+            agent is processing the user's last turn or fetching docs. */}
+        {(status === 'thinking' || status === 'searching') && (
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 bg-neutral-900/35 text-white backdrop-blur-[2px]">
             <div className="flex items-end gap-1.5">
               <span
@@ -1060,7 +1108,11 @@ export default function StreamingStage({
                 style={{ animationDelay: '240ms' }}
               />
             </div>
-            <p className="text-xs font-medium tracking-wide">考えています…</p>
+            <p className="text-xs font-medium tracking-wide">
+              {status === 'searching'
+                ? '🔎 資料を検索中… 少しお待ちください'
+                : '考えています…'}
+            </p>
           </div>
         )}
 
@@ -1073,7 +1125,7 @@ export default function StreamingStage({
                   ? 'animate-pulse bg-emerald-400'
                   : status === 'listening'
                     ? 'bg-emerald-400'
-                    : status === 'thinking'
+                    : status === 'thinking' || status === 'searching'
                       ? 'animate-pulse bg-indigo-300'
                       : 'bg-amber-400'
               }`}
@@ -1082,9 +1134,11 @@ export default function StreamingStage({
               ? '話しています…'
               : status === 'listening'
                 ? '聞いています'
-                : status === 'thinking'
-                  ? '考えています…'
-                  : '接続中'}
+                : status === 'searching'
+                  ? '🔎 資料を検索中…'
+                  : status === 'thinking'
+                    ? '考えています…'
+                    : '接続中'}
             <span
               className="ml-1 font-mono text-[10px] tabular-nums text-white/70"
               aria-label="経過時間"
