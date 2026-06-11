@@ -182,7 +182,22 @@ export default function StreamingStage({
   const playheadRef = useRef<number>(0);
   const rafRef = useRef<number | null>(null);
   const speakingRef = useRef(false);
+  // When the last agent audio finished — used to keep the half-duplex
+  // mic gate closed briefly after playback so the speaker echo tail
+  // doesn't register as user speech.
+  const speakingEndedAtRef = useRef(0);
   const mutedRef = useRef(false);
+  // Half-duplex by default: while the agent is speaking we don't send
+  // mic audio upstream. Browser echo cancellation does NOT cover Web
+  // Audio playback, so on speakers the agent's own voice comes back in
+  // through the mic and the server treats it as a user barge-in —
+  // truncating answers mid-sentence. Headphone users can enable
+  // barge-in to talk over the agent again.
+  const [bargeIn, setBargeIn] = useState(false);
+  const bargeInRef = useRef(false);
+  useEffect(() => {
+    bargeInRef.current = bargeIn;
+  }, [bargeIn]);
 
   useEffect(() => {
     mutedRef.current = muted;
@@ -277,6 +292,7 @@ export default function StreamingStage({
         activeSourcesRef.current.size === 0
       ) {
         speakingRef.current = false;
+        speakingEndedAtRef.current = Date.now();
         setStatus((s) => (s === 'speaking' ? 'listening' : s));
       }
     };
@@ -764,6 +780,16 @@ export default function StreamingStage({
         // and base64-encoding more audio — and the SDK throws on each
         // attempt, which we saw as a CLOSED-state spam loop.
         if (!sessionOpenRef.current || !sessionRef.current) return;
+        // Half-duplex gate (default): drop mic frames while the agent
+        // is speaking — and for a short tail afterwards — so speaker
+        // echo can't masquerade as a barge-in.
+        if (
+          !bargeInRef.current &&
+          (speakingRef.current ||
+            Date.now() - speakingEndedAtRef.current < 400)
+        ) {
+          return;
+        }
         const input = e.inputBuffer.getChannelData(0);
         const pcm = new Int16Array(input.length);
         for (let i = 0; i < input.length; i++) {
@@ -1189,17 +1215,35 @@ export default function StreamingStage({
         {/* Bottom control bar */}
         {isLive && (
           <div className="absolute inset-x-3 bottom-3 flex items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={() => setMuted((m) => !m)}
-              className={`rounded-full px-3 py-1 text-[11px] font-medium backdrop-blur transition ${
-                muted
-                  ? 'bg-red-500/90 text-white hover:bg-red-500'
-                  : 'bg-white/90 text-neutral-800 hover:bg-white'
-              }`}
-            >
-              {muted ? 'マイクOFF中(タップでON)' : 'マイクON'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setMuted((m) => !m)}
+                className={`rounded-full px-3 py-1 text-[11px] font-medium backdrop-blur transition ${
+                  muted
+                    ? 'bg-red-500/90 text-white hover:bg-red-500'
+                    : 'bg-white/90 text-neutral-800 hover:bg-white'
+                }`}
+              >
+                {muted ? 'マイクOFF中(タップでON)' : 'マイクON'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setBargeIn((v) => !v)}
+                className={`rounded-full px-3 py-1 text-[11px] font-medium backdrop-blur transition ${
+                  bargeIn
+                    ? 'bg-indigo-500/90 text-white hover:bg-indigo-500'
+                    : 'bg-white/90 text-neutral-800 hover:bg-white'
+                }`}
+                title={
+                  bargeIn
+                    ? '応答中も声で割り込めます。スピーカー利用だと自分の声で誤中断することがあります(ヘッドホン推奨)'
+                    : '応答中はマイクを止めて、回答が途切れないようにしています。割り込みたい場合はONに(ヘッドホン推奨)'
+                }
+              >
+                {bargeIn ? '🎧 割り込みON' : '割り込みOFF'}
+              </button>
+            </div>
             <button
               type="button"
               onClick={stop}
