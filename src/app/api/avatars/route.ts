@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { storageBucket, supabaseAdmin } from '@/lib/supabase';
 import { extractFrameAndAudio } from '@/lib/media';
 import { processTrainingVideo } from '@/lib/processing';
+import { chunkTranscript, embedTexts } from '@/lib/gemini';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -42,11 +44,10 @@ export async function POST(req: NextRequest) {
   const name = (form.get('name') as string | null)?.trim() || '名称未設定';
   const description = (form.get('description') as string | null) || null;
 
+  // Lightweight path: no video. The brain is seeded from an optional
+  // icon photo + optional pasted text instead of a talking-head clip.
   if (!(file instanceof File)) {
-    return NextResponse.json(
-      { error: 'video file is required' },
-      { status: 400 },
-    );
+    return createBrainFromTextAndPhoto({ form, name, description });
   }
 
   const videoBytes = Buffer.from(await file.arrayBuffer());
@@ -150,4 +151,123 @@ export async function POST(req: NextRequest) {
   revalidatePath('/');
 
   return NextResponse.json({ id: avatarId });
+}
+
+/**
+ * Create a brain without a source video. The caller may provide:
+ *   - photo: an image File used directly as the cover/icon.
+ *   - text:  pasted knowledge that gets chunked + embedded so the brain
+ *            can answer from it immediately.
+ * Both are optional; a brain can be created with just a name and filled
+ * in later from its detail page.
+ */
+async function createBrainFromTextAndPhoto({
+  form,
+  name,
+  description,
+}: {
+  form: FormData;
+  name: string;
+  description: string | null;
+}) {
+  const db = supabaseAdmin();
+  const bucket = storageBucket();
+
+  const { data: avatar, error: avatarErr } = await db
+    .from('avatars')
+    .insert({ name, description })
+    .select('id')
+    .single();
+  if (avatarErr || !avatar) {
+    return NextResponse.json(
+      { error: avatarErr?.message || 'insert failed' },
+      { status: 500 },
+    );
+  }
+  const avatarId = avatar.id as string;
+
+  // Optional icon photo → cover image.
+  const photo = form.get('photo');
+  if (photo instanceof File && photo.size > 0) {
+    const bytes = Buffer.from(await photo.arrayBuffer());
+    const contentType = photo.type || 'image/jpeg';
+    const coverPath = `${avatarId}/cover.jpg`;
+    const { error: upErr } = await db.storage
+      .from(bucket)
+      .upload(coverPath, bytes, { contentType, upsert: true });
+    if (!upErr) {
+      await db
+        .from('avatars')
+        .update({ cover_image_path: coverPath })
+        .eq('id', avatarId);
+    }
+  }
+
+  // Optional seed text → knowledge base.
+  const text = (form.get('text') as string | null)?.trim();
+  if (text) {
+    try {
+      await seedTextKnowledge(db, avatarId, text);
+    } catch {
+      // The brain still exists; the failed training row carries the error.
+    }
+  }
+
+  revalidatePath('/');
+  return NextResponse.json({ id: avatarId });
+}
+
+/**
+ * Insert a text training entry and its embedded chunks. Mirrors the
+ * /api/avatars/[id]/train-text flow so a brain can be seeded at creation.
+ */
+async function seedTextKnowledge(
+  db: SupabaseClient,
+  avatarId: string,
+  text: string,
+) {
+  const { data: tv } = await db
+    .from('training_videos')
+    .insert({
+      avatar_id: avatarId,
+      storage_path: null,
+      file_name: 'テキスト学習',
+      mime_type: 'text/plain',
+      source_type: 'text',
+      status: 'processing',
+    })
+    .select('id')
+    .single();
+  const videoId = tv?.id as string | undefined;
+  if (!videoId) return;
+
+  try {
+    const chunks = chunkTranscript(text);
+    const embeddings = chunks.length > 0 ? await embedTexts(chunks) : [];
+    if (chunks.length > 0) {
+      const rows = chunks.map((content, i) => ({
+        avatar_id: avatarId,
+        video_id: videoId,
+        content,
+        embedding: embeddings[i],
+      }));
+      const { error } = await db.from('knowledge_chunks').insert(rows);
+      if (error) throw error;
+    }
+    await db
+      .from('training_videos')
+      .update({
+        status: 'ready',
+        transcript: text,
+        summary: text.length > 120 ? text.slice(0, 120) + '…' : text,
+      })
+      .eq('id', videoId);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    await db
+      .from('training_videos')
+      .update({ status: 'error', error_message: message })
+      .eq('id', videoId);
+    throw e;
+  }
 }
