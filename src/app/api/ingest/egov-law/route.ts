@@ -126,11 +126,12 @@ export async function POST(req: NextRequest) {
   const page = entries.slice(offset, offset + limit);
   let processed = 0;
   let replacedCount = 0;
+  let unchangedCount = 0;
   const errors: Array<{ ref: string; error: string }> = [];
   for (const entry of page) {
     const externalRef = `egov:${lawId}:${entry.key}`;
     try {
-      const { replaced } = await upsertTextKnowledge({
+      const { replaced, unchanged } = await upsertTextKnowledge({
         db,
         avatarId,
         text: entry.text,
@@ -140,6 +141,7 @@ export async function POST(req: NextRequest) {
       });
       processed += 1;
       if (replaced) replacedCount += 1;
+      if (unchanged) unchangedCount += 1;
     } catch (e) {
       errors.push({
         ref: externalRef,
@@ -160,6 +162,7 @@ export async function POST(req: NextRequest) {
     offset,
     processed,
     replaced: replacedCount,
+    unchanged: unchangedCount,
     failed: errors.length,
     errors: errors.slice(0, 5),
     next_offset: done ? null : nextOffset,

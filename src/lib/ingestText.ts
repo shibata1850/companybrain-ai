@@ -17,7 +17,7 @@ export async function upsertTextKnowledge(params: {
   title: string;
   folder: string | null;
   externalRef: string | null;
-}): Promise<{ videoId: string; replaced: boolean }> {
+}): Promise<{ videoId: string; replaced: boolean; unchanged: boolean }> {
   const { db, avatarId, text, title, folder, externalRef } = params;
 
   let videoId: string | null = null;
@@ -25,13 +25,26 @@ export async function upsertTextKnowledge(params: {
   if (externalRef) {
     const { data: existing } = await db
       .from('training_videos')
-      .select('id')
+      .select('id, transcript, status')
       .eq('avatar_id', avatarId)
       .eq('external_ref', externalRef)
       .limit(1);
     if (existing && existing.length > 0) {
       videoId = existing[0].id as string;
       replaced = true;
+      // Identical text → the chunks and embeddings are still valid.
+      // Skip the expensive re-embed so periodic syncs only pay for
+      // entries that actually changed (i.e. amended articles).
+      if (
+        existing[0].status === 'ready' &&
+        (existing[0].transcript as string | null) === text
+      ) {
+        await db
+          .from('training_videos')
+          .update({ file_name: title, folder })
+          .eq('id', videoId);
+        return { videoId, replaced: true, unchanged: true };
+      }
       await db
         .from('training_videos')
         .update({ status: 'processing', file_name: title, folder })
@@ -90,7 +103,7 @@ export async function upsertTextKnowledge(params: {
     throw e;
   }
 
-  return { videoId, replaced };
+  return { videoId, replaced, unchanged: false };
 }
 
 /**
