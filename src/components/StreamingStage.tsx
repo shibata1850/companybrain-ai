@@ -32,6 +32,20 @@ const THINKING_FALLBACK_MS = 15000;
 const RETRYABLE_CLOSE_CODES = new Set([1006, 1011, 1012, 1013, 1014]);
 const MAX_AUTO_RECONNECTS = 3;
 
+// 1008 ("Operation is not implemented, or supported, or enabled") is a
+// permanent rejection of the requested model for this API key — retrying
+// the same config can never succeed. Instead we walk this list of known
+// Live-capable models and reconnect with the next candidate. Whichever
+// one opens successfully is cached in localStorage so future sessions
+// start with it directly.
+const LIVE_MODEL_FALLBACKS = [
+  'gemini-2.5-flash-native-audio-latest',
+  'gemini-2.5-flash-preview-native-audio-dialog',
+  'gemini-live-2.5-flash-preview',
+  'gemini-2.0-flash-live-001',
+];
+const LIVE_MODEL_CACHE_KEY = 'cb-live-model';
+
 const INPUT_SAMPLE_RATE = 16000;
 const OUTPUT_SAMPLE_RATE = 24000;
 
@@ -130,6 +144,11 @@ export default function StreamingStage({
   const manualStopRef = useRef(false);
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Model-fallback state for 1008 rejections. modelOverrideRef is the
+  // model we'll request from the token endpoint (null = server default);
+  // triedModelsRef tracks what already got rejected this session.
+  const modelOverrideRef = useRef<string | null>(null);
+  const triedModelsRef = useRef<Set<string>>(new Set());
   // Active output buffer sources so we can stop them when the user
   // barges in (server sends interrupted=true).
   const activeSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
@@ -497,10 +516,22 @@ export default function StreamingStage({
     }
     setStatus((s) => (s === 'reconnecting' ? s : 'connecting'));
     try {
+      // A model that worked here before beats the server default.
+      if (!modelOverrideRef.current) {
+        try {
+          modelOverrideRef.current =
+            window.localStorage.getItem(LIVE_MODEL_CACHE_KEY) || null;
+        } catch {
+          // storage disabled
+        }
+      }
       const tokenRes = await fetch('/api/streaming/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ avatarId }),
+        body: JSON.stringify({
+          avatarId,
+          model: modelOverrideRef.current || undefined,
+        }),
       });
       const tokenJson = (await tokenRes.json()) as {
         token?: string;
@@ -511,6 +542,8 @@ export default function StreamingStage({
       if (!tokenRes.ok || !tokenJson.token) {
         throw new Error(tokenJson.error || `HTTP ${tokenRes.status}`);
       }
+      const usedModel =
+        tokenJson.model || 'gemini-2.5-flash-native-audio-latest';
 
       const ai = new GoogleGenAI({
         apiKey: tokenJson.token,
@@ -522,15 +555,24 @@ export default function StreamingStage({
       });
 
       const session = await ai.live.connect({
-        model: tokenJson.model || 'gemini-2.5-flash-native-audio-latest',
+        model: usedModel,
         config: {
           responseModalities: [Modality.AUDIO],
         },
         callbacks: {
           onopen: () => {
-            console.log('[live] session open');
+            console.log('[live] session open', { model: usedModel });
             sessionOpenRef.current = true;
             reconnectAttemptsRef.current = 0;
+            // This model works for this key — remember it so future
+            // sessions (and reconnects) skip the discovery dance.
+            triedModelsRef.current.clear();
+            modelOverrideRef.current = usedModel;
+            try {
+              window.localStorage.setItem(LIVE_MODEL_CACHE_KEY, usedModel);
+            } catch {
+              // storage disabled
+            }
             // Start the session timer on the first successful open; on
             // auto-reconnect we keep the existing timer running.
             setSessionStartedAt((prev) => prev ?? Date.now());
@@ -562,6 +604,47 @@ export default function StreamingStage({
               code === 1005
             ) {
               setStatus((s) => (s === 'error' ? s : 'ended'));
+              return;
+            }
+
+            // 1008: this key can't use the model we requested. Retrying
+            // the same model is pointless — switch to the next known
+            // Live model and reconnect with that instead.
+            if (code === 1008) {
+              triedModelsRef.current.add(usedModel);
+              try {
+                // The cached model just got rejected; don't keep
+                // re-suggesting it on future visits.
+                if (
+                  window.localStorage.getItem(LIVE_MODEL_CACHE_KEY) ===
+                  usedModel
+                ) {
+                  window.localStorage.removeItem(LIVE_MODEL_CACHE_KEY);
+                }
+              } catch {
+                // storage disabled
+              }
+              const next = LIVE_MODEL_FALLBACKS.find(
+                (m) => !triedModelsRef.current.has(m),
+              );
+              if (next) {
+                console.warn(
+                  `[live] model "${usedModel}" rejected (1008) — trying "${next}"`,
+                );
+                modelOverrideRef.current = next;
+                setStatus('reconnecting');
+                reconnectTimerRef.current = setTimeout(() => {
+                  void start();
+                }, 400);
+                return;
+              }
+              setError(
+                'このAPIキーで利用できるリアルタイム会話モデルが見つかりませんでした。' +
+                  '/api/debug/live-models で利用可能なモデルを確認し、' +
+                  '.env.local の GEMINI_LIVE_MODEL を設定してください。' +
+                  '(全候補がエラー code 1008 で拒否されました)',
+              );
+              setStatus('error');
               return;
             }
 

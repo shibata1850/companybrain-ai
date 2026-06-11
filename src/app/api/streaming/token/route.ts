@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic';
  *     can show a debug peek if it wants
  */
 export async function POST(req: NextRequest) {
-  let body: { avatarId?: string } = {};
+  let body: { avatarId?: string; model?: string } = {};
   try {
     body = await req.json();
   } catch {
@@ -31,6 +31,14 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
+
+  // Optional model override from the client's 1008-fallback loop. Only
+  // accept plain model identifiers so this can't be abused to smuggle
+  // arbitrary config.
+  const modelOverride =
+    typeof body.model === 'string' && /^[a-zA-Z0-9._-]{1,80}$/.test(body.model)
+      ? body.model
+      : null;
 
   const db = supabaseAdmin();
   const { data: avatar } = await db
@@ -162,6 +170,7 @@ ${styleSamples || '（参考発言なし。一般的な人柄として自然に�
         'ephemeral tokens are not supported by this SDK build — upgrade @google/genai',
       );
     }
+    const liveModel = modelOverride || env.geminiLiveModel();
     const token = await create({
       config: {
         uses: 5,
@@ -170,7 +179,7 @@ ${styleSamples || '（参考発言なし。一般的な人柄として自然に�
           Date.now() + 10 * 60 * 1000,
         ).toISOString(),
         liveConnectConstraints: {
-          model: env.geminiLiveModel(),
+          model: liveModel,
           config: liveConfig,
         },
         httpOptions: { apiVersion: 'v1alpha' },
@@ -187,7 +196,7 @@ ${styleSamples || '（参考発言なし。一般的な人柄として自然に�
     }
     return NextResponse.json({
       token: tokenString,
-      model: env.geminiLiveModel(),
+      model: liveModel,
       voice: voiceName,
       avatar: { id: avatar.id, name: avatar.name },
     });
