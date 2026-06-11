@@ -2005,6 +2005,14 @@ function MessageRow({
               🔍 根拠 {sourceCount}件 {sourcesOpen ? '▲' : '▼'}
             </button>
           )}
+          {!isUser && !hasSources && (
+            <p
+              className="mt-1.5 text-[10px] text-amber-600/80"
+              title="この回答は学習素材を検索せずに生成されています。重要な内容は素材や原典で確認してください。"
+            >
+              ⚠ 根拠未参照(素材を検索せずに回答)
+            </p>
+          )}
           {hasSources && sourcesOpen && (
             <div className="mt-2 space-y-2 rounded-lg bg-white p-2.5 text-[11px] leading-relaxed ring-1 ring-neutral-200">
               {m.sources!.map((s, si) => (
