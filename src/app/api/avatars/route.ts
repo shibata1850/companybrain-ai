@@ -206,8 +206,13 @@ async function createBrainFromTextAndPhoto({
   // Optional seed text → knowledge base.
   const text = (form.get('text') as string | null)?.trim();
   if (text) {
+    const folderRaw = form.get('folder');
+    const folder =
+      typeof folderRaw === 'string' && folderRaw.trim()
+        ? folderRaw.trim()
+        : null;
     try {
-      await seedTextKnowledge(db, avatarId, text);
+      await seedTextKnowledge(db, avatarId, text, folder);
     } catch {
       // The brain still exists; the failed training row carries the error.
     }
@@ -225,6 +230,7 @@ async function seedTextKnowledge(
   db: SupabaseClient,
   avatarId: string,
   text: string,
+  folder: string | null,
 ) {
   const { data: tv } = await db
     .from('training_videos')
@@ -234,6 +240,7 @@ async function seedTextKnowledge(
       file_name: 'テキスト学習',
       mime_type: 'text/plain',
       source_type: 'text',
+      folder,
       status: 'processing',
     })
     .select('id')

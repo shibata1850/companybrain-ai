@@ -16,9 +16,15 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const body = (await req.json()) as { text?: string; title?: string };
+  const body = (await req.json()) as {
+    text?: string;
+    title?: string;
+    folder?: string | null;
+  };
   const text = body.text?.trim();
   const title = body.title?.trim() || null;
+  const folder =
+    typeof body.folder === 'string' ? body.folder.trim() || null : null;
   if (!text) {
     return NextResponse.json({ error: 'text is required' }, { status: 400 });
   }
@@ -42,6 +48,7 @@ export async function POST(
       file_name: title ?? 'テキスト学習',
       mime_type: 'text/plain',
       source_type: 'text',
+      folder,
       status: 'processing',
     })
     .select('id')

@@ -15,6 +15,7 @@ export default function NewAvatarPage() {
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [seedText, setSeedText] = useState('');
+  const [seedFolder, setSeedFolder] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progressLabel, setProgressLabel] = useState<string | null>(null);
@@ -51,6 +52,7 @@ export default function NewAvatarPage() {
       // テキスト＋写真モード。どちらも任意だが、片方は入れてもらう想定。
       if (photo) form.append('photo', photo);
       if (seedText.trim()) form.append('text', seedText.trim());
+      if (seedFolder.trim()) form.append('folder', seedFolder.trim());
       setProgressLabel(
         seedText.trim()
           ? 'ブレインを作成し、テキストを学習中… 少し時間がかかります。'
@@ -249,6 +251,25 @@ export default function NewAvatarPage() {
                 かまいません。
               </p>
             </div>
+
+            {seedText.trim() && (
+              <div>
+                <label className="block text-sm font-medium text-neutral-700">
+                  分類フォルダ <span className="text-neutral-400">(任意)</span>
+                </label>
+                <input
+                  type="text"
+                  value={seedFolder}
+                  onChange={(e) => setSeedFolder(e.target.value)}
+                  placeholder="例: 建築基準法 / 議事録 / マニュアル"
+                  className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+                />
+                <p className="mt-1.5 text-xs text-neutral-400">
+                  あとから素材を増やすときに、同じフォルダ名を入れれば
+                  ひとまとめにできます。
+                </p>
+              </div>
+            )}
           </>
         )}
 

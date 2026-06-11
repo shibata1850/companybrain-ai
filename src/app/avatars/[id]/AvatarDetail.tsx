@@ -110,6 +110,7 @@ export default function AvatarDetail({ id }: { id: string }) {
   const [training, setTraining] = useState(false);
   const [trainText, setTrainText] = useState('');
   const [trainTextTitle, setTrainTextTitle] = useState('');
+  const [trainFolder, setTrainFolder] = useState<string | null>(null);
   const [trainingText, setTrainingText] = useState(false);
 
   // Live transcript log. Persisted as a collection of threads so the
@@ -416,6 +417,7 @@ export default function AvatarDetail({ id }: { id: string }) {
     if (!trainFile) return;
     const form = new FormData();
     form.append('video', trainFile);
+    if (trainFolder) form.append('folder', trainFolder);
     setTraining(true);
     setError(null);
     try {
@@ -446,6 +448,7 @@ export default function AvatarDetail({ id }: { id: string }) {
         body: JSON.stringify({
           text: trainText,
           title: trainTextTitle.trim() || undefined,
+          folder: trainFolder,
         }),
       });
       const json = (await res.json()) as { error?: string };
@@ -802,6 +805,8 @@ export default function AvatarDetail({ id }: { id: string }) {
             onChangeTextTitle={setTrainTextTitle}
             onSubmitText={addTrainingText}
             submittingText={trainingText}
+            trainFolder={trainFolder}
+            onChangeFolder={setTrainFolder}
           />
         </div>
       </div>
@@ -849,6 +854,8 @@ function TrainingPanel({
   onChangeTextTitle,
   onSubmitText,
   submittingText,
+  trainFolder,
+  onChangeFolder,
 }: {
   avatarId: string;
   avatarName: string;
@@ -863,10 +870,14 @@ function TrainingPanel({
   onChangeTextTitle: (v: string) => void;
   onSubmitText: (e: React.FormEvent) => void;
   submittingText: boolean;
+  trainFolder: string | null;
+  onChangeFolder: (folder: string | null) => void;
 }) {
   const [mode, setMode] = useState<'video' | 'text'>('text');
 
-  // Compact folder summary derived from the videos list.
+  // Compact folder summary derived from the videos list. Skips the
+  // synthetic 未分類 bucket so the picker only suggests folders the
+  // operator has actually named.
   const folders = useMemo(() => {
     const counts = new Map<string, number>();
     for (const v of videos) {
@@ -875,6 +886,11 @@ function TrainingPanel({
     }
     return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
   }, [videos]);
+
+  const folderOptions = useMemo(
+    () => folders.filter(([name]) => name !== '未分類').map(([name]) => name),
+    [folders],
+  );
 
   return (
     <aside className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-5">
@@ -911,6 +927,12 @@ function TrainingPanel({
           動画
         </button>
       </div>
+
+      <FolderPickerInline
+        current={trainFolder}
+        options={folderOptions}
+        onChange={onChangeFolder}
+      />
 
       {mode === 'video' ? (
         <form onSubmit={onSubmitVideo} className="space-y-3">
@@ -1007,6 +1029,119 @@ function TrainingPanel({
         )}
       </div>
     </aside>
+  );
+}
+
+/**
+ * Compact folder selector for the training panel. Existing folder names
+ * appear as one-click chips; "+ 新規" opens an inline text input so the
+ * operator can create a new bucket without leaving the panel.
+ */
+function FolderPickerInline({
+  current,
+  options,
+  onChange,
+}: {
+  current: string | null;
+  options: string[];
+  onChange: (next: string | null) => void;
+}) {
+  const [creating, setCreating] = useState(false);
+  const [draft, setDraft] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (creating) inputRef.current?.focus();
+  }, [creating]);
+
+  function commit() {
+    const next = draft.trim();
+    if (next) onChange(next);
+    setDraft('');
+    setCreating(false);
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-500">
+          分類フォルダ
+        </span>
+        {current && (
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            className="text-[10px] text-neutral-400 hover:text-neutral-900"
+          >
+            未分類に戻す
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-1">
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          className={`rounded-full border px-2 py-0.5 text-[11px] transition ${
+            current === null
+              ? 'border-neutral-900 bg-neutral-900 text-white'
+              : 'border-neutral-300 bg-white text-neutral-600 hover:border-neutral-900'
+          }`}
+        >
+          📁 未分類
+        </button>
+        {options.map((name) => (
+          <button
+            key={name}
+            type="button"
+            onClick={() => onChange(name)}
+            className={`max-w-[10rem] truncate rounded-full border px-2 py-0.5 text-[11px] transition ${
+              current === name
+                ? 'border-neutral-900 bg-neutral-900 text-white'
+                : 'border-neutral-300 bg-white text-neutral-600 hover:border-neutral-900'
+            }`}
+            title={name}
+          >
+            📂 {name}
+          </button>
+        ))}
+        {creating ? (
+          <span className="inline-flex items-center gap-1 rounded-full border border-neutral-900 bg-white px-1 py-0.5">
+            <input
+              ref={inputRef}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  commit();
+                } else if (e.key === 'Escape') {
+                  setDraft('');
+                  setCreating(false);
+                }
+              }}
+              onBlur={commit}
+              placeholder="フォルダ名"
+              className="w-24 bg-transparent text-[11px] outline-none"
+            />
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="rounded-full border border-dashed border-neutral-300 px-2 py-0.5 text-[11px] text-neutral-500 transition hover:border-neutral-900 hover:text-neutral-900"
+          >
+            ＋ 新規
+          </button>
+        )}
+      </div>
+      {current && (
+        <p className="text-[10px] text-neutral-400">
+          このあと学習させる素材は
+          <span className="font-medium text-neutral-700">「{current}」</span>
+          に保存されます。
+        </p>
+      )}
+    </div>
   );
 }
 

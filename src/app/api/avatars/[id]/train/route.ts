@@ -29,6 +29,11 @@ export async function POST(
 
   const form = await req.formData();
   const file = form.get('video');
+  const folderRaw = form.get('folder');
+  const folder =
+    typeof folderRaw === 'string' && folderRaw.trim()
+      ? folderRaw.trim()
+      : null;
   if (!(file instanceof File)) {
     return NextResponse.json(
       { error: 'video file is required' },
@@ -55,6 +60,7 @@ export async function POST(
       storage_path: storagePath,
       file_name: file.name,
       mime_type: mimeType,
+      folder,
       status: 'pending',
     })
     .select('id')
