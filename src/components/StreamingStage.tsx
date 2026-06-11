@@ -187,6 +187,14 @@ export default function StreamingStage({
   // doesn't register as user speech.
   const speakingEndedAtRef = useRef(0);
   const mutedRef = useRef(false);
+  // When `interrupted` fires we cancel the audio queue, but the server
+  // keeps streaming chunks from the in-flight generation for several
+  // more seconds. Those late chunks would re-open the speaker and
+  // re-close the half-duplex mic gate, so the next user question is
+  // swallowed and the session looks frozen. Block further audio
+  // playback after an interrupt until the user clearly starts a new
+  // turn (inputTranscription arrives, or text input is sent).
+  const audioBlockedRef = useRef(false);
   // Half-duplex by default: while the agent is speaking we don't send
   // mic audio upstream. Browser echo cancellation does NOT cover Web
   // Audio playback, so on speakers the agent's own voice comes back in
@@ -261,6 +269,10 @@ export default function StreamingStage({
   }, [stop]);
 
   function playAudioChunk(base64: string) {
+    // Drop chunks that arrive after an interrupt — they're ghost
+    // audio from the cancelled generation and would otherwise re-open
+    // the speaker and block the mic for the user's next question.
+    if (audioBlockedRef.current) return;
     const ctx = outputCtxRef.current;
     if (!ctx) return;
     const pcm = base64ToInt16(base64);
@@ -411,6 +423,8 @@ export default function StreamingStage({
     // instead of waiting for the turn to finish.
     const inputTx = sc?.inputTranscription?.text;
     if (inputTx) {
+      // User is starting a new turn — accept the next model response.
+      audioBlockedRef.current = false;
       userBufRef.current += inputTx;
       onPartialRef.current?.('user', cleanTranscript(userBufRef.current));
     }
@@ -438,6 +452,10 @@ export default function StreamingStage({
       } else {
         stopAllPlayback();
         flushTranscripts();
+        // Latch the audio block so the rest of the in-flight
+        // generation doesn't leak through. Cleared the moment the
+        // user starts a new turn (input transcription / text input).
+        audioBlockedRef.current = true;
         setStatus('listening');
       }
     }
@@ -897,8 +915,10 @@ export default function StreamingStage({
       at: Date.now(),
     });
     // Any agent audio that was already playing should be cut off so it
-    // doesn't talk over its new answer.
+    // doesn't talk over its new answer. Also lift the post-interrupt
+    // audio block — a brand new turn just started.
     stopAllPlayback();
+    audioBlockedRef.current = false;
   }
 
   function onTextSubmit(e: React.FormEvent) {
