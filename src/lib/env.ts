@@ -46,4 +46,7 @@ export const env = {
   geminiLiveModel: () =>
     process.env.GEMINI_LIVE_MODEL || 'gemini-2.5-flash-native-audio-latest',
   geminiLiveVoice: () => process.env.GEMINI_LIVE_VOICE || 'Kore',
+  // Shared secret for the external ingestion API (/api/ingest/*).
+  // Empty = ingestion endpoints are disabled.
+  ingestApiKey: () => process.env.INGEST_API_KEY || '',
 };
