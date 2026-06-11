@@ -1288,8 +1288,6 @@ function TranscriptPanel({
   const [showPinnedOnly, setShowPinnedOnly] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const threadButtonRef = useRef<HTMLButtonElement>(null);
-  const [threadMenuOpen, setThreadMenuOpen] = useState(false);
 
   const filteredMessages = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -1338,101 +1336,53 @@ function TranscriptPanel({
       : 0;
   const pinnedCount = messages.filter((m) => m.pinned).length;
 
-  const currentThread = threads.find((t) => t.id === currentThreadId) ?? null;
-  const currentLabel = currentThread
-    ? threadTitle(currentThread)
-    : '新しい会話';
+  const sortedThreads = useMemo(
+    () => [...threads].sort((a, b) => b.updatedAt - a.updatedAt),
+    [threads],
+  );
 
   return (
     <section>
+      {/* Header: collapse toggle on the left, view tools on the right. */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onToggle}
-            className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900"
+        <button
+          type="button"
+          onClick={onToggle}
+          className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900"
+        >
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 10 10"
+            className={`transition ${open ? 'rotate-90' : ''}`}
+            aria-hidden
           >
-            <svg
-              width="10"
-              height="10"
-              viewBox="0 0 10 10"
-              className={`transition ${open ? 'rotate-90' : ''}`}
-              aria-hidden
-            >
-              <path
-                d="M3 2l4 3-4 3"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            会話
-            <span className="rounded-full bg-neutral-100 px-1.5 text-[10px] font-medium text-neutral-500">
-              {messages.length + totalLive}件
-            </span>
-            {turns > 0 && (
-              <span className="text-[10px] text-neutral-400">
-                ・ {turns}往復
-              </span>
-            )}
-          </button>
-          <button
-            ref={threadButtonRef}
-            type="button"
-            onClick={() => setThreadMenuOpen((o) => !o)}
-            className="inline-flex max-w-[14rem] items-center gap-1 truncate rounded-full border border-neutral-300 bg-white px-2 py-0.5 text-[11px] text-neutral-700 transition hover:border-neutral-900"
-            title="スレッドを切り替え"
-          >
-            <span className="truncate">📂 {currentLabel}</span>
-            {threads.length > 1 && (
-              <span className="rounded bg-neutral-100 px-1 text-[10px] text-neutral-500">
-                {threads.length}
-              </span>
-            )}
-            <svg width="8" height="8" viewBox="0 0 10 10" aria-hidden>
-              <path
-                d="M2 4l3 3 3-3"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-          <PortalMenu
-            anchorRef={threadButtonRef}
-            open={threadMenuOpen}
-            onClose={() => setThreadMenuOpen(false)}
-            width={288}
-          >
-            <ThreadList
-              threads={threads}
-              currentThreadId={currentThreadId}
-              onSwitch={(id) => {
-                onSwitchThread(id);
-                setThreadMenuOpen(false);
-              }}
-              onRename={onRenameThread}
-              onDelete={onDeleteThread}
-              onNew={() => {
-                onNewThread();
-                setThreadMenuOpen(false);
-              }}
+            <path
+              d="M3 2l4 3-4 3"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             />
-          </PortalMenu>
-        </div>
-        <div className="flex items-center gap-3 text-[11px]">
+          </svg>
+          会話
+          <span className="rounded-full bg-neutral-100 px-1.5 text-[10px] font-medium text-neutral-500">
+            {messages.length + totalLive}件
+          </span>
+          {turns > 0 && (
+            <span className="text-[10px] text-neutral-400">・ {turns}往復</span>
+          )}
+        </button>
+        <div className="flex items-center gap-1">
           {pinnedCount > 0 && (
             <button
               type="button"
               onClick={() => setShowPinnedOnly((v) => !v)}
-              className={`inline-flex items-center gap-1 transition ${
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] transition ${
                 showPinnedOnly
-                  ? 'text-amber-600'
-                  : 'text-neutral-500 hover:text-neutral-900'
+                  ? 'bg-amber-100 text-amber-800'
+                  : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900'
               }`}
               title="ピン留めだけ表示"
             >
@@ -1446,10 +1396,10 @@ function TranscriptPanel({
                 setSearchOpen((v) => !v);
                 if (searchOpen) setSearch('');
               }}
-              className={`inline-flex items-center gap-1 transition ${
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] transition ${
                 searchOpen
-                  ? 'text-neutral-900'
-                  : 'text-neutral-500 hover:text-neutral-900'
+                  ? 'bg-neutral-200 text-neutral-900'
+                  : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900'
               }`}
               title="会話を検索 (/)"
             >
@@ -1477,7 +1427,7 @@ function TranscriptPanel({
             <button
               type="button"
               onClick={onExport}
-              className="inline-flex items-center gap-1 text-neutral-500 transition hover:text-neutral-900"
+              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
               title="Markdown としてダウンロード"
             >
               <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden>
@@ -1493,295 +1443,308 @@ function TranscriptPanel({
               書き出し
             </button>
           )}
-          <button
-            type="button"
-            onClick={onNewThread}
-            className="text-neutral-500 transition hover:text-neutral-900"
-            title="新しいスレッドを始める"
-          >
-            ＋新規
-          </button>
         </div>
       </div>
 
-      {searchOpen && open && (
-        <div className="mt-2 flex items-center gap-2 rounded-full border border-neutral-300 bg-white px-3 py-1.5 anim-fade-in">
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 16 16"
-            aria-hidden
-            className="text-neutral-400"
-          >
-            <circle
-              cx="7"
-              cy="7"
-              r="4.5"
-              stroke="currentColor"
-              strokeWidth="1.4"
-              fill="none"
-            />
-            <path
-              d="M10.5 10.5L14 14"
-              stroke="currentColor"
-              strokeWidth="1.4"
-              fill="none"
-              strokeLinecap="round"
-            />
-          </svg>
-          <input
-            ref={searchInputRef}
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                setSearch('');
-                setSearchOpen(false);
-              }
-            }}
-            placeholder="会話を検索…(Esc で閉じる)"
-            className="flex-1 bg-transparent text-xs outline-none placeholder:text-neutral-400"
-          />
-          {search && (
-            <span className="text-[10px] text-neutral-500">
-              {filteredMessages.length} / {messages.length} 件
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              setSearch('');
-              setSearchOpen(false);
-            }}
-            className="text-[11px] text-neutral-400 hover:text-neutral-900"
-          >
-            閉じる
-          </button>
-        </div>
-      )}
-
       {open && (
-        <div
-          ref={scrollerRef}
-          className="mt-3 max-h-[28rem] overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-3 anim-fade-in"
-        >
-          {messages.length === 0 && !partialUser && !partialAgent ? (
-            <div className="space-y-3 py-6 text-center">
-              <p className="text-xs text-neutral-400">
-                セッションを開始して話しかけると、ここに会話が記録されます。
-              </p>
-              {threads.length > 1 && (
-                <p className="text-[10px] text-neutral-400">
-                  過去のスレッドは📂から呼び出せます。
-                </p>
-              )}
-            </div>
-          ) : (
-            <ul className="space-y-2.5">
-              {hiddenByFilter > 0 && (
-                <li className="rounded-md bg-neutral-50 px-3 py-1.5 text-center text-[10px] text-neutral-500">
-                  非表示中: {hiddenByFilter} 件
-                </li>
-              )}
-              {filteredMessages.map((m) => (
-                <MessageRow
-                  key={m.id}
-                  m={m}
-                  avatarName={avatarName}
-                  search={search}
-                  onUpdate={(patch) => onUpdateMessage(m.id, patch)}
+        <div className="mt-3 overflow-hidden rounded-2xl border border-neutral-200 bg-white anim-fade-in">
+          {searchOpen && (
+            <div className="flex items-center gap-2 border-b border-neutral-100 px-4 py-2">
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 16 16"
+                aria-hidden
+                className="shrink-0 text-neutral-400"
+              >
+                <circle
+                  cx="7"
+                  cy="7"
+                  r="4.5"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  fill="none"
                 />
-              ))}
-              {partialUser && (
-                <li className="flex justify-end">
-                  <div className="max-w-[80%] rounded-2xl rounded-br-md bg-neutral-900 px-3 py-2 text-sm text-white opacity-80">
-                    <p className="text-[10px] uppercase tracking-wider opacity-60">
-                      あなた(入力中)
-                    </p>
-                    <p className="mt-0.5 whitespace-pre-wrap leading-relaxed">
-                      {partialUser}
-                      <span className="ml-0.5 inline-block h-3 w-[2px] animate-pulse bg-white" />
-                    </p>
-                  </div>
-                </li>
+                <path
+                  d="M10.5 10.5L14 14"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  fill="none"
+                  strokeLinecap="round"
+                />
+              </svg>
+              <input
+                ref={searchInputRef}
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setSearch('');
+                    setSearchOpen(false);
+                  }
+                }}
+                placeholder="会話を検索…(Esc で閉じる)"
+                className="flex-1 bg-transparent text-xs outline-none placeholder:text-neutral-400"
+              />
+              {search && (
+                <span className="shrink-0 text-[10px] text-neutral-500">
+                  {filteredMessages.length} / {messages.length} 件
+                </span>
               )}
-              {partialAgent && (
-                <li className="flex justify-start">
-                  <div className="max-w-[80%] rounded-2xl rounded-bl-md bg-neutral-100 px-3 py-2 text-sm text-neutral-900 opacity-80">
-                    <p className="text-[10px] uppercase tracking-wider opacity-60">
-                      {avatarName}(話し中)
-                    </p>
-                    <p className="mt-0.5 whitespace-pre-wrap leading-relaxed">
-                      {partialAgent}
-                      <span className="ml-0.5 inline-block h-3 w-[2px] animate-pulse bg-neutral-900" />
-                    </p>
-                  </div>
-                </li>
-              )}
-            </ul>
-          )}
-          {messages.length > 0 && (
-            <div className="mt-3 border-t border-neutral-100 pt-2 text-right">
               <button
                 type="button"
-                onClick={onClearCurrent}
-                className="text-[10px] text-neutral-400 hover:text-red-600"
-                title="このスレッドの内容を空にする"
+                onClick={() => {
+                  setSearch('');
+                  setSearchOpen(false);
+                }}
+                className="shrink-0 text-[11px] text-neutral-400 hover:text-neutral-900"
               >
-                このスレッドを空にする
+                閉じる
               </button>
             </div>
           )}
+
+          <div className="flex h-[30rem]">
+            {/* Thread sidebar — always visible on sm+ so switching
+                conversations is one click, not buried in a menu. */}
+            <aside className="hidden w-48 shrink-0 flex-col border-r border-neutral-100 bg-neutral-50/70 sm:flex">
+              <div className="p-2">
+                <button
+                  type="button"
+                  onClick={onNewThread}
+                  className="w-full rounded-lg bg-neutral-900 py-1.5 text-xs font-medium text-white transition hover:bg-neutral-700"
+                >
+                  ＋ 新しい会話
+                </button>
+              </div>
+              <div className="flex-1 space-y-1 overflow-y-auto px-2 pb-2">
+                {sortedThreads.length === 0 && (
+                  <p className="px-2 py-3 text-center text-[10px] text-neutral-400">
+                    まだ会話がありません
+                  </p>
+                )}
+                {sortedThreads.map((t) => (
+                  <ThreadRow
+                    key={t.id}
+                    thread={t}
+                    current={t.id === currentThreadId}
+                    onSwitch={() => onSwitchThread(t.id)}
+                    onRename={(title) => onRenameThread(t.id, title)}
+                    onDelete={() => onDeleteThread(t.id)}
+                  />
+                ))}
+              </div>
+            </aside>
+
+            <div className="flex min-w-0 flex-1 flex-col">
+              {/* Mobile fallback: a plain select for switching threads. */}
+              <div className="flex items-center gap-2 border-b border-neutral-100 px-3 py-2 sm:hidden">
+                <select
+                  value={currentThreadId ?? ''}
+                  onChange={(e) => {
+                    if (e.target.value === '__new__') onNewThread();
+                    else if (e.target.value) onSwitchThread(e.target.value);
+                  }}
+                  className="w-full rounded-lg border border-neutral-300 bg-white px-2 py-1.5 text-xs"
+                >
+                  {sortedThreads.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {threadTitle(t)}（{t.messages.length}件）
+                    </option>
+                  ))}
+                  <option value="__new__">＋ 新しい会話</option>
+                </select>
+              </div>
+
+              <div ref={scrollerRef} className="flex-1 overflow-y-auto p-4">
+                {messages.length === 0 && !partialUser && !partialAgent ? (
+                  <div className="flex h-full items-center justify-center">
+                    <p className="text-center text-xs leading-relaxed text-neutral-400">
+                      セッションを開始して話しかけると、
+                      <br />
+                      ここに会話が記録されます。
+                    </p>
+                  </div>
+                ) : (
+                  <ul className="space-y-4">
+                    {hiddenByFilter > 0 && (
+                      <li className="rounded-md bg-neutral-50 px-3 py-1.5 text-center text-[10px] text-neutral-500">
+                        非表示中: {hiddenByFilter} 件
+                      </li>
+                    )}
+                    {filteredMessages.map((m) => (
+                      <MessageRow
+                        key={m.id}
+                        m={m}
+                        avatarName={avatarName}
+                        search={search}
+                        onUpdate={(patch) => onUpdateMessage(m.id, patch)}
+                      />
+                    ))}
+                    {partialUser && (
+                      <li className="flex justify-end">
+                        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-neutral-900 px-3.5 py-2.5 text-sm text-white opacity-80">
+                          <p className="text-[10px] uppercase tracking-wider opacity-60">
+                            あなた(入力中)
+                          </p>
+                          <p className="mt-1 whitespace-pre-wrap leading-relaxed">
+                            {partialUser}
+                            <span className="ml-0.5 inline-block h-3 w-[2px] animate-pulse bg-white" />
+                          </p>
+                        </div>
+                      </li>
+                    )}
+                    {partialAgent && (
+                      <li className="flex justify-start">
+                        <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-neutral-100 px-3.5 py-2.5 text-sm text-neutral-900 opacity-80">
+                          <p className="text-[10px] uppercase tracking-wider opacity-60">
+                            {avatarName}(話し中)
+                          </p>
+                          <p className="mt-1 whitespace-pre-wrap leading-relaxed">
+                            {partialAgent}
+                            <span className="ml-0.5 inline-block h-3 w-[2px] animate-pulse bg-neutral-900" />
+                          </p>
+                        </div>
+                      </li>
+                    )}
+                  </ul>
+                )}
+              </div>
+
+              {messages.length > 0 && (
+                <div className="flex items-center justify-end border-t border-neutral-100 px-3 py-1.5">
+                  <button
+                    type="button"
+                    onClick={onClearCurrent}
+                    className="text-[10px] text-neutral-400 transition hover:text-red-600"
+                    title="この会話の内容を空にする(スレッドは残る)"
+                  >
+                    この会話を空にする
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </section>
   );
 }
 
-function ThreadList({
-  threads,
-  currentThreadId,
+function ThreadRow({
+  thread,
+  current,
   onSwitch,
   onRename,
   onDelete,
-  onNew,
 }: {
-  threads: ChatThread[];
-  currentThreadId: string | null;
-  onSwitch: (id: string) => void;
-  onRename: (id: string, title: string) => void;
-  onDelete: (id: string) => void;
-  onNew: () => void;
+  thread: ChatThread;
+  current: boolean;
+  onSwitch: () => void;
+  onRename: (title: string) => void;
+  onDelete: () => void;
 }) {
-  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState('');
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
-  const sorted = useMemo(
-    () => [...threads].sort((a, b) => b.updatedAt - a.updatedAt),
-    [threads],
-  );
+  if (renaming) {
+    return (
+      <div className="rounded-lg bg-white p-1 shadow-sm ring-1 ring-neutral-200">
+        <input
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => {
+            onRename(draft);
+            setRenaming(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              onRename(draft);
+              setRenaming(false);
+            } else if (e.key === 'Escape') {
+              setRenaming(false);
+            }
+          }}
+          className="w-full rounded border border-neutral-300 px-1.5 py-1 text-xs focus:border-neutral-900 focus:outline-none"
+        />
+      </div>
+    );
+  }
 
   return (
-    <div>
+    <div
+      className={`group relative rounded-lg transition ${
+        current
+          ? 'bg-white shadow-sm ring-1 ring-neutral-200'
+          : 'hover:bg-white/70'
+      }`}
+    >
       <button
         type="button"
-        onClick={onNew}
-        className="block w-full border-b border-neutral-100 px-3 py-2 text-left text-xs font-medium text-neutral-900 hover:bg-neutral-50"
+        onClick={onSwitch}
+        className="block w-full px-2 py-1.5 text-left"
       >
-        ＋ 新しい会話を始める
+        <span
+          className={`block truncate pr-8 text-xs ${
+            current ? 'font-medium text-neutral-900' : 'text-neutral-600'
+          }`}
+        >
+          {threadTitle(thread)}
+        </span>
+        <span className="mt-0.5 block text-[10px] text-neutral-400">
+          {thread.messages.length}件 ・{' '}
+          {new Date(thread.updatedAt).toLocaleDateString('ja-JP', {
+            month: 'numeric',
+            day: 'numeric',
+          })}
+        </span>
       </button>
-      {sorted.length === 0 && (
-        <p className="px-3 py-3 text-[11px] text-neutral-400">
-          スレッドはまだありません。
-        </p>
-      )}
-      {sorted.map((t) => {
-        const isCurrent = t.id === currentThreadId;
-        const isRenaming = renamingId === t.id;
-        const isConfirming = confirmDeleteId === t.id;
-        return (
-          <div
-            key={t.id}
-            className={`group border-b border-neutral-100 px-3 py-2 text-xs last:border-b-0 ${
-              isCurrent ? 'bg-neutral-50' : 'hover:bg-neutral-50'
-            }`}
+      {confirming ? (
+        <div className="absolute right-1 top-1 z-10 flex items-center gap-1 rounded-md bg-white px-1.5 py-0.5 text-[10px] shadow ring-1 ring-neutral-200">
+          <button
+            type="button"
+            onClick={() => setConfirming(false)}
+            className="text-neutral-500 hover:text-neutral-900"
           >
-            {isRenaming ? (
-              <input
-                autoFocus
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onBlur={() => {
-                  onRename(t.id, draft);
-                  setRenamingId(null);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    onRename(t.id, draft);
-                    setRenamingId(null);
-                  } else if (e.key === 'Escape') {
-                    setRenamingId(null);
-                  }
-                }}
-                className="w-full rounded border border-neutral-300 px-2 py-1 text-xs focus:border-neutral-900 focus:outline-none"
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={() => onSwitch(t.id)}
-                className="block w-full text-left"
-              >
-                <span
-                  className={`block truncate ${
-                    isCurrent ? 'font-medium text-neutral-900' : 'text-neutral-700'
-                  }`}
-                >
-                  {threadTitle(t)}
-                </span>
-                <span className="block text-[10px] text-neutral-400">
-                  {t.messages.length}件 ・{' '}
-                  {new Date(t.updatedAt).toLocaleString('ja-JP', {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </span>
-              </button>
-            )}
-            {!isRenaming && (
-              <div className="mt-1 flex items-center gap-2 text-[10px] text-neutral-400 opacity-0 transition group-hover:opacity-100">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDraft(t.title ?? threadTitle(t));
-                    setRenamingId(t.id);
-                  }}
-                  className="hover:text-neutral-900"
-                >
-                  名前を変更
-                </button>
-                <span>·</span>
-                {isConfirming ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmDeleteId(null)}
-                      className="hover:text-neutral-900"
-                    >
-                      取消
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onDelete(t.id);
-                        setConfirmDeleteId(null);
-                      }}
-                      className="font-medium text-red-600"
-                    >
-                      削除を実行
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setConfirmDeleteId(t.id);
-                    }}
-                    className="hover:text-red-600"
-                  >
-                    削除
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        );
-      })}
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onDelete();
+              setConfirming(false);
+            }}
+            className="font-medium text-red-600"
+          >
+            削除
+          </button>
+        </div>
+      ) : (
+        <div className="absolute right-1 top-1 hidden items-center gap-0.5 rounded-md bg-white/90 px-0.5 shadow-sm ring-1 ring-neutral-200 group-hover:flex">
+          <button
+            type="button"
+            onClick={() => {
+              setDraft(thread.title ?? threadTitle(thread));
+              setRenaming(true);
+            }}
+            className="rounded p-0.5 text-[10px] text-neutral-500 hover:text-neutral-900"
+            title="名前を変更"
+          >
+            ✎
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            className="rounded p-0.5 text-[10px] text-neutral-500 hover:text-red-600"
+            title="この会話を削除"
+          >
+            🗑
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1801,116 +1764,26 @@ function MessageRow({
   const [noteDraft, setNoteDraft] = useState(m.note ?? '');
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const isUser = m.role === 'user';
-  const hasSources = !!m.sources && m.sources.length > 0;
+  const hasSources = !isUser && !!m.sources && m.sources.length > 0;
+  const sourceCount = hasSources
+    ? m.sources!.reduce((sum, s) => sum + s.chunks.length, 0)
+    : 0;
 
   return (
     <li className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-      <div
-        className={`group max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
-          isUser
-            ? 'rounded-br-md bg-neutral-900 text-white'
-            : 'rounded-bl-md bg-neutral-100 text-neutral-900'
-        }`}
-      >
-        <div className="flex items-baseline justify-between gap-2">
-          <p className="text-[10px] uppercase tracking-wider opacity-60">
-            {isUser ? 'あなた' : avatarName}
-          </p>
-          <span className="text-[10px] opacity-50">
-            {new Date(m.at).toLocaleTimeString('ja-JP', {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </span>
-        </div>
-        <p className="mt-0.5 whitespace-pre-wrap leading-relaxed">
-          <Highlight text={m.text} term={search} />
-        </p>
-        {m.note && (
-          <div
-            className={`mt-1.5 rounded-md px-2 py-1 text-[11px] ${
-              isUser
-                ? 'bg-white/10 text-white/80'
-                : 'bg-amber-50 text-amber-900'
-            }`}
-          >
-            📝 {m.note}
-          </div>
-        )}
-        {hasSources && sourcesOpen && (
-          <div className="mt-2 space-y-1.5 rounded-md bg-white/5 p-2 text-[11px] leading-relaxed">
-            {m.sources!.map((s, si) => (
-              <div key={si}>
-                <p className={isUser ? 'text-white/80' : 'text-neutral-500'}>
-                  🔍 {s.query}
-                </p>
-                <ul className="ml-3 list-disc space-y-0.5">
-                  {s.chunks.slice(0, 4).map((c, ci) => (
-                    <li
-                      key={ci}
-                      className={
-                        isUser ? 'text-white/70' : 'text-neutral-700'
-                      }
-                    >
-                      {c.length > 180 ? c.slice(0, 180) + '…' : c}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        )}
-        {noteOpen && (
-          <div className="mt-2 space-y-1">
-            <textarea
-              value={noteDraft}
-              onChange={(e) => setNoteDraft(e.target.value)}
-              placeholder="このメッセージへのメモ"
-              className={`w-full rounded-md border px-2 py-1 text-[11px] focus:outline-none ${
-                isUser
-                  ? 'border-white/20 bg-white/10 text-white placeholder:text-white/40'
-                  : 'border-neutral-300 bg-white text-neutral-900 placeholder:text-neutral-400'
-              }`}
-              rows={2}
-            />
-            <div className="flex justify-end gap-1.5 text-[10px]">
-              <button
-                type="button"
-                onClick={() => {
-                  setNoteDraft(m.note ?? '');
-                  setNoteOpen(false);
-                }}
-                className="opacity-60 hover:opacity-100"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onUpdate({ note: noteDraft.trim() || undefined });
-                  setNoteOpen(false);
-                }}
-                className="font-medium"
-              >
-                保存
-              </button>
-            </div>
-          </div>
-        )}
+      <div className="group relative max-w-[85%]">
+        {/* Floating action toolbar — appears on hover above the bubble
+            so it never shifts the message layout. */}
         <div
-          className={`mt-1.5 flex items-center gap-2 text-[11px] opacity-0 transition group-hover:opacity-100 ${
-            m.pinned || m.rating || m.note ? 'opacity-100' : ''
+          className={`absolute -top-3 z-10 hidden items-center gap-0.5 rounded-full border border-neutral-200 bg-white px-1 py-0.5 shadow-sm group-hover:flex ${
+            isUser ? 'left-2' : 'right-2'
           }`}
         >
           <button
             type="button"
             onClick={() => onUpdate({ pinned: !m.pinned })}
-            className={`transition ${
-              m.pinned
-                ? 'text-amber-400'
-                : isUser
-                  ? 'text-white/50 hover:text-white'
-                  : 'text-neutral-400 hover:text-neutral-900'
+            className={`rounded-full px-1 text-[12px] leading-none transition ${
+              m.pinned ? 'opacity-100' : 'opacity-40 hover:opacity-100'
             }`}
             title={m.pinned ? 'ピンを外す' : 'ピン留め'}
           >
@@ -1922,14 +1795,8 @@ function MessageRow({
               setNoteDraft(m.note ?? '');
               setNoteOpen((v) => !v);
             }}
-            className={`transition ${
-              m.note
-                ? isUser
-                  ? 'text-white'
-                  : 'text-amber-700'
-                : isUser
-                  ? 'text-white/50 hover:text-white'
-                  : 'text-neutral-400 hover:text-neutral-900'
+            className={`rounded-full px-1 text-[12px] leading-none transition ${
+              m.note ? 'opacity-100' : 'opacity-40 hover:opacity-100'
             }`}
             title="メモを追加"
           >
@@ -1942,10 +1809,10 @@ function MessageRow({
                 onClick={() =>
                   onUpdate({ rating: m.rating === 'up' ? null : 'up' })
                 }
-                className={`transition ${
+                className={`rounded-full px-1 text-[12px] leading-none transition ${
                   m.rating === 'up'
-                    ? 'text-green-600'
-                    : 'text-neutral-400 hover:text-green-600'
+                    ? 'opacity-100'
+                    : 'opacity-40 hover:opacity-100'
                 }`}
                 title="良い回答"
               >
@@ -1956,26 +1823,117 @@ function MessageRow({
                 onClick={() =>
                   onUpdate({ rating: m.rating === 'down' ? null : 'down' })
                 }
-                className={`transition ${
+                className={`rounded-full px-1 text-[12px] leading-none transition ${
                   m.rating === 'down'
-                    ? 'text-red-600'
-                    : 'text-neutral-400 hover:text-red-600'
+                    ? 'opacity-100'
+                    : 'opacity-40 hover:opacity-100'
                 }`}
                 title="改善が必要"
               >
                 👎
               </button>
-              {hasSources && (
+            </>
+          )}
+        </div>
+
+        <div
+          className={`rounded-2xl px-3.5 py-2.5 text-sm ${
+            isUser
+              ? 'rounded-br-md bg-neutral-900 text-white'
+              : 'rounded-bl-md bg-neutral-100 text-neutral-900'
+          }`}
+        >
+          <div className="flex items-center gap-2 text-[10px] opacity-60">
+            <span className="font-medium uppercase tracking-wider">
+              {isUser ? 'あなた' : avatarName}
+            </span>
+            <span>
+              {new Date(m.at).toLocaleTimeString('ja-JP', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </span>
+            {m.pinned && <span title="ピン留め済み">📌</span>}
+            {m.rating === 'up' && <span>👍</span>}
+            {m.rating === 'down' && <span>👎</span>}
+          </div>
+          <p className="mt-1 whitespace-pre-wrap leading-relaxed">
+            <Highlight text={m.text} term={search} />
+          </p>
+
+          {hasSources && (
+            <button
+              type="button"
+              onClick={() => setSourcesOpen((v) => !v)}
+              className="mt-2 inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[10px] text-neutral-600 ring-1 ring-neutral-200 transition hover:text-neutral-900"
+            >
+              🔍 根拠 {sourceCount}件 {sourcesOpen ? '▲' : '▼'}
+            </button>
+          )}
+          {hasSources && sourcesOpen && (
+            <div className="mt-2 space-y-2 rounded-lg bg-white p-2.5 text-[11px] leading-relaxed ring-1 ring-neutral-200">
+              {m.sources!.map((s, si) => (
+                <div key={si}>
+                  <p className="font-medium text-neutral-500">🔍 {s.query}</p>
+                  <ul className="ml-3 mt-0.5 list-disc space-y-0.5 text-neutral-700">
+                    {s.chunks.slice(0, 4).map((c, ci) => (
+                      <li key={ci}>
+                        {c.length > 180 ? c.slice(0, 180) + '…' : c}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {m.note && !noteOpen && (
+            <div
+              className={`mt-2 rounded-md px-2 py-1 text-[11px] ${
+                isUser
+                  ? 'bg-white/10 text-white/80'
+                  : 'bg-amber-50 text-amber-900'
+              }`}
+            >
+              📝 {m.note}
+            </div>
+          )}
+          {noteOpen && (
+            <div className="mt-2 space-y-1">
+              <textarea
+                value={noteDraft}
+                onChange={(e) => setNoteDraft(e.target.value)}
+                placeholder="このメッセージへのメモ"
+                className={`w-full rounded-md border px-2 py-1 text-[11px] focus:outline-none ${
+                  isUser
+                    ? 'border-white/20 bg-white/10 text-white placeholder:text-white/40'
+                    : 'border-neutral-300 bg-white text-neutral-900 placeholder:text-neutral-400'
+                }`}
+                rows={2}
+              />
+              <div className="flex justify-end gap-1.5 text-[10px]">
                 <button
                   type="button"
-                  onClick={() => setSourcesOpen((v) => !v)}
-                  className="text-neutral-400 transition hover:text-neutral-900"
-                  title="参照した素材を表示"
+                  onClick={() => {
+                    setNoteDraft(m.note ?? '');
+                    setNoteOpen(false);
+                  }}
+                  className="opacity-60 hover:opacity-100"
                 >
-                  🔍 {m.sources!.reduce((sum, s) => sum + s.chunks.length, 0)}
+                  取消
                 </button>
-              )}
-            </>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onUpdate({ note: noteDraft.trim() || undefined });
+                    setNoteOpen(false);
+                  }}
+                  className="font-medium"
+                >
+                  保存
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>
