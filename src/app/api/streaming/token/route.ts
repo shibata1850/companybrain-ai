@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic';
  *     can show a debug peek if it wants
  */
 export async function POST(req: NextRequest) {
-  let body: { avatarId?: string; model?: string } = {};
+  let body: { avatarId?: string; model?: string; bargeIn?: boolean } = {};
   try {
     body = await req.json();
   } catch {
@@ -39,6 +39,11 @@ export async function POST(req: NextRequest) {
     typeof body.model === 'string' && /^[a-zA-Z0-9._-]{1,80}$/.test(body.model)
       ? body.model
       : null;
+  // When the client is in 割り込みOFF mode (default), the model must
+  // not be cancelled by VAD-detected user activity — that's what was
+  // causing the mid-sentence truncations even with sane sensitivity
+  // settings, because the server killed its own generation on echo.
+  const bargeIn = body.bargeIn === true;
 
   const db = supabaseAdmin();
   const { data: avatar } = await db
@@ -173,22 +178,33 @@ ${styleSamples || '（参考発言なし。一般的な人柄として自然に�
     // Don't let the server's default cap truncate long spoken answers
     // (audio output consumes tokens far faster than text).
     maxOutputTokens: 8192,
-    // Server-side VAD tuning — the real fix for "the agent's answer
-    // gets cut off mid-sentence". On speaker setups the agent's own
-    // voice (and ambient noise during the think pause) leaks into the
-    // mic; the default-sensitivity VAD reads it as the user barging in
-    // and the server ABORTS its own in-flight generation. Lowering the
-    // start-of-speech sensitivity and requiring a longer continuous
-    // silence makes a brief echo/noise burst no longer count as the
-    // user starting to talk, so the agent finishes its turn.
-    realtimeInputConfig: {
-      automaticActivityDetection: {
-        startOfSpeechSensitivity: 'START_SENSITIVITY_LOW',
-        endOfSpeechSensitivity: 'END_SENSITIVITY_LOW',
-        prefixPaddingMs: 300,
-        silenceDurationMs: 1000,
-      },
-    },
+    // Real fix for the mid-sentence cutoffs. The default Live VAD
+    // setup is START_OF_ACTIVITY_INTERRUPTS — any time the server
+    // detects user audio activity it cancels the in-flight model
+    // turn. On a speaker setup the agent's own voice (and ambient
+    // noise during the think pause) reaches the mic, the VAD reads it
+    // as the user barging in, and the server kills its own
+    // generation. Switching activityHandling to NO_INTERRUPTION in
+    // 割り込みOFF mode tells the server to keep generating no matter
+    // what it thinks it hears, which is exactly what half-duplex
+    // operation requires. We keep default sensitivity so the user's
+    // own questions are still detected normally (the earlier LOW
+    // start/end sensitivity was clipping question tails). When the
+    // operator opts into 割り込みON, the default
+    // START_OF_ACTIVITY_INTERRUPTS behaviour comes back so they can
+    // talk over the agent on headphones.
+    realtimeInputConfig: bargeIn
+      ? {
+          automaticActivityDetection: {
+            silenceDurationMs: 800,
+          },
+        }
+      : {
+          activityHandling: 'NO_INTERRUPTION',
+          automaticActivityDetection: {
+            silenceDurationMs: 1500,
+          },
+        },
   };
 
   try {

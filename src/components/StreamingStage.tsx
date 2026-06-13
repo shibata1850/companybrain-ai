@@ -695,6 +695,11 @@ export default function StreamingStage({
         body: JSON.stringify({
           avatarId,
           model: modelOverrideRef.current || undefined,
+          // Per-session: NO_INTERRUPTION on the server when the user
+          // has 割り込みOFF, so server-side VAD can't kill the model
+          // mid-sentence on echo. Toggling割り込みmid-session needs
+          // a fresh session to take effect.
+          bargeIn: bargeInRef.current,
         }),
       });
       const tokenJson = (await tokenRes.json()) as {
