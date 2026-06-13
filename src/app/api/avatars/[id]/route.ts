@@ -27,7 +27,13 @@ export async function GET(
       'id, file_name, mime_type, status, summary, transcript, folder, created_at',
     )
     .eq('avatar_id', params.id)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    // Supabase JS defaults to a 1000-row implicit cap. With multiple
+    // full law dumps (建基法 + 施行令 + 都計法 ...) a single brain
+    // crosses that threshold easily, and the older entries silently
+    // vanish from the management UI. Bump the ceiling well past any
+    // realistic single-brain ingestion volume.
+    .range(0, 19999);
 
   const { data: generations } = await db
     .from('generations')
