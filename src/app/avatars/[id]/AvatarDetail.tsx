@@ -1682,7 +1682,7 @@ function TranscriptPanel({
           <div className="flex h-[30rem]">
             {/* Thread sidebar — always visible on sm+ so switching
                 conversations is one click, not buried in a menu. */}
-            <aside className="hidden w-48 shrink-0 flex-col border-r border-neutral-100 bg-neutral-50/70 sm:flex">
+            <aside className="hidden w-56 shrink-0 flex-col border-r border-neutral-100 bg-neutral-50/70 sm:flex">
               <div className="p-2">
                 <button
                   type="button"
@@ -1825,7 +1825,7 @@ function ThreadRow({
 
   if (renaming) {
     return (
-      <div className="rounded-lg bg-white p-1 shadow-sm ring-1 ring-neutral-200">
+      <div className="rounded-lg bg-white p-2 shadow-sm ring-1 ring-neutral-300">
         <input
           autoFocus
           value={draft}
@@ -1842,15 +1842,19 @@ function ThreadRow({
               setRenaming(false);
             }
           }}
-          className="w-full rounded border border-neutral-300 px-1.5 py-1 text-xs focus:border-neutral-900 focus:outline-none"
+          className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm focus:border-neutral-900 focus:outline-none"
+          placeholder="会話の名前"
         />
+        <p className="mt-1 text-[10px] text-neutral-400">
+          Enter で確定 / Esc で取消
+        </p>
       </div>
     );
   }
 
   return (
     <div
-      className={`group relative rounded-lg transition ${
+      className={`relative rounded-lg transition ${
         current
           ? 'bg-white shadow-sm ring-1 ring-neutral-200'
           : 'hover:bg-white/70'
@@ -1859,10 +1863,10 @@ function ThreadRow({
       <button
         type="button"
         onClick={onSwitch}
-        className="block w-full px-2 py-1.5 text-left"
+        className="block w-full px-2 py-2 text-left"
       >
         <span
-          className={`block truncate pr-8 text-xs ${
+          className={`block truncate text-xs ${
             current ? 'font-medium text-neutral-900' : 'text-neutral-600'
           }`}
         >
@@ -1877,45 +1881,71 @@ function ThreadRow({
         </span>
       </button>
       {confirming ? (
-        <div className="absolute right-1 top-1 z-10 flex items-center gap-1 rounded-md bg-white px-1.5 py-0.5 text-[10px] shadow ring-1 ring-neutral-200">
-          <button
-            type="button"
-            onClick={() => setConfirming(false)}
-            className="text-neutral-500 hover:text-neutral-900"
-          >
-            取消
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              onDelete();
-              setConfirming(false);
-            }}
-            className="font-medium text-red-600"
-          >
-            削除
-          </button>
+        <div className="mt-1 flex items-center justify-between gap-2 rounded-md border border-red-200 bg-red-50 px-2 py-1.5">
+          <span className="text-[11px] text-red-800">削除しますか?</span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              className="rounded-full bg-white px-2 py-1 text-[11px] font-medium text-neutral-700 hover:bg-neutral-100"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onDelete();
+                setConfirming(false);
+              }}
+              className="rounded-full bg-red-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-red-500"
+            >
+              削除する
+            </button>
+          </div>
         </div>
       ) : (
-        <div className="absolute right-1 top-1 hidden items-center gap-0.5 rounded-md bg-white/90 px-0.5 shadow-sm ring-1 ring-neutral-200 group-hover:flex">
+        // Permanent action row (no longer hover-only) so the buttons are
+        // discoverable and the hit-targets are large enough to tap on
+        // touch / trackpad without precise hovering.
+        <div className="flex items-center justify-end gap-1 px-1 pb-1.5">
           <button
             type="button"
             onClick={() => {
               setDraft(thread.title ?? threadTitle(thread));
               setRenaming(true);
             }}
-            className="rounded p-0.5 text-[10px] text-neutral-500 hover:text-neutral-900"
+            className="inline-flex items-center gap-1 rounded-md bg-white/80 px-2 py-1 text-[11px] font-medium text-neutral-600 ring-1 ring-neutral-200 transition hover:bg-white hover:text-neutral-900"
             title="名前を変更"
           >
-            ✎
+            <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden>
+              <path
+                d="M11 1.5l3.5 3.5L5 14.5H1.5V11L11 1.5z"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            名前
           </button>
           <button
             type="button"
             onClick={() => setConfirming(true)}
-            className="rounded p-0.5 text-[10px] text-neutral-500 hover:text-red-600"
+            className="inline-flex items-center gap-1 rounded-md bg-white/80 px-2 py-1 text-[11px] font-medium text-neutral-600 ring-1 ring-neutral-200 transition hover:bg-red-50 hover:text-red-600 hover:ring-red-200"
             title="この会話を削除"
           >
-            🗑
+            <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden>
+              <path
+                d="M3 4h10M6 4V2.5h4V4M5 4l.5 9.5h5L11 4M7 7v4M9 7v4"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            削除
           </button>
         </div>
       )}

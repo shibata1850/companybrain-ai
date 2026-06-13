@@ -203,6 +203,14 @@ export default function StreamingStage({
   // playback after an interrupt until the user clearly starts a new
   // turn (inputTranscription arrives, or text input is sent).
   const audioBlockedRef = useRef(false);
+  // turnComplete can arrive before the trailing outputTranscription
+  // chunks (transcript lags its own audio in some Live API builds).
+  // Flushing on the immediate turnComplete in that window truncates
+  // the agent message mid-sentence — usually at a comma or article
+  // number where it was about to continue. Latch instead: defer the
+  // flush until the audio queue actually drains, so we capture the
+  // late-arriving transcript before sealing the message.
+  const pendingFlushRef = useRef(false);
   // Half-duplex by default: while the agent is speaking we don't send
   // mic audio upstream. Browser echo cancellation does NOT cover Web
   // Audio playback, so on speakers the agent's own voice comes back in
@@ -264,6 +272,7 @@ export default function StreamingStage({
       rafRef.current = null;
     }
     speakingRef.current = false;
+    pendingFlushRef.current = false;
     setLevel(0);
     setSessionStartedAt(null);
     setElapsedSec(0);
@@ -314,6 +323,16 @@ export default function StreamingStage({
         speakingRef.current = false;
         speakingEndedAtRef.current = Date.now();
         setStatus((s) => (s === 'speaking' ? 'listening' : s));
+      }
+      // If turnComplete arrived early and we deferred the flush, run
+      // it now that the audio queue is empty — any late-arriving
+      // outputTranscription chunks have had time to land in agentBuf.
+      if (
+        activeSourcesRef.current.size === 0 &&
+        pendingFlushRef.current
+      ) {
+        pendingFlushRef.current = false;
+        flushTranscripts();
       }
     };
   }
@@ -469,20 +488,22 @@ export default function StreamingStage({
     }
 
     // End of turn — push the completed transcripts as messages.
-    if (sc?.turnComplete || sc?.generationComplete) {
-      flushTranscripts();
-      // Safety net for the half-duplex mic gate. The normal path that
-      // flips speakingRef back to false lives in the last audio
-      // buffer's `onended` callback, but if the server finishes the
-      // turn before any audio was generated (text-only / aborted
-      // generation) or if the onended condition just misses by a few
-      // ms, speakingRef gets stuck true and the next user utterance is
-      // silently dropped at the gate. When the turn is officially over
-      // and there's nothing left to play, force the gate open.
-      if (activeSourcesRef.current.size === 0 && speakingRef.current) {
-        speakingRef.current = false;
-        speakingEndedAtRef.current = Date.now();
-        setStatus((s) => (s === 'speaking' ? 'listening' : s));
+    // generationComplete is intentionally NOT used as a flush trigger:
+    // outputTranscription chunks can lag the audio, and flushing on
+    // generationComplete clipped sentences mid-word. Only turnComplete
+    // (the official end of the turn) qualifies, and even then we wait
+    // for the audio queue to drain so any trailing transcript chunks
+    // make it into the message.
+    if (sc?.turnComplete) {
+      if (activeSourcesRef.current.size === 0) {
+        flushTranscripts();
+        if (speakingRef.current) {
+          speakingRef.current = false;
+          speakingEndedAtRef.current = Date.now();
+          setStatus((s) => (s === 'speaking' ? 'listening' : s));
+        }
+      } else {
+        pendingFlushRef.current = true;
       }
     }
 
