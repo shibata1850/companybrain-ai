@@ -63,6 +63,11 @@ export type TranscriptSource = {
   chunks: string[];
 };
 
+export type TranscriptEscalation = {
+  categories: string[];
+  hints: string[];
+};
+
 export type TranscriptMessage = {
   id: string;
   role: 'user' | 'agent';
@@ -74,6 +79,9 @@ export type TranscriptMessage = {
   /** Knowledge-base lookups Gemini performed while producing this
    * agent turn. Empty / undefined for user messages. */
   sources?: TranscriptSource[];
+  /** Set when the user's question (or the matching agent reply) was
+   * flagged as needing human supervisor confirmation. */
+  escalation?: TranscriptEscalation;
 };
 
 function newMessageId() {

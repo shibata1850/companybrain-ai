@@ -8,6 +8,7 @@ import StreamingStage, {
   type TranscriptMessage,
   type TranscriptSource,
 } from '@/components/StreamingStage';
+import { detectEscalation, escalationLabel, type EscalationCategory } from '@/lib/escalation';
 import PhotoCropper from '@/components/PhotoCropper';
 import PortalMenu from '@/components/PortalMenu';
 
@@ -134,7 +135,23 @@ export default function AvatarDetail({ id }: { id: string }) {
   );
   const transcript = currentThread?.messages ?? [];
 
+  // When a user message gets escalation-flagged, the matching agent
+  // reply that follows inherits the same flag — the warning belongs on
+  // both sides of the high-stakes exchange.
+  const pendingEscalationRef = useRef<TranscriptMessage['escalation'] | null>(null);
+
   const handleTranscriptMessage = useCallback((m: TranscriptMessage) => {
+    let enriched: TranscriptMessage = m;
+    if (m.role === 'user') {
+      const flag = detectEscalation(m.text);
+      if (flag) {
+        enriched = { ...m, escalation: flag };
+        pendingEscalationRef.current = flag;
+      }
+    } else if (m.role === 'agent' && pendingEscalationRef.current) {
+      enriched = { ...m, escalation: pendingEscalationRef.current };
+      pendingEscalationRef.current = null;
+    }
     setChatStore((prev) => {
       let store = prev;
       // No active thread yet — open one implicitly on the first message.
@@ -152,7 +169,7 @@ export default function AvatarDetail({ id }: { id: string }) {
         ...store,
         threads: store.threads.map((t) =>
           t.id === store.currentId
-            ? { ...t, messages: [...t.messages, m], updatedAt: Date.now() }
+            ? { ...t, messages: [...t.messages, enriched], updatedAt: Date.now() }
             : t,
         ),
       };
@@ -332,9 +349,22 @@ export default function AvatarDetail({ id }: { id: string }) {
       if (m.pinned) flags.push('📌');
       if (m.rating === 'up') flags.push('👍');
       if (m.rating === 'down') flags.push('👎');
+      if (m.escalation) flags.push('⚠️');
       const flagStr = flags.length > 0 ? ` ${flags.join(' ')}` : '';
       lines.push(`**${who}** _(${time})_${flagStr}  `);
       lines.push(m.text, '');
+      if (m.escalation) {
+        const cats = m.escalation.categories
+          .map((c) => escalationLabel(c as EscalationCategory))
+          .join(' / ');
+        lines.push(
+          `> ⚠️ **上長確認推奨** (${cats})`,
+          m.escalation.hints.length > 0
+            ? `> 検出語: ${m.escalation.hints.join('、')}`
+            : '',
+          '',
+        );
+      }
       if (m.note) {
         lines.push(`> 📝 メモ: ${m.note}`, '');
       }
@@ -1470,6 +1500,7 @@ function TranscriptPanel({
       ? messages.length - filteredMessages.length
       : 0;
   const pinnedCount = messages.filter((m) => m.pinned).length;
+  const escalationCount = messages.filter((m) => m.escalation).length;
 
   const sortedThreads = useMemo(
     () => [...threads].sort((a, b) => b.updatedAt - a.updatedAt),
@@ -1510,6 +1541,14 @@ function TranscriptPanel({
           )}
         </button>
         <div className="flex items-center gap-1">
+          {escalationCount > 0 && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-800"
+              title="上長確認推奨と判定された質問・回答の件数"
+            >
+              ⚠️ {escalationCount}
+            </span>
+          )}
           {pinnedCount > 0 && (
             <button
               type="button"
@@ -1991,11 +2030,49 @@ function MessageRow({
             {m.pinned && <span title="ピン留め済み">📌</span>}
             {m.rating === 'up' && <span>👍</span>}
             {m.rating === 'down' && <span>👎</span>}
+            {m.escalation && (
+              <span title="上長確認推奨を検出">⚠️</span>
+            )}
           </div>
           <p className="mt-1 whitespace-pre-wrap leading-relaxed">
             <Highlight text={m.text} term={search} />
           </p>
 
+          {m.escalation && (
+            <div
+              className={`mt-2 rounded-lg border px-2.5 py-2 text-[11px] leading-relaxed ${
+                isUser
+                  ? 'border-amber-300/60 bg-amber-100/15 text-amber-100'
+                  : 'border-amber-400 bg-amber-50 text-amber-900'
+              }`}
+            >
+              <p className="font-semibold">
+                ⚠️ 上長確認推奨{!isUser ? '(この回答は参考情報です)' : ''}
+              </p>
+              <p className="mt-0.5">
+                判断カテゴリ:{' '}
+                {m.escalation.categories
+                  .map((c) => escalationLabel(c as EscalationCategory))
+                  .join(' / ')}
+              </p>
+              {m.escalation.hints.length > 0 && (
+                <p
+                  className={`mt-0.5 text-[10px] ${
+                    isUser ? 'text-amber-100/80' : 'text-amber-800/80'
+                  }`}
+                >
+                  検出語: {m.escalation.hints.join('、')}
+                </p>
+              )}
+              <p
+                className={`mt-1 text-[10px] ${
+                  isUser ? 'text-amber-100/80' : 'text-amber-800/80'
+                }`}
+              >
+                最終判断は{isUser ? '必ず' : ''}上長・関連部署にご確認ください。
+              </p>
+            </div>
+          )}
           {hasSources && (
             <button
               type="button"
