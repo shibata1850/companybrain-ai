@@ -522,6 +522,9 @@ export default function StreamingStage({
     // interruptions when the user has explicitly enabled 🎧 割り込みON
     // (headphone mode), where talking over the agent is intended.
     if (sc?.interrupted) {
+      console.warn(
+        `[live] interrupted received (bargeIn=${bargeInRef.current ? 'ON' : 'OFF'}, status=${statusRef.current}, agentBuf=${agentBufRef.current.length} chars)`,
+      );
       if (bargeInRef.current) {
         stopAllPlayback();
         flushTranscripts();
@@ -867,15 +870,30 @@ export default function StreamingStage({
         // and base64-encoding more audio — and the SDK throws on each
         // attempt, which we saw as a CLOSED-state spam loop.
         if (!sessionOpenRef.current || !sessionRef.current) return;
-        // Half-duplex gate (default): drop mic frames while the agent
-        // is speaking — and for a short tail afterwards — so speaker
-        // echo can't masquerade as a barge-in.
-        if (
-          !bargeInRef.current &&
-          (speakingRef.current ||
-            Date.now() - speakingEndedAtRef.current < 400)
-        ) {
-          return;
+        // Tight half-duplex gate (割り込みOFF). The mic is only allowed
+        // to feed the server while we're actively waiting for user
+        // speech — status === 'listening'. Once the user finishes
+        // talking and the server starts processing (thinking →
+        // searching → speaking), the gate stays SHUT until status
+        // returns to 'listening', plus a 400ms echo-tail buffer.
+        //
+        // Why this matters: a tiny mic burst during the
+        // thinking/searching window — ambient noise, a breath, the
+        // speaker's first audio frame echoing in — was tripping the
+        // server-side VAD as a "user interrupt" and the server killed
+        // its own in-flight generation. Closing the gate for the whole
+        // non-listening window stops the spurious interrupt at the
+        // source, which is where the silent mid-sentence cutoffs
+        // really came from.
+        if (!bargeInRef.current) {
+          const s = statusRef.current;
+          const allowed = s === 'listening' || s === 'idle';
+          if (
+            !allowed ||
+            Date.now() - speakingEndedAtRef.current < 400
+          ) {
+            return;
+          }
         }
         const input = e.inputBuffer.getChannelData(0);
         const pcm = new Int16Array(input.length);
