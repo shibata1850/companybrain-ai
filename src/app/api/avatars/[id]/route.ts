@@ -21,19 +21,26 @@ export async function GET(
     return NextResponse.json({ error: 'not found' }, { status: 404 });
   }
 
-  const { data: videos } = await db
-    .from('training_videos')
-    .select(
-      'id, file_name, mime_type, status, summary, transcript, folder, created_at',
-    )
-    .eq('avatar_id', params.id)
-    .order('created_at', { ascending: false })
-    // Supabase JS defaults to a 1000-row implicit cap. With multiple
-    // full law dumps (建基法 + 施行令 + 都計法 ...) a single brain
-    // crosses that threshold easily, and the older entries silently
-    // vanish from the management UI. Bump the ceiling well past any
-    // realistic single-brain ingestion volume.
-    .range(0, 19999);
+  // Supabase / PostgREST caps each response at ~1000 rows regardless of
+  // an explicit .range() ceiling, so a brain loaded with several full
+  // law dumps loses its oldest entries from the management UI. Page
+  // through in 1000-row chunks and concatenate to get the full set.
+  const videos: Array<Record<string, unknown>> = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data: page, error: pageErr } = await db
+      .from('training_videos')
+      .select(
+        'id, file_name, mime_type, status, summary, transcript, folder, created_at',
+      )
+      .eq('avatar_id', params.id)
+      .order('created_at', { ascending: false })
+      .range(from, from + PAGE - 1);
+    if (pageErr) break;
+    if (!page || page.length === 0) break;
+    videos.push(...page);
+    if (page.length < PAGE) break;
+  }
 
   const { data: generations } = await db
     .from('generations')
@@ -61,7 +68,7 @@ export async function GET(
 
   return NextResponse.json({
     avatar: { ...avatar, cover_url: coverUrl, stage_url: stageUrl },
-    training_videos: videos ?? [],
+    training_videos: videos,
     generations: generations ?? [],
   });
 }
