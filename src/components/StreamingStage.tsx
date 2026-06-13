@@ -45,7 +45,6 @@ const LIVE_MODEL_FALLBACKS = [
   'gemini-live-2.5-flash-preview',
   'gemini-2.0-flash-live-001',
 ];
-const LIVE_MODEL_CACHE_KEY = 'cb-live-model';
 
 const INPUT_SAMPLE_RATE = 16000;
 const OUTPUT_SAMPLE_RATE = 24000;
@@ -507,29 +506,33 @@ export default function StreamingStage({
       onPartialRef.current?.('agent', cleanTranscript(agentBufRef.current));
     }
 
-    // Barge-in: user started talking over the model. Kill the queued
-    // audio so the agent goes silent immediately, then flush whatever
-    // transcript fragments we've collected so they show up as separate
-    // messages in the chat log.
+    // Barge-in handling. This is the ROOT CAUSE of the long-standing
+    // "answer cut off mid-sentence" bug: on speaker setups the agent's
+    // own voice echoes back into the mic, the server reads it as the
+    // user talking over the agent, fires `interrupted`, and we react by
+    // killing playback + flushing the half-built transcript — chopping
+    // both the audio and the message in the middle of a sentence. It
+    // hits longer answers hardest (more echo exposure), which is
+    // exactly the observed pattern.
+    //
+    // The fix: when barge-in is OFF (the default), the mic is gated
+    // shut for the entire agent turn, so a *genuine* user interruption
+    // is impossible — any `interrupted` we receive is therefore
+    // spurious echo/noise and must be ignored. We only honor
+    // interruptions when the user has explicitly enabled 🎧 割り込みON
+    // (headphone mode), where talking over the agent is intended.
     if (sc?.interrupted) {
-      // The server fires `interrupted` whenever it thinks the user
-      // started talking — that can be background noise during a long
-      // tool call, with no real intent to barge in. Ignore the signal
-      // while the agent is still searching so a half-built answer
-      // doesn't get truncated before it has a chance to be spoken.
-      if (statusRef.current === 'searching' && !agentBufRef.current) {
-        // Drop any stray user transcript fragment so the next real
-        // turn starts clean.
-        userBufRef.current = '';
-        onPartialRef.current?.('user', null);
-      } else {
+      if (bargeInRef.current) {
         stopAllPlayback();
         flushTranscripts();
-        // Latch the audio block so the rest of the in-flight
-        // generation doesn't leak through. Cleared the moment the
-        // user starts a new turn (input transcription / text input).
         audioBlockedRef.current = true;
         setStatus('listening');
+      } else {
+        // Half-duplex: ignore the spurious interrupt. Drop any stray
+        // user transcript fragment so the log stays clean, but leave
+        // the agent's audio and transcript intact to finish.
+        userBufRef.current = '';
+        onPartialRef.current?.('user', null);
       }
     }
 
@@ -677,15 +680,12 @@ export default function StreamingStage({
     }
     setStatus((s) => (s === 'reconnecting' ? s : 'connecting'));
     try {
-      // A model that worked here before beats the server default.
-      if (!modelOverrideRef.current) {
-        try {
-          modelOverrideRef.current =
-            window.localStorage.getItem(LIVE_MODEL_CACHE_KEY) || null;
-        } catch {
-          // storage disabled
-        }
-      }
+      // Send modelOverrideRef only when an in-session 1008 fallback has
+      // selected an alternate model. We deliberately do NOT seed it
+      // from localStorage anymore: a stale cached model was overriding
+      // the server's GEMINI_LIVE_MODEL env, so changing the model in
+      // Vercel had no effect. The server env is now authoritative for
+      // every fresh session; the fallback only kicks in on a real 1008.
       const tokenRes = await fetch('/api/streaming/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -725,15 +725,11 @@ export default function StreamingStage({
             console.log('[live] session open', { model: usedModel });
             sessionOpenRef.current = true;
             reconnectAttemptsRef.current = 0;
-            // This model works for this key — remember it so future
-            // sessions (and reconnects) skip the discovery dance.
+            // Keep the working model in memory for this session's
+            // reconnects, but no longer persist it across sessions —
+            // the server env must stay authoritative (see start()).
             triedModelsRef.current.clear();
             modelOverrideRef.current = usedModel;
-            try {
-              window.localStorage.setItem(LIVE_MODEL_CACHE_KEY, usedModel);
-            } catch {
-              // storage disabled
-            }
             // Start the session timer on the first successful open; on
             // auto-reconnect we keep the existing timer running.
             setSessionStartedAt((prev) => prev ?? Date.now());
@@ -778,18 +774,6 @@ export default function StreamingStage({
             // Live model and reconnect with that instead.
             if (code === 1008) {
               triedModelsRef.current.add(usedModel);
-              try {
-                // The cached model just got rejected; don't keep
-                // re-suggesting it on future visits.
-                if (
-                  window.localStorage.getItem(LIVE_MODEL_CACHE_KEY) ===
-                  usedModel
-                ) {
-                  window.localStorage.removeItem(LIVE_MODEL_CACHE_KEY);
-                }
-              } catch {
-                // storage disabled
-              }
               const next = LIVE_MODEL_FALLBACKS.find(
                 (m) => !triedModelsRef.current.has(m),
               );
