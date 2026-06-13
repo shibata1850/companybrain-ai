@@ -463,6 +463,19 @@ export default function StreamingStage({
     // End of turn — push the completed transcripts as messages.
     if (sc?.turnComplete || sc?.generationComplete) {
       flushTranscripts();
+      // Safety net for the half-duplex mic gate. The normal path that
+      // flips speakingRef back to false lives in the last audio
+      // buffer's `onended` callback, but if the server finishes the
+      // turn before any audio was generated (text-only / aborted
+      // generation) or if the onended condition just misses by a few
+      // ms, speakingRef gets stuck true and the next user utterance is
+      // silently dropped at the gate. When the turn is officially over
+      // and there's nothing left to play, force the gate open.
+      if (activeSourcesRef.current.size === 0 && speakingRef.current) {
+        speakingRef.current = false;
+        speakingEndedAtRef.current = Date.now();
+        setStatus((s) => (s === 'speaking' ? 'listening' : s));
+      }
     }
 
     // Tool call — search the knowledge base and feed results back.
@@ -675,7 +688,12 @@ export default function StreamingStage({
             const ce = e as CloseEvent;
             const reason = ce?.reason || '';
             const code = ce?.code;
-            console.warn('[live] session closed', { code, reason });
+            // Chrome's console renders {code, reason} as "Object" until
+            // expanded, which makes user-side diagnosis hard. Log the
+            // values inline so a screenshot/copy already shows them.
+            console.warn(
+              `[live] session closed — code=${code ?? '?'} reason="${reason}"`,
+            );
 
             // Clean shutdown / user clicked end / dev unmount.
             if (
