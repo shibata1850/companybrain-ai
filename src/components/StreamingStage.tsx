@@ -404,9 +404,12 @@ export default function StreamingStage({
     if (pendingFlushTimerRef.current) {
       clearTimeout(pendingFlushTimerRef.current);
     }
-    const QUIET_MS = 700;
-    const POLL_MS = 200;
-    const MAX_WAIT_MS = 6000;
+    // QUIET_MS picked at 1500 after 700ms still missed bursty trailing
+    // chunks — the native-audio Live stream can pause a full second
+    // between bursts when the model is mid-thought.
+    const QUIET_MS = 1500;
+    const POLL_MS = 250;
+    const MAX_WAIT_MS = 8000;
     pendingFlushTimerRef.current = setTimeout(() => {
       pendingFlushTimerRef.current = null;
       if (!pendingFlushRef.current) return;
