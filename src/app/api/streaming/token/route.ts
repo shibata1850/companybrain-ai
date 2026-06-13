@@ -170,39 +170,27 @@ ${styleSamples || '（参考発言なし。一般的な人柄として自然に�
     // can render a chat-format log.
     inputAudioTranscription: {},
     outputAudioTranscription: {},
-    // The native-audio "thinking" variants reason before speaking.
-    // That reasoning (a) leaks into outputTranscription as 思考プロセス
-    // text, (b) burns the output token budget so the spoken answer gets
-    // cut off mid-sentence, and (c) adds long silent pauses. Disable it.
+    // The native-audio "thinking" variants reason before speaking,
+    // which leaks into the transcript ("Let me check") and eats into
+    // the response. Ask for no thinking budget. (Some model builds
+    // ignore this, which is exactly why we must NOT also cap
+    // maxOutputTokens — see below.)
     thinkingConfig: { thinkingBudget: 0 },
-    // Don't let the server's default cap truncate long spoken answers
-    // (audio output consumes tokens far faster than text).
-    maxOutputTokens: 8192,
-    // Real fix for the mid-sentence cutoffs. The default Live VAD
-    // setup is START_OF_ACTIVITY_INTERRUPTS — any time the server
-    // detects user audio activity it cancels the in-flight model
-    // turn. On a speaker setup the agent's own voice (and ambient
-    // noise during the think pause) reaches the mic, the VAD reads it
-    // as the user barging in, and the server kills its own
-    // generation. Switching activityHandling to NO_INTERRUPTION in
-    // 割り込みOFF mode tells the server to keep generating no matter
-    // what it thinks it hears, which is exactly what half-duplex
-    // operation requires. We keep default sensitivity so the user's
-    // own questions are still detected normally (the earlier LOW
-    // start/end sensitivity was clipping question tails). When the
-    // operator opts into 割り込みON, the default
-    // START_OF_ACTIVITY_INTERRUPTS behaviour comes back so they can
-    // talk over the agent on headphones.
+    // NOTE: we deliberately do NOT set maxOutputTokens. A cap there was
+    // the cause of the mid-sentence cutoffs: audio output consumes
+    // tokens fast and, when the model still does hidden thinking, the
+    // reasoning + audio together blew past the cap and the spoken
+    // answer was truncated. Leaving it unset lets the turn finish.
     realtimeInputConfig: bargeIn
       ? {
           automaticActivityDetection: {
-            silenceDurationMs: 800,
+            silenceDurationMs: 600,
           },
         }
       : {
           activityHandling: 'NO_INTERRUPTION',
           automaticActivityDetection: {
-            silenceDurationMs: 1500,
+            silenceDurationMs: 700,
           },
         },
   };
