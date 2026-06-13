@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic';
  *     can show a debug peek if it wants
  */
 export async function POST(req: NextRequest) {
-  let body: { avatarId?: string; model?: string; bargeIn?: boolean } = {};
+  let body: { avatarId?: string; model?: string } = {};
   try {
     body = await req.json();
   } catch {
@@ -39,11 +39,6 @@ export async function POST(req: NextRequest) {
     typeof body.model === 'string' && /^[a-zA-Z0-9._-]{1,80}$/.test(body.model)
       ? body.model
       : null;
-  // When the client is in 割り込みOFF mode (default), the model must
-  // not be cancelled by VAD-detected user activity — that's what was
-  // causing the mid-sentence truncations even with sane sensitivity
-  // settings, because the server killed its own generation on echo.
-  const bargeIn = body.bargeIn === true;
 
   const db = supabaseAdmin();
   const { data: avatar } = await db
@@ -170,29 +165,20 @@ ${styleSamples || '（参考発言なし。一般的な人柄として自然に�
     // can render a chat-format log.
     inputAudioTranscription: {},
     outputAudioTranscription: {},
-    // The native-audio "thinking" variants reason before speaking,
-    // which leaks into the transcript ("Let me check") and eats into
-    // the response. Ask for no thinking budget. (Some model builds
-    // ignore this, which is exactly why we must NOT also cap
-    // maxOutputTokens — see below.)
+    // The native-audio variants reason before speaking, which leaks
+    // into the transcript ("Let me check"). Disable thinking budget.
     thinkingConfig: { thinkingBudget: 0 },
-    // NOTE: we deliberately do NOT set maxOutputTokens. A cap there was
-    // the cause of the mid-sentence cutoffs: audio output consumes
-    // tokens fast and, when the model still does hidden thinking, the
-    // reasoning + audio together blew past the cap and the spoken
-    // answer was truncated. Leaving it unset lets the turn finish.
-    realtimeInputConfig: bargeIn
-      ? {
-          automaticActivityDetection: {
-            silenceDurationMs: 600,
-          },
-        }
-      : {
-          activityHandling: 'NO_INTERRUPTION',
-          automaticActivityDetection: {
-            silenceDurationMs: 700,
-          },
-        },
+    // Manual turn control. The server-side VAD has been the source of
+    // every truncation we've chased — echo, ambient noise, or even the
+    // model's own audio leakage was being read as user barge-in, and
+    // the server cancelled its own generation. Disable automatic
+    // detection entirely and let the client declare turn boundaries
+    // (activityStart / activityEnd) via push-to-talk. The client
+    // already stops queued playback when the user starts a new turn,
+    // so explicit interrupts are unnecessary.
+    realtimeInputConfig: {
+      automaticActivityDetection: { disabled: true },
+    },
   };
 
   try {

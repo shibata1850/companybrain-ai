@@ -218,17 +218,18 @@ export default function StreamingStage({
   // instead of a flat timeout — adapts to whatever the live wire is
   // actually doing, so slow-arriving trailing chunks still make it.
   const lastTranscriptAtRef = useRef(0);
-  // Half-duplex by default: while the agent is speaking we don't send
-  // mic audio upstream. Browser echo cancellation does NOT cover Web
-  // Audio playback, so on speakers the agent's own voice comes back in
-  // through the mic and the server treats it as a user barge-in —
-  // truncating answers mid-sentence. Headphone users can enable
-  // barge-in to talk over the agent again.
-  const [bargeIn, setBargeIn] = useState(false);
-  const bargeInRef = useRef(false);
+  // Manual turn control (push-to-talk). Server-side automatic VAD is
+  // disabled in the token config; mic audio only flows upstream while
+  // the user is actively holding the talk button or Space. We send
+  // explicit activityStart / activityEnd around each utterance so the
+  // server never has to guess when a turn began or ended — which
+  // eliminates every echo / noise / pause induced truncation we've
+  // chased so far.
+  const [isTalking, setIsTalking] = useState(false);
+  const isTalkingRef = useRef(false);
   useEffect(() => {
-    bargeInRef.current = bargeIn;
-  }, [bargeIn]);
+    isTalkingRef.current = isTalking;
+  }, [isTalking]);
 
   useEffect(() => {
     mutedRef.current = muted;
@@ -237,6 +238,8 @@ export default function StreamingStage({
   const stop = useCallback(async () => {
     manualStopRef.current = true;
     sessionOpenRef.current = false;
+    isTalkingRef.current = false;
+    setIsTalking(false);
     if (reconnectTimerRef.current) {
       clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
@@ -522,21 +525,18 @@ export default function StreamingStage({
     // interruptions when the user has explicitly enabled 🎧 割り込みON
     // (headphone mode), where talking over the agent is intended.
     if (sc?.interrupted) {
+      // With automatic VAD disabled the server should only treat us
+      // as interrupting when WE explicitly sent activityStart — i.e.
+      // the user just pressed talk, and the local push-to-talk
+      // handler already stopped playback. So we just need to seal the
+      // half-built agent message so it shows up in the log.
       console.warn(
-        `[live] interrupted received (bargeIn=${bargeInRef.current ? 'ON' : 'OFF'}, status=${statusRef.current}, agentBuf=${agentBufRef.current.length} chars)`,
+        `[live] interrupted received (status=${statusRef.current}, agentBuf=${agentBufRef.current.length} chars)`,
       );
-      if (bargeInRef.current) {
-        stopAllPlayback();
-        flushTranscripts();
-        audioBlockedRef.current = true;
-        setStatus('listening');
-      } else {
-        // Half-duplex: ignore the spurious interrupt. Drop any stray
-        // user transcript fragment so the log stays clean, but leave
-        // the agent's audio and transcript intact to finish.
-        userBufRef.current = '';
-        onPartialRef.current?.('user', null);
-      }
+      stopAllPlayback();
+      flushTranscripts();
+      audioBlockedRef.current = true;
+      setStatus('listening');
     }
 
     // End of turn — push the completed transcripts as messages.
@@ -695,11 +695,6 @@ export default function StreamingStage({
         body: JSON.stringify({
           avatarId,
           model: modelOverrideRef.current || undefined,
-          // Per-session: NO_INTERRUPTION on the server when the user
-          // has 割り込みOFF, so server-side VAD can't kill the model
-          // mid-sentence on echo. Toggling割り込みmid-session needs
-          // a fresh session to take effect.
-          bargeIn: bargeInRef.current,
         }),
       });
       const tokenJson = (await tokenRes.json()) as {
@@ -875,20 +870,12 @@ export default function StreamingStage({
         // and base64-encoding more audio — and the SDK throws on each
         // attempt, which we saw as a CLOSED-state spam loop.
         if (!sessionOpenRef.current || !sessionRef.current) return;
-        // Half-duplex gate (割り込みOFF): drop mic frames while the
-        // agent is actually speaking, plus a short echo tail. We do
-        // NOT gate the thinking/searching window — doing so clipped the
-        // tail of the user's own question whenever they paused briefly
-        // mid-sentence. Spurious interrupts in the thinking window are
-        // instead suppressed server-side via the lowered VAD start
-        // sensitivity in realtimeInputConfig (see the token route).
-        if (
-          !bargeInRef.current &&
-          (speakingRef.current ||
-            Date.now() - speakingEndedAtRef.current < 400)
-        ) {
-          return;
-        }
+        // Push-to-talk gate: mic frames only flow upstream while the
+        // user is explicitly holding the talk button (or Space). Any
+        // other time — listening, thinking, agent speaking — we send
+        // nothing, so echo and ambient noise can never reach the
+        // server and can never trigger a spurious turn boundary.
+        if (!isTalkingRef.current) return;
         const input = e.inputBuffer.getChannelData(0);
         const pcm = new Int16Array(input.length);
         for (let i = 0; i < input.length; i++) {
@@ -974,6 +961,40 @@ export default function StreamingStage({
    * doesn't want to (or can't) talk out loud. Mirrors the message into
    * the transcript log immediately so it shows up in chat.
    */
+  function startTalking() {
+    if (!sessionRef.current || !sessionOpenRef.current) return;
+    if (isTalkingRef.current) return;
+    if (mutedRef.current) return;
+    // Cut off any in-flight agent audio — the user is starting a new
+    // turn, they shouldn't have to talk over the previous answer.
+    stopAllPlayback();
+    audioBlockedRef.current = false;
+    isTalkingRef.current = true;
+    setIsTalking(true);
+    setStatus('listening');
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (sessionRef.current as any).sendRealtimeInput?.({ activityStart: {} });
+    } catch (e) {
+      console.warn('[live] activityStart failed:', e);
+    }
+  }
+
+  function stopTalking() {
+    if (!isTalkingRef.current) return;
+    isTalkingRef.current = false;
+    setIsTalking(false);
+    if (!sessionRef.current || !sessionOpenRef.current) return;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (sessionRef.current as any).sendRealtimeInput?.({ activityEnd: {} });
+    } catch (e) {
+      console.warn('[live] activityEnd failed:', e);
+    }
+    // The agent will start replying shortly; mark intent.
+    setStatus((s) => (s === 'listening' ? 'thinking' : s));
+  }
+
   function sendTextMessage(text: string) {
     const sess = sessionRef.current;
     if (!sess || !sessionOpenRef.current) return;
@@ -1018,19 +1039,21 @@ export default function StreamingStage({
 
   // Keyboard shortcuts. Skip when the user is typing in an input.
   useEffect(() => {
+    function isTyping(t: EventTarget | null) {
+      const el = t as HTMLElement | null;
+      return (
+        !!el &&
+        (el.tagName === 'INPUT' ||
+          el.tagName === 'TEXTAREA' ||
+          (el as HTMLElement).isContentEditable)
+      );
+    }
     function onKey(e: KeyboardEvent) {
-      const t = e.target as HTMLElement | null;
-      if (
-        t &&
-        (t.tagName === 'INPUT' ||
-          t.tagName === 'TEXTAREA' ||
-          (t as HTMLElement).isContentEditable)
-      )
-        return;
-      // Space = toggle mute, Esc = end session — only while live.
+      if (isTyping(e.target)) return;
+      // Space (hold) = push-to-talk while live.
       if (isLive && e.code === 'Space') {
         e.preventDefault();
-        setMuted((m) => !m);
+        if (!e.repeat) startTalking();
       } else if (isLive && e.key === 'Escape') {
         e.preventDefault();
         void stop();
@@ -1040,8 +1063,19 @@ export default function StreamingStage({
         void start();
       }
     }
+    function onKeyUp(e: KeyboardEvent) {
+      if (isTyping(e.target)) return;
+      if (isLive && e.code === 'Space') {
+        e.preventDefault();
+        stopTalking();
+      }
+    }
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keyup', onKeyUp);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLive]);
 
@@ -1286,7 +1320,7 @@ export default function StreamingStage({
                 マイクへのアクセスを許可してください。
               </p>
               <p className="mt-2 text-[10px] text-white/40">
-                ショートカット: S で開始 / Space でマイク切替 / Esc で終了 / / で検索
+                ショートカット: S で開始 / Space を長押しして話す / Esc で終了 / / で検索
               </p>
             </div>
             <button
@@ -1313,44 +1347,43 @@ export default function StreamingStage({
           </div>
         )}
 
-        {/* Bottom control bar */}
+        {/* Bottom control bar: large push-to-talk button + session end. */}
         {isLive && (
           <div className="absolute inset-x-3 bottom-3 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setMuted((m) => !m)}
-                className={`rounded-full px-3 py-1 text-[11px] font-medium backdrop-blur transition ${
-                  muted
-                    ? 'bg-red-500/90 text-white hover:bg-red-500'
-                    : 'bg-white/90 text-neutral-800 hover:bg-white'
-                }`}
-              >
-                {muted ? 'マイクOFF中(タップでON)' : 'マイクON'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setBargeIn((v) => !v)}
-                className={`rounded-full px-3 py-1 text-[11px] font-medium backdrop-blur transition ${
-                  bargeIn
-                    ? 'bg-indigo-500/90 text-white hover:bg-indigo-500'
-                    : 'bg-white/90 text-neutral-800 hover:bg-white'
-                }`}
-                title={
-                  bargeIn
-                    ? '応答中も声で割り込めます。スピーカー利用だと自分の声で誤中断することがあります(ヘッドホン推奨)'
-                    : '応答中はマイクを止めて、回答が途切れないようにしています。割り込みたい場合はONに(ヘッドホン推奨)'
-                }
-              >
-                {bargeIn ? '🎧 割り込みON' : '割り込みOFF'}
-              </button>
-            </div>
+            <button
+              type="button"
+              onMouseDown={startTalking}
+              onMouseUp={stopTalking}
+              onMouseLeave={() => {
+                if (isTalkingRef.current) stopTalking();
+              }}
+              onTouchStart={(e) => {
+                e.preventDefault();
+                startTalking();
+              }}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                stopTalking();
+              }}
+              onContextMenu={(e) => e.preventDefault()}
+              disabled={muted}
+              className={`flex-1 select-none rounded-full px-4 py-2 text-sm font-semibold shadow-md backdrop-blur transition active:scale-[0.98] disabled:opacity-50 ${
+                isTalking
+                  ? 'animate-pulse bg-red-500 text-white ring-4 ring-red-300/60'
+                  : 'bg-white/95 text-neutral-900 hover:bg-white'
+              }`}
+              title="長押し(またはSpace長押し)で話す。離すと送信"
+            >
+              {isTalking
+                ? '🎙 録音中… 離すと送信'
+                : '🎙 押している間だけ話す (またはSpace長押し)'}
+            </button>
             <button
               type="button"
               onClick={stop}
-              className="rounded-full bg-white/90 px-3 py-1 text-[11px] font-medium text-neutral-800 backdrop-blur transition hover:bg-white"
+              className="shrink-0 rounded-full bg-white/90 px-3 py-2 text-[11px] font-medium text-neutral-800 backdrop-blur transition hover:bg-white"
             >
-              セッション終了
+              終了
             </button>
           </div>
         )}
