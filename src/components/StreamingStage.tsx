@@ -870,30 +870,19 @@ export default function StreamingStage({
         // and base64-encoding more audio — and the SDK throws on each
         // attempt, which we saw as a CLOSED-state spam loop.
         if (!sessionOpenRef.current || !sessionRef.current) return;
-        // Tight half-duplex gate (割り込みOFF). The mic is only allowed
-        // to feed the server while we're actively waiting for user
-        // speech — status === 'listening'. Once the user finishes
-        // talking and the server starts processing (thinking →
-        // searching → speaking), the gate stays SHUT until status
-        // returns to 'listening', plus a 400ms echo-tail buffer.
-        //
-        // Why this matters: a tiny mic burst during the
-        // thinking/searching window — ambient noise, a breath, the
-        // speaker's first audio frame echoing in — was tripping the
-        // server-side VAD as a "user interrupt" and the server killed
-        // its own in-flight generation. Closing the gate for the whole
-        // non-listening window stops the spurious interrupt at the
-        // source, which is where the silent mid-sentence cutoffs
-        // really came from.
-        if (!bargeInRef.current) {
-          const s = statusRef.current;
-          const allowed = s === 'listening' || s === 'idle';
-          if (
-            !allowed ||
-            Date.now() - speakingEndedAtRef.current < 400
-          ) {
-            return;
-          }
+        // Half-duplex gate (割り込みOFF): drop mic frames while the
+        // agent is actually speaking, plus a short echo tail. We do
+        // NOT gate the thinking/searching window — doing so clipped the
+        // tail of the user's own question whenever they paused briefly
+        // mid-sentence. Spurious interrupts in the thinking window are
+        // instead suppressed server-side via the lowered VAD start
+        // sensitivity in realtimeInputConfig (see the token route).
+        if (
+          !bargeInRef.current &&
+          (speakingRef.current ||
+            Date.now() - speakingEndedAtRef.current < 400)
+        ) {
+          return;
         }
         const input = e.inputBuffer.getChannelData(0);
         const pcm = new Int16Array(input.length);
