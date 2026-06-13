@@ -214,6 +214,11 @@ export default function StreamingStage({
   const pendingFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
+  // Last time an outputTranscription chunk landed in agentBufRef. The
+  // flush poll uses this to wait for "no new transcript in N ms"
+  // instead of a flat timeout — adapts to whatever the live wire is
+  // actually doing, so slow-arriving trailing chunks still make it.
+  const lastTranscriptAtRef = useRef(0);
   // Half-duplex by default: while the agent is speaking we don't send
   // mic audio upstream. Browser echo cancellation does NOT cover Web
   // Audio playback, so on speakers the agent's own voice comes back in
@@ -387,20 +392,30 @@ export default function StreamingStage({
    * completed chat messages. Trims whitespace and skips empty strings.
    */
   /**
-   * Poll every 300ms until the audio queue is empty, then run the
-   * deferred flush. Re-arms itself while audio is still playing, so
-   * even a long answer's trailing transcript chunks make it into the
-   * message instead of being cut off when turnComplete fires.
+   * Poll the live-stream state and flush the agent transcript only
+   * when (1) the audio queue is empty and (2) no new transcript chunk
+   * has arrived in the last QUIET_MS. Re-arms while either condition
+   * is unmet, so trailing chunks that arrive 500ms or more after
+   * turnComplete still make it into the message before we seal it.
+   * As a safety net, gives up after MAX_WAIT_MS so a dropped final
+   * chunk can't leave the message in limbo forever.
    */
-  function scheduleFlushPoll() {
+  function scheduleFlushPoll(startedAt: number = Date.now()) {
     if (pendingFlushTimerRef.current) {
       clearTimeout(pendingFlushTimerRef.current);
     }
+    const QUIET_MS = 700;
+    const POLL_MS = 200;
+    const MAX_WAIT_MS = 6000;
     pendingFlushTimerRef.current = setTimeout(() => {
       pendingFlushTimerRef.current = null;
       if (!pendingFlushRef.current) return;
-      if (activeSourcesRef.current.size > 0) {
-        scheduleFlushPoll();
+      const audioBusy = activeSourcesRef.current.size > 0;
+      const sinceLastChunk = Date.now() - lastTranscriptAtRef.current;
+      const transcriptBusy = sinceLastChunk < QUIET_MS;
+      const exhausted = Date.now() - startedAt > MAX_WAIT_MS;
+      if ((audioBusy || transcriptBusy) && !exhausted) {
+        scheduleFlushPoll(startedAt);
         return;
       }
       pendingFlushRef.current = false;
@@ -410,7 +425,7 @@ export default function StreamingStage({
         speakingEndedAtRef.current = Date.now();
         setStatus((s) => (s === 'speaking' ? 'listening' : s));
       }
-    }, 300);
+    }, POLL_MS);
   }
 
   function flushTranscripts() {
@@ -485,6 +500,7 @@ export default function StreamingStage({
     const outputTx = sc?.outputTranscription?.text;
     if (outputTx) {
       agentBufRef.current += outputTx;
+      lastTranscriptAtRef.current = Date.now();
       onPartialRef.current?.('agent', cleanTranscript(agentBufRef.current));
     }
 
