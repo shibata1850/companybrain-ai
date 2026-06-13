@@ -211,6 +211,9 @@ export default function StreamingStage({
   // flush until the audio queue actually drains, so we capture the
   // late-arriving transcript before sealing the message.
   const pendingFlushRef = useRef(false);
+  const pendingFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   // Half-duplex by default: while the agent is speaking we don't send
   // mic audio upstream. Browser echo cancellation does NOT cover Web
   // Audio playback, so on speakers the agent's own voice comes back in
@@ -273,6 +276,10 @@ export default function StreamingStage({
     }
     speakingRef.current = false;
     pendingFlushRef.current = false;
+    if (pendingFlushTimerRef.current) {
+      clearTimeout(pendingFlushTimerRef.current);
+      pendingFlushTimerRef.current = null;
+    }
     setLevel(0);
     setSessionStartedAt(null);
     setElapsedSec(0);
@@ -324,16 +331,9 @@ export default function StreamingStage({
         speakingEndedAtRef.current = Date.now();
         setStatus((s) => (s === 'speaking' ? 'listening' : s));
       }
-      // If turnComplete arrived early and we deferred the flush, run
-      // it now that the audio queue is empty — any late-arriving
-      // outputTranscription chunks have had time to land in agentBuf.
-      if (
-        activeSourcesRef.current.size === 0 &&
-        pendingFlushRef.current
-      ) {
-        pendingFlushRef.current = false;
-        flushTranscripts();
-      }
+      // The pending-flush poll picks up the empty queue on its next
+      // tick (max 300ms later), so trailing transcript chunks have
+      // time to land before the message is sealed. No flush here.
     };
   }
 
@@ -386,6 +386,33 @@ export default function StreamingStage({
    * Push the accumulated user / agent transcripts to the parent as
    * completed chat messages. Trims whitespace and skips empty strings.
    */
+  /**
+   * Poll every 300ms until the audio queue is empty, then run the
+   * deferred flush. Re-arms itself while audio is still playing, so
+   * even a long answer's trailing transcript chunks make it into the
+   * message instead of being cut off when turnComplete fires.
+   */
+  function scheduleFlushPoll() {
+    if (pendingFlushTimerRef.current) {
+      clearTimeout(pendingFlushTimerRef.current);
+    }
+    pendingFlushTimerRef.current = setTimeout(() => {
+      pendingFlushTimerRef.current = null;
+      if (!pendingFlushRef.current) return;
+      if (activeSourcesRef.current.size > 0) {
+        scheduleFlushPoll();
+        return;
+      }
+      pendingFlushRef.current = false;
+      flushTranscripts();
+      if (speakingRef.current) {
+        speakingRef.current = false;
+        speakingEndedAtRef.current = Date.now();
+        setStatus((s) => (s === 'speaking' ? 'listening' : s));
+      }
+    }, 300);
+  }
+
   function flushTranscripts() {
     const u = cleanTranscript(userBufRef.current);
     if (u) {
@@ -490,21 +517,13 @@ export default function StreamingStage({
     // End of turn — push the completed transcripts as messages.
     // generationComplete is intentionally NOT used as a flush trigger:
     // outputTranscription chunks can lag the audio, and flushing on
-    // generationComplete clipped sentences mid-word. Only turnComplete
-    // (the official end of the turn) qualifies, and even then we wait
-    // for the audio queue to drain so any trailing transcript chunks
-    // make it into the message.
+    // generationComplete clipped sentences mid-word. Even on
+    // turnComplete the last transcript chunk can still be in flight,
+    // so we always defer: wait for the audio queue to drain AND grant
+    // a 300ms grace window for trailing transcript chunks to arrive.
     if (sc?.turnComplete) {
-      if (activeSourcesRef.current.size === 0) {
-        flushTranscripts();
-        if (speakingRef.current) {
-          speakingRef.current = false;
-          speakingEndedAtRef.current = Date.now();
-          setStatus((s) => (s === 'speaking' ? 'listening' : s));
-        }
-      } else {
-        pendingFlushRef.current = true;
-      }
+      pendingFlushRef.current = true;
+      scheduleFlushPoll();
     }
 
     // Tool call — search the knowledge base and feed results back.
