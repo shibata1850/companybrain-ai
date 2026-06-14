@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authorizeAvatar } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabase';
 import { embedTexts } from '@/lib/gemini';
 
@@ -15,6 +16,10 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  const auth = await authorizeAvatar(params.id);
+  if (!auth.ok) {
+    return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
+  }
   const body = (await req.json().catch(() => ({}))) as { query?: string };
   const query = body.query?.trim();
   if (!query) {

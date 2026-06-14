@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { storageBucket, supabaseAdmin } from '@/lib/supabase';
 import { permanentlyDeleteAvatars } from '@/lib/avatars';
+import { authorizeAvatar } from '@/lib/authServer';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,6 +12,10 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  const auth = await authorizeAvatar(params.id);
+  if (!auth.ok) {
+    return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
+  }
   const db = supabaseAdmin();
   const { data: avatar, error } = await db
     .from('avatars')
@@ -81,6 +86,10 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  const auth = await authorizeAvatar(params.id);
+  if (!auth.ok) {
+    return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
+  }
   const body = (await req.json().catch(() => ({}))) as {
     name?: string;
     description?: string | null;
@@ -147,6 +156,10 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  const auth = await authorizeAvatar(params.id);
+  if (!auth.ok) {
+    return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
+  }
   const url = new URL(req.url);
   const permanent = url.searchParams.get('permanent') === 'true';
   const db = supabaseAdmin();

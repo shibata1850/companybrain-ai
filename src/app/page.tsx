@@ -102,12 +102,20 @@ export default function HomePage() {
         </div>
         <div className="mt-1 flex shrink-0 flex-wrap items-center justify-end gap-2">
           {me?.role === 'admin' && (
-            <Link
-              href="/admin/users"
-              className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900"
-            >
-              👤 ユーザー管理
-            </Link>
+            <>
+              <Link
+                href="/admin/avatars"
+                className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900"
+              >
+                🛡 管理ページ
+              </Link>
+              <Link
+                href="/admin/users"
+                className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900"
+              >
+                👤 ユーザー管理
+              </Link>
+            </>
           )}
           <Link
             href="/audit"

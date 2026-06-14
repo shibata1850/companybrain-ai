@@ -58,3 +58,32 @@ export async function getAppUser(): Promise<AppUser | null> {
   if (!data) return null;
   return { email: data.email, role: data.role === 'admin' ? 'admin' : 'member' };
 }
+
+/**
+ * Authorize the current user against one brain. Admins pass for any
+ * brain; members only for brains they own. Returns the resolved user
+ * on success, or an HTTP status to return on failure.
+ */
+export async function authorizeAvatar(
+  avatarId: string,
+): Promise<
+  { ok: true; me: AppUser } | { ok: false; status: number }
+> {
+  const me = await getAppUser();
+  if (!me) return { ok: false, status: 401 };
+  if (me.role === 'admin') return { ok: true, me };
+
+  const db = supabaseAdmin();
+  const { data } = await db
+    .from('avatars')
+    .select('owner_email')
+    .eq('id', avatarId)
+    .single();
+  if (!data) return { ok: false, status: 404 };
+  if (
+    (data.owner_email ?? '').toLowerCase() !== me.email.toLowerCase()
+  ) {
+    return { ok: false, status: 403 };
+  }
+  return { ok: true, me };
+}

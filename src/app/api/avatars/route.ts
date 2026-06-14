@@ -5,6 +5,7 @@ import { storageBucket, supabaseAdmin } from '@/lib/supabase';
 import { extractFrameAndAudio } from '@/lib/media';
 import { processTrainingVideo } from '@/lib/processing';
 import { chunkTranscript, embedTexts } from '@/lib/gemini';
+import { getAppUser } from '@/lib/authServer';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
@@ -12,13 +13,30 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const maxDuration = 300;
 
-export async function GET() {
+/**
+ * GET lists brains. A normal user sees only the brains they own; an
+ * admin sees their own by default, or everyone's with ?scope=all
+ * (used by the admin management page).
+ */
+export async function GET(req: NextRequest) {
+  const me = await getAppUser();
+  if (!me) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+  const scopeAll =
+    me.role === 'admin' &&
+    new URL(req.url).searchParams.get('scope') === 'all';
+
   const db = supabaseAdmin();
-  const { data, error } = await db
+  let query = db
     .from('avatars')
-    .select('id, name, description, cover_image_path, created_at')
+    .select('id, name, description, cover_image_path, owner_email, created_at')
     .is('deleted_at', null)
     .order('created_at', { ascending: false });
+  if (!scopeAll) {
+    query = query.eq('owner_email', me.email);
+  }
+  const { data, error } = await query;
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -39,6 +57,10 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const me = await getAppUser();
+  if (!me) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
   const form = await req.formData();
   const file = form.get('video');
   const name = (form.get('name') as string | null)?.trim() || '名称未設定';
@@ -47,7 +69,12 @@ export async function POST(req: NextRequest) {
   // Lightweight path: no video. The brain is seeded from an optional
   // icon photo + optional pasted text instead of a talking-head clip.
   if (!(file instanceof File)) {
-    return createBrainFromTextAndPhoto({ form, name, description });
+    return createBrainFromTextAndPhoto({
+      form,
+      name,
+      description,
+      ownerEmail: me.email,
+    });
   }
 
   const videoBytes = Buffer.from(await file.arrayBuffer());
@@ -59,7 +86,7 @@ export async function POST(req: NextRequest) {
   // 1. Insert avatar row up-front so we have an id to attribute work to.
   const { data: avatar, error: avatarErr } = await db
     .from('avatars')
-    .insert({ name, description })
+    .insert({ name, description, owner_email: me.email })
     .select('id')
     .single();
   if (avatarErr || !avatar) {
@@ -165,17 +192,19 @@ async function createBrainFromTextAndPhoto({
   form,
   name,
   description,
+  ownerEmail,
 }: {
   form: FormData;
   name: string;
   description: string | null;
+  ownerEmail: string;
 }) {
   const db = supabaseAdmin();
   const bucket = storageBucket();
 
   const { data: avatar, error: avatarErr } = await db
     .from('avatars')
-    .insert({ name, description })
+    .insert({ name, description, owner_email: ownerEmail })
     .select('id')
     .single();
   if (avatarErr || !avatar) {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authorizeAvatar } from '@/lib/authServer';
 import { randomUUID } from 'node:crypto';
 import { storageBucket, supabaseAdmin } from '@/lib/supabase';
 import { processTrainingVideo } from '@/lib/processing';
@@ -15,6 +16,10 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  const auth = await authorizeAvatar(params.id);
+  if (!auth.ok) {
+    return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
+  }
   const avatarId = params.id;
   const db = supabaseAdmin();
 

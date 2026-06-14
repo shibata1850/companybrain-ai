@@ -67,15 +67,22 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * List recent audit entries for the review UI. Optional filters:
- *   ?avatar=<id>   only one brain
- *   ?q=<text>      substring match on content
- *   ?limit=<n>     default 200, max 1000
+ * List recent audit entries for the review UI.
+ *   scope=all   (admin only) every user's logs; otherwise only the
+ *               caller's own brains.
+ *   actor=<email> (admin + scope=all) filter to one user's questions.
+ *   q=<text>    substring match on content
+ *   limit=<n>   default 200, max 1000
  */
 export async function GET(req: NextRequest) {
+  const me = await getAppUser();
+  if (!me) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
   const url = new URL(req.url);
-  const avatar = url.searchParams.get('avatar');
   const q = url.searchParams.get('q')?.trim();
+  const actor = url.searchParams.get('actor')?.trim();
+  const scopeAll = me.role === 'admin' && url.searchParams.get('scope') === 'all';
   const limit = Math.min(
     1000,
     Math.max(1, Number(url.searchParams.get('limit')) || 200),
@@ -89,12 +96,41 @@ export async function GET(req: NextRequest) {
     )
     .order('created_at', { ascending: false })
     .limit(limit);
-  if (avatar) query = query.eq('avatar_id', avatar);
+
+  if (!scopeAll) {
+    // Restrict to the brains this user owns.
+    const { data: owned } = await db
+      .from('avatars')
+      .select('id')
+      .eq('owner_email', me.email);
+    const ids = (owned ?? []).map((a) => a.id as string);
+    if (ids.length === 0) {
+      return NextResponse.json({ entries: [], actors: [] });
+    }
+    query = query.in('avatar_id', ids);
+  } else if (actor) {
+    query = query.eq('actor', actor);
+  }
   if (q) query = query.ilike('content', `%${q}%`);
 
   const { data, error } = await query;
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ entries: data ?? [] });
+
+  // For the admin "全ユーザー" tab, surface the distinct actor list so
+  // the UI can offer a per-user filter dropdown.
+  let actors: string[] = [];
+  if (scopeAll) {
+    const { data: rows } = await db
+      .from('audit_logs')
+      .select('actor')
+      .not('actor', 'is', null)
+      .limit(5000);
+    actors = Array.from(
+      new Set((rows ?? []).map((r) => r.actor as string).filter(Boolean)),
+    ).sort();
+  }
+
+  return NextResponse.json({ entries: data ?? [], actors });
 }

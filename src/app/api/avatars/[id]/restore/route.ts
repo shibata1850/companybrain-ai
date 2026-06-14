@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authorizeAvatar } from '@/lib/authServer';
 import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase';
 
@@ -9,6 +10,10 @@ export async function POST(
   _req: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  const auth = await authorizeAvatar(params.id);
+  if (!auth.ok) {
+    return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
+  }
   const db = supabaseAdmin();
   const { error } = await db
     .from('avatars')
