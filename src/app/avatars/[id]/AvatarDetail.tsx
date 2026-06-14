@@ -140,6 +140,50 @@ export default function AvatarDetail({ id }: { id: string }) {
   // both sides of the high-stakes exchange.
   const pendingEscalationRef = useRef<TranscriptMessage['escalation'] | null>(null);
 
+  // Audit-log plumbing. Each finalised message is mirrored to the
+  // server so the org keeps a durable trail beyond browser storage.
+  // sessionId groups one visit; actor is a weak browser id until real
+  // auth exists. avatarNameRef lets the []-deps callback read the
+  // current name without being recreated.
+  const sessionIdRef = useRef<string>(newThreadId());
+  const avatarNameRef = useRef<string>('');
+  const actorRef = useRef<string>('');
+  useEffect(() => {
+    try {
+      let a = window.localStorage.getItem('cb-actor-id');
+      if (!a) {
+        a = newThreadId();
+        window.localStorage.setItem('cb-actor-id', a);
+      }
+      actorRef.current = a;
+    } catch {
+      // storage disabled — actor stays empty
+    }
+  }, []);
+
+  const logAudit = useCallback(
+    (m: TranscriptMessage) => {
+      const payload = {
+        avatar_id: id,
+        avatar_name: avatarNameRef.current || null,
+        session_id: sessionIdRef.current,
+        actor: actorRef.current || null,
+        role: m.role,
+        content: m.text,
+        sources: m.sources ?? null,
+        escalation: m.escalation ?? null,
+      };
+      // Fire-and-forget; never block the chat on the audit write.
+      void fetch('/api/audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      }).catch(() => {});
+    },
+    [id],
+  );
+
   const handleTranscriptMessage = useCallback((m: TranscriptMessage) => {
     let enriched: TranscriptMessage = m;
     if (m.role === 'user') {
@@ -152,6 +196,7 @@ export default function AvatarDetail({ id }: { id: string }) {
       enriched = { ...m, escalation: pendingEscalationRef.current };
       pendingEscalationRef.current = null;
     }
+    logAudit(enriched);
     setChatStore((prev) => {
       let store = prev;
       // No active thread yet — open one implicitly on the first message.
@@ -174,7 +219,7 @@ export default function AvatarDetail({ id }: { id: string }) {
         ),
       };
     });
-  }, []);
+  }, [logAudit]);
 
   const handlePartial = useCallback(
     (role: 'user' | 'agent', text: string | null) => {
@@ -598,6 +643,8 @@ export default function AvatarDetail({ id }: { id: string }) {
     return <DetailSkeleton />;
   }
   const { avatar, training_videos } = data;
+  // Keep the audit logger's name copy current (read by a []-deps cb).
+  avatarNameRef.current = avatar.name;
 
   return (
     <div className="space-y-6">
