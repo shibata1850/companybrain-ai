@@ -8,6 +8,7 @@ type Row = {
   name: string;
   description: string | null;
   owner_email: string | null;
+  owner_label: string | null;
   created_at: string;
   material_count: number;
   last_activity: string | null;
@@ -59,12 +60,19 @@ export default function AdminAvatarsClient() {
       return (
         r.name.toLowerCase().includes(needle) ||
         (r.owner_email ?? '').toLowerCase().includes(needle) ||
+        (r.owner_label ?? '').toLowerCase().includes(needle) ||
         (r.description ?? '').toLowerCase().includes(needle)
       );
     });
   }, [rows, q, owner]);
 
   // Group by owner for a tidy overview.
+  const labelByOwner = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const r of rows) if (r.owner_email) m.set(r.owner_email, r.owner_label);
+    return m;
+  }, [rows]);
+
   const grouped = useMemo(() => {
     const map = new Map<string, Row[]>();
     for (const r of filtered) {
@@ -107,8 +115,9 @@ export default function AdminAvatarsClient() {
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">ブレイン管理</h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-500">
-          全ユーザーのブレインを所有者ごとに一覧します。クリックで各ブレインを
-          開けます（管理者は誰のブレインも閲覧・操作できます）。
+          全ユーザーのブレインをユーザーごとに一覧します（閲覧専用）。
+          各ブレインは作成者本人だけが利用・編集でき、管理者でも中身は開けません。
+          利用状況の点検は監査ログから行えます。
         </p>
       </header>
 
@@ -134,7 +143,7 @@ export default function AdminAvatarsClient() {
           <option value="">全ユーザー</option>
           {owners.map((o) => (
             <option key={o} value={o}>
-              {o}
+              {labelByOwner.get(o) ? `${labelByOwner.get(o)}（${o}）` : o}
             </option>
           ))}
         </select>
@@ -158,36 +167,44 @@ export default function AdminAvatarsClient() {
           {grouped.map(([ownerEmail, list]) => (
             <div key={ownerEmail} className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
               <div className="flex items-center justify-between border-b border-neutral-100 bg-neutral-50 px-4 py-2 text-xs">
-                <span className="font-medium text-neutral-700">{ownerEmail}</span>
-                <span className="text-neutral-400">{list.length} ブレイン</span>
+                <span className="min-w-0 truncate font-medium text-neutral-700">
+                  {labelByOwner.get(ownerEmail) ? (
+                    <>
+                      {labelByOwner.get(ownerEmail)}
+                      <span className="ml-1.5 text-[10px] font-normal text-neutral-400">
+                        {ownerEmail}
+                      </span>
+                    </>
+                  ) : (
+                    ownerEmail
+                  )}
+                </span>
+                <span className="shrink-0 text-neutral-400">{list.length} ブレイン</span>
               </div>
               <ul className="divide-y divide-neutral-50">
                 {list.map((r) => (
-                  <li key={r.id}>
-                    <Link
-                      href={`/avatars/${r.id}`}
-                      className="flex items-center justify-between gap-3 px-4 py-3 transition hover:bg-neutral-50"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-neutral-900">
-                          {r.name}
+                  <li
+                    key={r.id}
+                    className="flex items-center justify-between gap-3 px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-neutral-900">
+                        {r.name}
+                      </p>
+                      {r.description && (
+                        <p className="truncate text-xs text-neutral-500">
+                          {r.description}
                         </p>
-                        {r.description && (
-                          <p className="truncate text-xs text-neutral-500">
-                            {r.description}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex shrink-0 items-center gap-4 text-[11px] text-neutral-400">
-                        <span>素材 {r.material_count}</span>
-                        <span>
-                          {r.last_activity
-                            ? `最終利用 ${new Date(r.last_activity).toLocaleDateString('ja-JP')}`
-                            : '未利用'}
-                        </span>
-                        <span className="text-neutral-300">›</span>
-                      </div>
-                    </Link>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-4 text-[11px] text-neutral-400">
+                      <span>素材 {r.material_count}</span>
+                      <span>
+                        {r.last_activity
+                          ? `最終利用 ${new Date(r.last_activity).toLocaleDateString('ja-JP')}`
+                          : '未利用'}
+                      </span>
+                    </div>
                   </li>
                 ))}
               </ul>

@@ -18,25 +18,21 @@ export const maxDuration = 300;
  * admin sees their own by default, or everyone's with ?scope=all
  * (used by the admin management page).
  */
-export async function GET(req: NextRequest) {
+export async function GET() {
   const me = await getAppUser();
   if (!me) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
-  const scopeAll =
-    me.role === 'admin' &&
-    new URL(req.url).searchParams.get('scope') === 'all';
 
+  // Everyone — including admins — sees only their own brains here. A
+  // brain is private to its creator; admin oversight is the audit log.
   const db = supabaseAdmin();
-  let query = db
+  const { data, error } = await db
     .from('avatars')
     .select('id, name, description, cover_image_path, owner_email, created_at')
     .is('deleted_at', null)
+    .eq('owner_email', me.email)
     .order('created_at', { ascending: false });
-  if (!scopeAll) {
-    query = query.eq('owner_email', me.email);
-  }
-  const { data, error } = await query;
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

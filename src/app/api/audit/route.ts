@@ -99,13 +99,25 @@ export async function GET(req: NextRequest) {
       .select('owner_email')
       .not('owner_email', 'is', null)
       .is('deleted_at', null);
-    const users = Array.from(
+    const emails = Array.from(
       new Set(
         (data ?? [])
           .map((r) => r.owner_email as string)
           .filter((e) => typeof e === 'string' && e.includes('@')),
       ),
     ).sort();
+    // Decorate with the admin's own label for each user (never the
+    // user's private display_name).
+    const { data: labels } = await db
+      .from('app_users')
+      .select('email, admin_label');
+    const labelByEmail = new Map(
+      (labels ?? []).map((l) => [l.email as string, l.admin_label as string | null]),
+    );
+    const users = emails.map((email) => ({
+      email,
+      label: labelByEmail.get(email) ?? null,
+    }));
     return NextResponse.json({ users });
   }
 

@@ -124,8 +124,9 @@ export default function AuditClient() {
 }
 
 /* ---------- Step 1: pick a user (admin) ---------- */
+type UserRow = { email: string; label: string | null };
 function UserStep({ onPick }: { onPick: (u: string) => void }) {
-  const [users, setUsers] = useState<string[]>([]);
+  const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState('');
@@ -141,32 +142,50 @@ function UserStep({ onPick }: { onPick: (u: string) => void }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const filtered = useMemo(
-    () =>
-      users.filter((u) => u.toLowerCase().includes(q.trim().toLowerCase())),
-    [users, q],
-  );
+  const filtered = useMemo(() => {
+    const n = q.trim().toLowerCase();
+    return users.filter(
+      (u) =>
+        u.email.toLowerCase().includes(n) ||
+        (u.label ?? '').toLowerCase().includes(n),
+    );
+  }, [users, q]);
 
   if (loading) return <Loading />;
   if (error) return <ErrorBox msg={error} />;
 
   return (
     <div className="space-y-3">
-      <SearchBar value={q} onChange={setQ} placeholder="ユーザーを検索…" />
+      <SearchBar value={q} onChange={setQ} placeholder="ユーザーを検索（名前・メール）…" />
       {filtered.length === 0 ? (
         <Empty msg="ユーザーがいません。" />
       ) : (
         <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
           <ul className="divide-y divide-neutral-50">
             {filtered.map((u) => (
-              <li key={u}>
+              <li key={u.email}>
                 <button
                   type="button"
-                  onClick={() => onPick(u)}
-                  className="flex w-full items-center justify-between px-4 py-3 text-left transition hover:bg-neutral-50"
+                  onClick={() => onPick(u.email)}
+                  className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-neutral-50"
                 >
-                  <span className="text-sm text-neutral-900">{u}</span>
-                  <span className="text-neutral-300">›</span>
+                  <span className="min-w-0">
+                    {u.label && (
+                      <span className="block truncate text-sm font-medium text-neutral-900">
+                        {u.label}
+                      </span>
+                    )}
+                    <span
+                      className={`block truncate ${
+                        u.label
+                          ? 'text-[11px] text-neutral-400'
+                          : 'text-sm text-neutral-900'
+                      }`}
+                    >
+                      {u.email}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-neutral-300">›</span>
                 </button>
               </li>
             ))}

@@ -34,6 +34,8 @@ export function supabaseRoute() {
 export type AppUser = {
   email: string;
   role: 'admin' | 'member';
+  /** The user's own chosen name (only they see/edit it). */
+  display_name: string | null;
 };
 
 /**
@@ -52,17 +54,22 @@ export async function getAppUser(): Promise<AppUser | null> {
   const db = supabaseAdmin();
   const { data } = await db
     .from('app_users')
-    .select('email, role')
+    .select('email, role, display_name')
     .eq('email', email)
     .single();
   if (!data) return null;
-  return { email: data.email, role: data.role === 'admin' ? 'admin' : 'member' };
+  return {
+    email: data.email,
+    role: data.role === 'admin' ? 'admin' : 'member',
+    display_name: data.display_name ?? null,
+  };
 }
 
 /**
- * Authorize the current user against one brain. Admins pass for any
- * brain; members only for brains they own. Returns the resolved user
- * on success, or an HTTP status to return on failure.
+ * Authorize the current user against one brain for USE / EDIT / DELETE.
+ * A brain belongs solely to its creator — admins have NO access to
+ * other people's brains (their oversight is the audit log only). The
+ * owner is the only one who passes.
  */
 export async function authorizeAvatar(
   avatarId: string,
@@ -71,7 +78,6 @@ export async function authorizeAvatar(
 > {
   const me = await getAppUser();
   if (!me) return { ok: false, status: 401 };
-  if (me.role === 'admin') return { ok: true, me };
 
   const db = supabaseAdmin();
   const { data } = await db

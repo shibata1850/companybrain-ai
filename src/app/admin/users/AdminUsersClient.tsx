@@ -3,7 +3,12 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
-type User = { email: string; role: 'admin' | 'member'; created_at: string };
+type User = {
+  email: string;
+  role: 'admin' | 'member';
+  admin_label: string | null;
+  created_at: string;
+};
 
 export default function AdminUsersClient() {
   const [users, setUsers] = useState<User[]>([]);
@@ -172,23 +177,32 @@ export default function AdminUsersClient() {
         ) : (
           <ul className="divide-y divide-neutral-100">
             {users.map((u) => (
-              <li key={u.email} className="flex items-center justify-between px-4 py-3">
-                <div>
-                  <span className="text-sm text-neutral-900">{u.email}</span>
-                  <span
-                    className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                      u.role === 'admin'
-                        ? 'bg-neutral-900 text-white'
-                        : 'bg-neutral-100 text-neutral-600'
-                    }`}
-                  >
-                    {u.role === 'admin' ? '管理者' : '一般'}
-                  </span>
+              <li key={u.email} className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm text-neutral-900">
+                      {u.email}
+                    </span>
+                    <span
+                      className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                        u.role === 'admin'
+                          ? 'bg-neutral-900 text-white'
+                          : 'bg-neutral-100 text-neutral-600'
+                      }`}
+                    >
+                      {u.role === 'admin' ? '管理者' : '一般'}
+                    </span>
+                  </div>
+                  <LabelEditor
+                    email={u.email}
+                    initial={u.admin_label}
+                    onSaved={load}
+                  />
                 </div>
                 <button
                   type="button"
                   onClick={() => removeUser(u.email)}
-                  className="text-xs text-neutral-400 transition hover:text-red-600"
+                  className="shrink-0 text-xs text-neutral-400 transition hover:text-red-600"
                 >
                   利用停止
                 </button>
@@ -198,5 +212,77 @@ export default function AdminUsersClient() {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Inline editor for the admin's private label for a user. Saving only
+ * sets admin_label — it never touches the user's own display name.
+ */
+function LabelEditor({
+  email,
+  initial,
+  onSaved,
+}: {
+  email: string;
+  initial: string | null;
+  onSaved: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(initial ?? '');
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, admin_label: draft }),
+      });
+      setEditing(false);
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="mt-1 flex items-center gap-1">
+        <input
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void save();
+            else if (e.key === 'Escape') setEditing(false);
+          }}
+          placeholder="管理用ラベル（例: 営業部 田中）"
+          className="w-56 rounded-md border border-neutral-300 px-2 py-1 text-[11px] focus:border-neutral-900 focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={saving}
+          className="rounded-md bg-neutral-900 px-2 py-1 text-[10px] font-medium text-white disabled:opacity-50"
+        >
+          保存
+        </button>
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setDraft(initial ?? '');
+        setEditing(true);
+      }}
+      className="mt-0.5 text-[11px] text-neutral-400 transition hover:text-neutral-900"
+      title="管理者だけに見えるラベル。本人の表示名には影響しません"
+    >
+      {initial ? `ラベル: ${initial}` : '＋ 管理用ラベルを付ける'}
+    </button>
   );
 }

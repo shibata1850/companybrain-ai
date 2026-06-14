@@ -17,14 +17,56 @@ export async function GET() {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
   const db = supabaseAdmin();
+  // Admins see each user's email, role, and the admin-only label — but
+  // NOT the user's own display_name, which is private to that user.
   const { data, error } = await db
     .from('app_users')
-    .select('email, role, created_at')
+    .select('email, role, admin_label, created_at')
     .order('created_at', { ascending: true });
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json({ users: data ?? [] });
+}
+
+/**
+ * Update a user's admin-only label and/or role. Admin only. This never
+ * touches the user's own display_name.
+ * Body: { email, admin_label?, role? }
+ */
+export async function PATCH(req: NextRequest) {
+  if (!(await requireAdmin())) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
+  const { email, admin_label, role } = (await req.json().catch(() => ({}))) as {
+    email?: string;
+    admin_label?: string | null;
+    role?: string;
+  };
+  const cleanEmail = email?.trim().toLowerCase();
+  if (!cleanEmail) {
+    return NextResponse.json({ error: 'email required' }, { status: 400 });
+  }
+  const updates: Record<string, unknown> = {};
+  if (admin_label !== undefined) {
+    updates.admin_label =
+      typeof admin_label === 'string' ? admin_label.trim().slice(0, 60) || null : null;
+  }
+  if (role === 'admin' || role === 'member') {
+    updates.role = role;
+  }
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ ok: true });
+  }
+  const db = supabaseAdmin();
+  const { error } = await db
+    .from('app_users')
+    .update(updates)
+    .eq('email', cleanEmail);
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true });
 }
 
 /**

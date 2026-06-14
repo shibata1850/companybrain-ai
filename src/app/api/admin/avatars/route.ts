@@ -50,11 +50,20 @@ export async function GET() {
     }
   }
 
+  // Admin's labels for the owners (never their private display_name).
+  const { data: labels } = await db
+    .from('app_users')
+    .select('email, admin_label');
+  const labelByEmail = new Map(
+    (labels ?? []).map((l) => [l.email as string, l.admin_label as string | null]),
+  );
+
   const rows = (avatars ?? []).map((a) => ({
     id: a.id,
     name: a.name,
     description: a.description,
     owner_email: a.owner_email,
+    owner_label: labelByEmail.get(a.owner_email as string) ?? null,
     created_at: a.created_at,
     material_count: counts.get(a.id as string) ?? 0,
     last_activity: lastActivity.get(a.id as string) ?? null,
