@@ -218,6 +218,13 @@ export default function StreamingStage({
   // instead of a flat timeout — adapts to whatever the live wire is
   // actually doing, so slow-arriving trailing chunks still make it.
   const lastTranscriptAtRef = useRef(0);
+  // Auto-continuation: the native-audio model self-stops mid-word at a
+  // ~20s per-turn audio ceiling. When a turn ends without proper
+  // sentence-ending punctuation we silently ask it to continue and
+  // keep appending to the same message bubble, so long answers finish
+  // across multiple turns without the user shortening anything.
+  const continuationCountRef = useRef(0);
+  const MAX_CONTINUATIONS = 6;
   // Manual turn control (push-to-talk). Server-side automatic VAD is
   // disabled in the token config; mic audio only flows upstream while
   // the user is actively holding the talk button or Space. We send
@@ -423,10 +430,31 @@ export default function StreamingStage({
         scheduleFlushPoll(startedAt);
         return;
       }
+      // The turn has settled. If the agent stopped mid-sentence (no
+      // sentence-ending punctuation) it hit the per-turn audio limit —
+      // ask it to continue instead of sealing a truncated message.
+      const text = agentBufRef.current.trim();
+      const endsCleanly =
+        text.length === 0 || /[。.！!？?」』）)、]$/.test(text);
+      if (
+        !endsCleanly &&
+        continuationCountRef.current < MAX_CONTINUATIONS &&
+        sessionOpenRef.current &&
+        !audioBlockedRef.current
+      ) {
+        continuationCountRef.current += 1;
+        console.warn(
+          `[live] auto-continue #${continuationCountRef.current} (agentBuf=${text.length} chars) tail="${text.slice(-30)}"`,
+        );
+        pendingFlushRef.current = false;
+        requestContinuation();
+        return;
+      }
       console.warn(
         `[live] FLUSH (agentBuf=${agentBufRef.current.length} chars, audioBusy=${audioBusy}, exhausted=${exhausted}) text="${agentBufRef.current.slice(-40)}"`,
       );
       pendingFlushRef.current = false;
+      continuationCountRef.current = 0;
       flushTranscripts();
       if (speakingRef.current) {
         speakingRef.current = false;
@@ -434,6 +462,41 @@ export default function StreamingStage({
         setStatus((s) => (s === 'speaking' ? 'listening' : s));
       }
     }, POLL_MS);
+  }
+
+  /**
+   * Silently ask the model to keep going from where its audio cut off.
+   * Sent as a text turn so it produces no user-side transcript and
+   * doesn't appear in the chat log. The model's continued
+   * outputTranscription appends to the same agentBuf, growing the one
+   * message bubble until it finally ends on punctuation.
+   */
+  function requestContinuation() {
+    const sess = sessionRef.current;
+    if (!sess || !sessionOpenRef.current) return;
+    setStatus('speaking');
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (sess as any).sendClientContent?.({
+        turns: [
+          {
+            role: 'user',
+            parts: [
+              {
+                text: '（システム指示）直前のあなたの発言が途中で切れました。重複させず、切れたところから続きを最後まで話してください。新しい前置きや挨拶は不要です。',
+              },
+            ],
+          },
+        ],
+        turnComplete: true,
+      });
+    } catch (e) {
+      console.warn('[live] requestContinuation failed:', e);
+      // Couldn't continue — flush what we have so it's not lost.
+      pendingFlushRef.current = false;
+      continuationCountRef.current = 0;
+      flushTranscripts();
+    }
   }
 
   function flushTranscripts() {
@@ -500,8 +563,11 @@ export default function StreamingStage({
     // instead of waiting for the turn to finish.
     const inputTx = sc?.inputTranscription?.text;
     if (inputTx) {
-      // User is starting a new turn — accept the next model response.
+      // User is starting a new turn — accept the next model response
+      // and reset the auto-continuation budget (this is real speech,
+      // not our silent continuation nudge, which is sent as text).
       audioBlockedRef.current = false;
+      continuationCountRef.current = 0;
       userBufRef.current += inputTx;
       onPartialRef.current?.('user', cleanTranscript(userBufRef.current));
     }
@@ -980,6 +1046,13 @@ export default function StreamingStage({
     // turn, they shouldn't have to talk over the previous answer.
     stopAllPlayback();
     audioBlockedRef.current = false;
+    // New user turn: abandon any pending auto-continuation and seal
+    // whatever the agent already said.
+    continuationCountRef.current = 0;
+    if (pendingFlushRef.current || agentBufRef.current) {
+      pendingFlushRef.current = false;
+      flushTranscripts();
+    }
     isTalkingRef.current = true;
     setIsTalking(true);
     setStatus('listening');
@@ -1032,6 +1105,7 @@ export default function StreamingStage({
     // audio block — a brand new turn just started.
     stopAllPlayback();
     audioBlockedRef.current = false;
+    continuationCountRef.current = 0;
   }
 
   function onTextSubmit(e: React.FormEvent) {
