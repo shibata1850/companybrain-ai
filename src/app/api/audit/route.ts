@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { getAppUser } from '@/lib/authServer';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -36,13 +37,18 @@ export async function POST(req: NextRequest) {
     ? (body as { entries: AuditEntry[] }).entries
     : [body as AuditEntry];
 
+  // Actor is taken from the authenticated session, not the client
+  // payload — that's the whole point of an audit trail.
+  const me = await getAppUser();
+  const actor = me?.email ?? null;
+
   const rows = rawEntries
     .filter((e) => e && typeof e.content === 'string' && e.content.trim())
     .map((e) => ({
       avatar_id: e.avatar_id || null,
       avatar_name: e.avatar_name ?? null,
       session_id: e.session_id ?? null,
-      actor: e.actor ?? null,
+      actor,
       role: e.role === 'agent' ? 'agent' : 'user',
       content: (e.content as string).slice(0, 8000),
       sources: e.sources ?? null,

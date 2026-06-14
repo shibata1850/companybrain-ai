@@ -19,6 +19,19 @@ export default function HomePage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
+  const [me, setMe] = useState<{ email: string; role: string } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/auth/me', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => setMe(j.user ?? null))
+      .catch(() => {});
+  }, []);
+
+  async function logout() {
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    window.location.href = '/login';
+  }
 
   const filteredAvatars = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -87,12 +100,36 @@ export default function HomePage() {
             自動生成されます。
           </p>
         </div>
-        <Link
-          href="/audit"
-          className="mt-1 shrink-0 inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900"
-        >
-          📋 監査ログ
-        </Link>
+        <div className="mt-1 flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {me?.role === 'admin' && (
+            <Link
+              href="/admin/users"
+              className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900"
+            >
+              👤 ユーザー管理
+            </Link>
+          )}
+          <Link
+            href="/audit"
+            className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900"
+          >
+            📋 監査ログ
+          </Link>
+          {me && (
+            <div className="flex items-center gap-2">
+              <span className="hidden text-[11px] text-neutral-400 sm:inline">
+                {me.email}
+              </span>
+              <button
+                type="button"
+                onClick={logout}
+                className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900"
+              >
+                ログアウト
+              </button>
+            </div>
+          )}
+        </div>
       </section>
 
       {error && (
