@@ -67,12 +67,18 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * List recent audit entries for the review UI.
- *   scope=all   (admin only) every user's logs; otherwise only the
- *               caller's own brains.
- *   actor=<email> (admin + scope=all) filter to one user's questions.
- *   q=<text>    substring match on content
- *   limit=<n>   default 200, max 1000
+ * Drill-down audit reader. `view` selects the step:
+ *
+ *   view=users   (admin only) → { users: string[] }
+ *                distinct brain owners, to pick whose activity to audit
+ *   view=brains&user=<email>  → { brains: [{id,name,last_activity}] }
+ *                brains OWNED by that user (members forced to self)
+ *   view=entries&user=<email>&avatar=<id>&q=<text>
+ *                → { entries: [...] } where actor=user AND avatar=id
+ *
+ * Q1(a): a brain's own questions are filtered by actor, so an admin
+ * proxying into someone's brain (actor=admin) never shows up in that
+ * owner's audit view.
  */
 export async function GET(req: NextRequest) {
   const me = await getAppUser();
@@ -80,63 +86,101 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
   const url = new URL(req.url);
-  const q = url.searchParams.get('q')?.trim();
-  const actor = url.searchParams.get('actor')?.trim();
-  const scopeAll = me.role === 'admin' && url.searchParams.get('scope') === 'all';
-  const limit = Math.min(
-    1000,
-    Math.max(1, Number(url.searchParams.get('limit')) || 200),
-  );
-
+  const view = url.searchParams.get('view') || 'entries';
   const db = supabaseAdmin();
+
+  // ---- Step 1: list users to audit (admin only) ----
+  if (view === 'users') {
+    if (me.role !== 'admin') {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    }
+    const { data } = await db
+      .from('avatars')
+      .select('owner_email')
+      .not('owner_email', 'is', null)
+      .is('deleted_at', null);
+    const users = Array.from(
+      new Set(
+        (data ?? [])
+          .map((r) => r.owner_email as string)
+          .filter((e) => typeof e === 'string' && e.includes('@')),
+      ),
+    ).sort();
+    return NextResponse.json({ users });
+  }
+
+  // The user being audited. Members can only ever be themselves.
+  const requestedUser = url.searchParams.get('user')?.trim().toLowerCase();
+  const targetUser =
+    me.role === 'admin' && requestedUser ? requestedUser : me.email.toLowerCase();
+
+  // ---- Step 2: that user's owned brains ----
+  if (view === 'brains') {
+    const { data: brains } = await db
+      .from('avatars')
+      .select('id, name')
+      .eq('owner_email', targetUser)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+
+    // Decorate with last activity (by the target user) per brain.
+    const ids = (brains ?? []).map((b) => b.id as string);
+    const lastByBrain = new Map<string, string>();
+    if (ids.length > 0) {
+      const { data: recent } = await db
+        .from('audit_logs')
+        .select('avatar_id, created_at')
+        .in('avatar_id', ids)
+        .eq('actor', targetUser)
+        .order('created_at', { ascending: false })
+        .limit(3000);
+      for (const r of recent ?? []) {
+        const id = r.avatar_id as string;
+        if (!lastByBrain.has(id)) lastByBrain.set(id, r.created_at as string);
+      }
+    }
+    return NextResponse.json({
+      user: targetUser,
+      brains: (brains ?? []).map((b) => ({
+        id: b.id,
+        name: b.name,
+        last_activity: lastByBrain.get(b.id as string) ?? null,
+      })),
+    });
+  }
+
+  // ---- Step 3: entries for one (user, brain) pair ----
+  const avatar = url.searchParams.get('avatar')?.trim();
+  if (!avatar) {
+    return NextResponse.json({ entries: [] });
+  }
+  // Members may only read entries for a brain they own.
+  if (me.role !== 'admin') {
+    const { data: own } = await db
+      .from('avatars')
+      .select('id')
+      .eq('id', avatar)
+      .eq('owner_email', me.email)
+      .single();
+    if (!own) {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    }
+  }
+  const q = url.searchParams.get('q')?.trim();
   let query = db
     .from('audit_logs')
     .select(
       'id, avatar_id, avatar_name, session_id, actor, role, content, escalation, created_at',
     )
+    .eq('avatar_id', avatar)
+    .eq('actor', targetUser)
     .order('created_at', { ascending: false })
-    .limit(limit);
-
-  if (!scopeAll) {
-    // Restrict to the brains this user owns.
-    const { data: owned } = await db
-      .from('avatars')
-      .select('id')
-      .eq('owner_email', me.email);
-    const ids = (owned ?? []).map((a) => a.id as string);
-    if (ids.length === 0) {
-      return NextResponse.json({ entries: [], actors: [] });
-    }
-    query = query.in('avatar_id', ids);
-  } else if (actor) {
-    query = query.eq('actor', actor);
-  }
+    .limit(1000);
   if (q) query = query.ilike('content', `%${q}%`);
 
   const { data, error } = await query;
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-
-  // For the admin "全ユーザー" tab, surface the distinct actor list so
-  // the UI can offer a per-user filter dropdown. We restrict it to
-  // email-shaped values: anything else is a leftover pre-auth browser
-  // id (random UUID) that would render as garbled text in a select.
-  let actors: string[] = [];
-  if (scopeAll) {
-    const { data: rows } = await db
-      .from('audit_logs')
-      .select('actor')
-      .not('actor', 'is', null)
-      .limit(5000);
-    actors = Array.from(
-      new Set(
-        (rows ?? [])
-          .map((r) => r.actor as string)
-          .filter((a) => typeof a === 'string' && a.includes('@')),
-      ),
-    ).sort();
-  }
-
-  return NextResponse.json({ entries: data ?? [], actors });
+  return NextResponse.json({ entries: data ?? [] });
 }
