@@ -13,15 +13,15 @@ export async function GET() {
   if (!me) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
+  // Trash is fully per-user. Admins also see only their own — they
+  // never see or touch another user's trashed brains.
   const db = supabaseAdmin();
-  let query = db
+  const { data, error } = await db
     .from('avatars')
     .select('id, name, description, cover_image_path, deleted_at, created_at')
     .not('deleted_at', 'is', null)
+    .eq('owner_email', me.email)
     .order('deleted_at', { ascending: false });
-  // Members only see their own trashed brains; admins see all.
-  if (me.role !== 'admin') query = query.eq('owner_email', me.email);
-  const { data, error } = await query;
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -29,8 +29,8 @@ export async function GET() {
 }
 
 /**
- * Empty the trash — permanently delete trashed avatars (the caller's
- * own; admins empty everyone's), including their storage files.
+ * Empty the caller's own trash — permanently delete only the brains
+ * they own, including the storage files.
  */
 export async function DELETE() {
   const me = await getAppUser();
@@ -38,12 +38,11 @@ export async function DELETE() {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
   const db = supabaseAdmin();
-  let trashQuery = db
+  const { data: trashed, error } = await db
     .from('avatars')
     .select('id')
-    .not('deleted_at', 'is', null);
-  if (me.role !== 'admin') trashQuery = trashQuery.eq('owner_email', me.email);
-  const { data: trashed, error } = await trashQuery;
+    .not('deleted_at', 'is', null)
+    .eq('owner_email', me.email);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
