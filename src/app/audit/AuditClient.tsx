@@ -127,6 +127,10 @@ export default function AuditClient() {
           {isAdmin
             ? '「自分」は自分のブレイン、「全ユーザー」は全員の記録です。'
             : '自分のブレインへの記録が残ります。'}
+          <br />
+          <span className="text-[11px] text-neutral-400">
+            ※ 監査ログは利用者の操作（会話の削除・スレッド削除など）では消えません。
+          </span>
         </p>
       </header>
 
@@ -180,7 +184,7 @@ export default function AuditClient() {
             onChange={(e) => setActorFilter(e.target.value)}
             className="rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs text-neutral-700"
           >
-            <option value="">全利用者</option>
+            <option value="">全ユーザー</option>
             {actors.map((a) => (
               <option key={a} value={a}>
                 {a}
@@ -243,7 +247,9 @@ export default function AuditClient() {
                   </span>
                   {g.rows[0].actor && (
                     <span className="rounded bg-neutral-100 px-1.5 py-0.5">
-                      {g.rows[0].actor}
+                      {g.rows[0].actor.includes('@')
+                        ? g.rows[0].actor
+                        : '(ログイン導入前の利用者)'}
                     </span>
                   )}
                 </span>

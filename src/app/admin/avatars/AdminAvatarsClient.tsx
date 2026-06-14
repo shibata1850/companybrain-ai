@@ -131,7 +131,7 @@ export default function AdminAvatarsClient() {
           onChange={(e) => setOwner(e.target.value)}
           className="rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs text-neutral-700"
         >
-          <option value="">全所有者</option>
+          <option value="">全ユーザー</option>
           {owners.map((o) => (
             <option key={o} value={o}>
               {o}

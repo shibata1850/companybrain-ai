@@ -119,7 +119,9 @@ export async function GET(req: NextRequest) {
   }
 
   // For the admin "全ユーザー" tab, surface the distinct actor list so
-  // the UI can offer a per-user filter dropdown.
+  // the UI can offer a per-user filter dropdown. We restrict it to
+  // email-shaped values: anything else is a leftover pre-auth browser
+  // id (random UUID) that would render as garbled text in a select.
   let actors: string[] = [];
   if (scopeAll) {
     const { data: rows } = await db
@@ -128,7 +130,11 @@ export async function GET(req: NextRequest) {
       .not('actor', 'is', null)
       .limit(5000);
     actors = Array.from(
-      new Set((rows ?? []).map((r) => r.actor as string).filter(Boolean)),
+      new Set(
+        (rows ?? [])
+          .map((r) => r.actor as string)
+          .filter((a) => typeof a === 'string' && a.includes('@')),
+      ),
     ).sort();
   }
 
