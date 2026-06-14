@@ -443,16 +443,10 @@ export default function StreamingStage({
         !audioBlockedRef.current
       ) {
         continuationCountRef.current += 1;
-        console.warn(
-          `[live] auto-continue #${continuationCountRef.current} (agentBuf=${text.length} chars) tail="${text.slice(-30)}"`,
-        );
         pendingFlushRef.current = false;
         requestContinuation();
         return;
       }
-      console.warn(
-        `[live] FLUSH (agentBuf=${agentBufRef.current.length} chars, audioBusy=${audioBusy}, exhausted=${exhausted}) text="${agentBufRef.current.slice(-40)}"`,
-      );
       pendingFlushRef.current = false;
       continuationCountRef.current = 0;
       flushTranscripts();
@@ -594,18 +588,17 @@ export default function StreamingStage({
     // interruptions when the user has explicitly enabled 🎧 割り込みON
     // (headphone mode), where talking over the agent is intended.
     if (sc?.interrupted) {
-      // With automatic VAD disabled the server should only treat us
-      // as interrupting when WE explicitly sent activityStart — i.e.
-      // the user just pressed talk, and the local push-to-talk
-      // handler already stopped playback. So we just need to seal the
-      // half-built agent message so it shows up in the log.
-      console.warn(
-        `[live] interrupted received (status=${statusRef.current}, agentBuf=${agentBufRef.current.length} chars)`,
-      );
-      stopAllPlayback();
-      flushTranscripts();
-      audioBlockedRef.current = true;
-      setStatus('listening');
+      // With automatic VAD disabled the server occasionally emits a
+      // spurious `interrupted` with nothing in flight (seen at session
+      // open). Only act when there's actually an agent turn to cut —
+      // otherwise we'd needlessly set the audio block and risk
+      // swallowing the next real answer.
+      if (agentBufRef.current || activeSourcesRef.current.size > 0) {
+        stopAllPlayback();
+        flushTranscripts();
+        audioBlockedRef.current = true;
+        setStatus('listening');
+      }
     }
 
     // End of turn — push the completed transcripts as messages.
@@ -615,15 +608,7 @@ export default function StreamingStage({
     // turnComplete the last transcript chunk can still be in flight,
     // so we always defer: wait for the audio queue to drain AND grant
     // a 300ms grace window for trailing transcript chunks to arrive.
-    if (sc?.generationComplete) {
-      console.warn(
-        `[live] generationComplete (agentBuf=${agentBufRef.current.length} chars, audioQueue=${activeSourcesRef.current.size})`,
-      );
-    }
     if (sc?.turnComplete) {
-      console.warn(
-        `[live] turnComplete (agentBuf=${agentBufRef.current.length} chars, audioQueue=${activeSourcesRef.current.size}) text="${agentBufRef.current.slice(-40)}"`,
-      );
       pendingFlushRef.current = true;
       scheduleFlushPoll();
     }
