@@ -423,6 +423,9 @@ export default function StreamingStage({
         scheduleFlushPoll(startedAt);
         return;
       }
+      console.warn(
+        `[live] FLUSH (agentBuf=${agentBufRef.current.length} chars, audioBusy=${audioBusy}, exhausted=${exhausted}) text="${agentBufRef.current.slice(-40)}"`,
+      );
       pendingFlushRef.current = false;
       flushTranscripts();
       if (speakingRef.current) {
@@ -546,7 +549,15 @@ export default function StreamingStage({
     // turnComplete the last transcript chunk can still be in flight,
     // so we always defer: wait for the audio queue to drain AND grant
     // a 300ms grace window for trailing transcript chunks to arrive.
+    if (sc?.generationComplete) {
+      console.warn(
+        `[live] generationComplete (agentBuf=${agentBufRef.current.length} chars, audioQueue=${activeSourcesRef.current.size})`,
+      );
+    }
     if (sc?.turnComplete) {
+      console.warn(
+        `[live] turnComplete (agentBuf=${agentBufRef.current.length} chars, audioQueue=${activeSourcesRef.current.size}) text="${agentBufRef.current.slice(-40)}"`,
+      );
       pendingFlushRef.current = true;
       scheduleFlushPoll();
     }
