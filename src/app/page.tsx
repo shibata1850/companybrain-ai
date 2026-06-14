@@ -172,6 +172,12 @@ export default function HomePage() {
                   <PencilGlyph />
                 </button>
               )}
+              <Link
+                href="/account/password"
+                className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900"
+              >
+                🔑 パスワード
+              </Link>
               <button
                 type="button"
                 onClick={logout}
