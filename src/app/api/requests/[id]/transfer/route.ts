@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'node:crypto';
 import { getAppUser } from '@/lib/authServer';
-import { supabaseAdmin } from '@/lib/supabase';
+import { storageBucket, supabaseAdmin } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -69,6 +70,39 @@ export async function POST(
       { error: e1?.message || 'コピーの作成に失敗しました' },
       { status: 500 },
     );
+  }
+
+  // 1b. Duplicate the cover / stage images in Storage so the copy is
+  //     fully independent — deleting the admin's original won't blank
+  //     out the requester's brain. Best-effort: log failures but keep
+  //     the transfer going, since DB state is the source of truth.
+  const bucket = storageBucket();
+  const { data: srcAvatar } = await db
+    .from('avatars')
+    .select('cover_image_path, stage_image_path')
+    .eq('id', avatar.id)
+    .single();
+  const newPaths: { cover_image_path?: string; stage_image_path?: string } = {};
+  if (srcAvatar?.cover_image_path) {
+    const dest = `${copyId}/${randomUUID()}-${srcAvatar.cover_image_path
+      .split('/')
+      .pop()}`;
+    const { error } = await db.storage
+      .from(bucket)
+      .copy(srcAvatar.cover_image_path, dest);
+    if (!error) newPaths.cover_image_path = dest;
+  }
+  if (srcAvatar?.stage_image_path) {
+    const dest = `${copyId}/${randomUUID()}-${srcAvatar.stage_image_path
+      .split('/')
+      .pop()}`;
+    const { error } = await db.storage
+      .from(bucket)
+      .copy(srcAvatar.stage_image_path, dest);
+    if (!error) newPaths.stage_image_path = dest;
+  }
+  if (Object.keys(newPaths).length > 0) {
+    await db.from('avatars').update(newPaths).eq('id', copyId);
   }
 
   // 2. complete the request, recording which copy was delivered.
