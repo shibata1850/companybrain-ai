@@ -48,7 +48,7 @@ export default function PasswordClient() {
   return (
     <div className="mx-auto max-w-sm space-y-6">
       <Link
-        href="/"
+        href="/dashboard"
         className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
       >
         <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
@@ -70,7 +70,7 @@ export default function PasswordClient() {
             パスワードを変更しました。
           </p>
           <Link
-            href="/"
+            href="/dashboard"
             className="inline-block rounded-full bg-neutral-900 px-4 py-2 text-sm font-medium text-white"
           >
             一覧へ戻る

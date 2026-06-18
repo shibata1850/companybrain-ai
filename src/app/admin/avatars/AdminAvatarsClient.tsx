@@ -91,7 +91,7 @@ export default function AdminAvatarsClient() {
           このページは管理者のみアクセスできます。
         </p>
         <Link
-          href="/"
+          href="/dashboard"
           className="mt-4 inline-block rounded-full bg-neutral-900 px-4 py-2 text-sm text-white"
         >
           一覧へ戻る
@@ -103,7 +103,7 @@ export default function AdminAvatarsClient() {
   return (
     <div className="space-y-6">
       <Link
-        href="/"
+        href="/dashboard"
         className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
       >
         <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>

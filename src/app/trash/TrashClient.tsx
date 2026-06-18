@@ -100,7 +100,7 @@ export default function TrashClient() {
   return (
     <div className="space-y-8">
       <Link
-        href="/"
+        href="/dashboard"
         className="inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-900"
       >
         <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>

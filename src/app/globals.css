@@ -149,6 +149,133 @@ body {
   animation: cb-progress 1.1s ease-in-out infinite;
 }
 
+/* ---------- Landing page (LP) animations ---------- */
+
+@keyframes lp-blob {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(40px, -30px) scale(1.08);
+  }
+  66% {
+    transform: translate(-30px, 40px) scale(0.95);
+  }
+}
+@keyframes lp-blob-slow {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-60px, 30px) scale(1.12);
+  }
+}
+@keyframes lp-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-12px) rotate(1.5deg);
+  }
+}
+@keyframes lp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes lp-pulse-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+@keyframes lp-gradient-shift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+@keyframes lp-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes lp-typewriter-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@layer utilities {
+  .lp-blob {
+    animation: lp-blob 18s ease-in-out infinite;
+  }
+  .lp-blob-slow {
+    animation: lp-blob-slow 24s ease-in-out infinite;
+  }
+  .lp-float {
+    animation: lp-float 5s ease-in-out infinite;
+  }
+  .lp-spin-slow {
+    animation: lp-spin 22s linear infinite;
+  }
+  .lp-pulse-ring {
+    animation: lp-pulse-ring 2.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+  .lp-gradient {
+    background: linear-gradient(
+      135deg,
+      #6366f1 0%,
+      #8b5cf6 30%,
+      #ec4899 60%,
+      #f59e0b 100%
+    );
+    background-size: 200% 200%;
+    animation: lp-gradient-shift 16s ease infinite;
+  }
+  .lp-gradient-text {
+    background: linear-gradient(
+      135deg,
+      #4f46e5 0%,
+      #8b5cf6 30%,
+      #ec4899 70%,
+      #f97316 100%
+    );
+    background-size: 200% 200%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    animation: lp-gradient-shift 12s ease infinite;
+  }
+  .lp-marquee {
+    animation: lp-marquee 30s linear infinite;
+  }
+  .lp-caret::after {
+    content: '▍';
+    color: #6366f1;
+    margin-left: 2px;
+    animation: lp-typewriter-blink 1s steps(1) infinite;
+  }
+  .lp-bleed {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+  }
+}
+
 /* Respect users who prefer reduced motion. */
 @media (prefers-reduced-motion: reduce) {
   *,
