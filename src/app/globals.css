@@ -24,6 +24,30 @@ body {
   scroll-behavior: smooth;
 }
 
+/* Base font size. Tailwind's text-* / spacing are rem-based, so raising
+   the root size scales the whole UI proportionally for readability.
+   Phones get a larger base since small text is hardest to read there. */
+html {
+  font-size: 17px;
+}
+@media (max-width: 640px) {
+  html {
+    font-size: 18.5px;
+  }
+}
+
+/* Rescue the smallest hard-coded label sizes on phones so badges and
+   captions stay legible (these px values don't scale with the root). */
+@media (max-width: 640px) {
+  .text-\[10px\] {
+    font-size: 11.5px;
+  }
+  .text-\[11px\] {
+    font-size: 12.5px;
+  }
+}
+
+
 /* Account for the sticky header (~56px tall) when jumping to anchor
    sections like /#features or /#pricing — otherwise the heading hides
    behind the header. */
