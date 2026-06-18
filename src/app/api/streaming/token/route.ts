@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI, Modality } from '@google/genai';
 import { env } from '@/lib/env';
 import { supabaseAdmin } from '@/lib/supabase';
+import { authorizeAvatar } from '@/lib/authServer';
+import { canAsk, getPlanUsage, planLimitResponse } from '@/lib/planEnforce';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -30,6 +32,25 @@ export async function POST(req: NextRequest) {
       { error: 'avatarId is required' },
       { status: 400 },
     );
+  }
+
+  // Authorize: only the brain's owner may open a live session. (Admins
+  // have no access to others' brains; this also closes the previous gap
+  // where any logged-in user could mint a token for any avatarId.)
+  const auth = await authorizeAvatar(avatarId);
+  if (!auth.ok) {
+    return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
+  }
+  // Enforce the monthly question quota. Members are blocked once over
+  // limit; admins have no plan, and request-built (gifted) brains are
+  // exempt from limits entirely.
+  if (auth.me.role !== 'admin' && !auth.fromRequest) {
+    const usage = await getPlanUsage(auth.me);
+    if (!canAsk(usage)) {
+      return NextResponse.json(planLimitResponse('questions', usage), {
+        status: 403,
+      });
+    }
   }
 
   // Optional model override from the client's 1008-fallback loop. Only
