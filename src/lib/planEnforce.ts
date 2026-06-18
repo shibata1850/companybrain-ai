@@ -40,6 +40,8 @@ export async function getPlanUsage(user: AppUser): Promise<PlanUsage> {
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
 
+  // Own (non-request) brains — questions to gifted request-brains are
+  // exempt, so we only count activity on these.
   const { data: ownedBrains } = await db
     .from('avatars')
     .select('id')
@@ -47,11 +49,15 @@ export async function getPlanUsage(user: AppUser): Promise<PlanUsage> {
     .is('request_id', null);
   const brainIds = (ownedBrains ?? []).map((b) => b.id as string);
 
+  // Questions asked this month. Conversations run over Gemini Live and
+  // are recorded in audit_logs (one role='user' row per question), NOT
+  // in `generations` (the /ask route is unused). Count those.
   let questionsThisMonth = 0;
   if (brainIds.length > 0) {
     const { count } = await db
-      .from('generations')
+      .from('audit_logs')
       .select('id', { count: 'exact', head: true })
+      .eq('role', 'user')
       .in('avatar_id', brainIds)
       .gte('created_at', monthStart.toISOString());
     questionsThisMonth = count ?? 0;
