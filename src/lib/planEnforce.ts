@@ -105,15 +105,37 @@ function nextPlanId(current: PlanId): PlanId {
   return order[Math.min(i + 1, order.length - 1)];
 }
 
-/** Map the plan's modelTier knob to a concrete Gemini model id. */
-export function answerModelForPlan(plan: Plan): string {
-  switch (plan.limits.modelTier) {
-    case 'pro-2.5':
-      return 'gemini-2.5-pro';
+/**
+ * Concrete Gemini model id per plan. Each tier is independently
+ * overridable via an environment variable, so the top tier can be
+ * pointed at a newer/better model (e.g. a future Gemini 3.x) the
+ * moment its real model id is confirmed in Google AI Studio — no code
+ * change or redeploy needed, just set the env var in Vercel.
+ *
+ * Defaults below use only model ids confirmed to exist. Do NOT invent
+ * ids here; set them via env once verified.
+ *
+ *   GEMINI_MODEL_FREE      (default: gemini-2.5-flash)
+ *   GEMINI_MODEL_STARTER   (default: gemini-2.5-flash)
+ *   GEMINI_MODEL_STANDARD  (default: gemini-2.5-pro)
+ *   GEMINI_MODEL_PRO       (default: gemini-2.5-pro)  ← set to the
+ *                          newest top model when available
+ */
+function modelForPlanId(id: PlanId): string {
+  switch (id) {
     case 'pro':
-      return 'gemini-1.5-pro-latest';
-    case 'flash':
+      return process.env.GEMINI_MODEL_PRO || 'gemini-2.5-pro';
+    case 'standard':
+      return process.env.GEMINI_MODEL_STANDARD || 'gemini-2.5-pro';
+    case 'starter':
+      return process.env.GEMINI_MODEL_STARTER || 'gemini-2.5-flash';
+    case 'free':
     default:
-      return 'gemini-1.5-flash-latest';
+      return process.env.GEMINI_MODEL_FREE || 'gemini-2.5-flash';
   }
+}
+
+/** Map the plan to a concrete Gemini model id (env-overridable). */
+export function answerModelForPlan(plan: Plan): string {
+  return modelForPlanId(plan.id);
 }
