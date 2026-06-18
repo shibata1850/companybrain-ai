@@ -10,7 +10,7 @@ async function fetchRequest(id: string) {
   const { data } = await db
     .from('brain_requests')
     .select(
-      'id, requester_email, title, purpose, persona, materials, notes, status, assignee_email, result_avatar_id, reject_reason, created_at, updated_at, completed_at',
+      'id, requester_email, title, purpose, persona, materials, notes, status, assignee_email, result_avatar_id, delivered_avatar_id, reject_reason, created_at, updated_at, completed_at',
     )
     .eq('id', id)
     .single();
@@ -81,7 +81,7 @@ export async function PATCH(
   // Admin-only workflow fields.
   if (me.role === 'admin') {
     if (typeof body.status === 'string') {
-      const ok = ['申請中', '対応中', '完了', '却下'].includes(body.status);
+      const ok = ['申請中', '受理', '対応中', '完了', '却下'].includes(body.status);
       if (!ok) {
         return NextResponse.json({ error: 'invalid status' }, { status: 400 });
       }
@@ -124,6 +124,23 @@ export async function PATCH(
     .eq('id', params.id);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Accepted notification: when an admin moves the request to 受理,
+  // tell the requester it's been received (and that cancellation now
+  // requires contacting the admin).
+  if (
+    me.role === 'admin' &&
+    body.status === '受理' &&
+    current.status !== '受理'
+  ) {
+    await db.from('notifications').insert({
+      recipient_email: current.requester_email,
+      kind: 'request_accepted',
+      title: 'ブレイン作成依頼を受理しました',
+      body: `「${current.title}」の作成を開始します。受理後の取り下げは管理者へメールでご連絡ください。`,
+      link: `/requests/${params.id}`,
+    });
   }
 
   // Reject-side notification (admin rejected; not when the requester

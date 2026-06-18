@@ -12,9 +12,10 @@ type Req = {
   persona: string | null;
   materials: string | null;
   notes: string | null;
-  status: '申請中' | '対応中' | '完了' | '却下';
+  status: '申請中' | '受理' | '対応中' | '完了' | '却下';
   assignee_email: string | null;
   result_avatar_id: string | null;
+  delivered_avatar_id: string | null;
   reject_reason: string | null;
   created_at: string;
   updated_at: string;
@@ -31,6 +32,7 @@ export default function RequestDetailClient({ id }: { id: string }) {
   const [myAvatars, setMyAvatars] = useState<Avatar[]>([]);
   const [linkAvatar, setLinkAvatar] = useState('');
   const [rejectReason, setRejectReason] = useState('');
+  const [admins, setAdmins] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     const [meRes, reqRes] = await Promise.all([
@@ -45,6 +47,14 @@ export default function RequestDetailClient({ id }: { id: string }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Admin contacts, for the "受理後は管理者へメール" guidance.
+  useEffect(() => {
+    fetch('/api/auth/admins', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => setAdmins(j.admins ?? []))
+      .catch(() => {});
+  }, []);
 
   // Admin: pull own avatars so they can attach one to the request.
   useEffect(() => {
@@ -167,10 +177,28 @@ export default function RequestDetailClient({ id }: { id: string }) {
         <div className="space-y-4 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-5">
           <h2 className="text-sm font-semibold text-neutral-900">管理者の操作</h2>
 
+          {/* Accept (受理): the point of no return for user cancellation */}
+          {req.status === '申請中' && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+              <p className="text-xs text-neutral-700">
+                依頼を受理すると、依頼者へ受理通知が届き、依頼者側からの
+                取り下げはできなくなります。
+              </p>
+              <button
+                type="button"
+                onClick={() => patch({ status: '受理' })}
+                disabled={busy}
+                className="mt-2 rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-500 disabled:opacity-50"
+              >
+                この依頼を受理する
+              </button>
+            </div>
+          )}
+
           {/* Status */}
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-neutral-500">ステータス:</span>
-            {(['申請中', '対応中'] as const).map((s) => (
+            {(['申請中', '受理', '対応中'] as const).map((s) => (
               <button
                 key={s}
                 type="button"
@@ -283,7 +311,7 @@ export default function RequestDetailClient({ id }: { id: string }) {
         </div>
       )}
 
-      {/* Requester cancel */}
+      {/* Requester cancel — allowed only before 受理 (while 申請中) */}
       {!isAdmin && isOwner && req.status === '申請中' && (
         <button
           type="button"
@@ -299,13 +327,40 @@ export default function RequestDetailClient({ id }: { id: string }) {
         </button>
       )}
 
-      {req.status === '完了' && req.result_avatar_id && isOwner && (
+      {/* After 受理: self-cancel is disabled; guide the user to email an admin */}
+      {!isAdmin &&
+        isOwner &&
+        (req.status === '受理' || req.status === '対応中') && (
+          <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm">
+            <p className="font-bold text-neutral-900">
+              この依頼は受理されました
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-neutral-600">
+              受理後は画面からの取り下げはできません。取り下げを希望される場合は、
+              直接管理者へメールでご連絡ください。
+            </p>
+            {admins.length > 0 && (
+              <a
+                href={`mailto:${admins.join(',')}?subject=${encodeURIComponent(
+                  `【依頼取り下げ希望】${req.title}`,
+                )}&body=${encodeURIComponent(
+                  `下記のブレイン作成依頼の取り下げを希望します。\n\n依頼: ${req.title}\n依頼ID: ${req.id}\n`,
+                )}`}
+                className="mt-3 inline-block rounded-full bg-neutral-900 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-neutral-700"
+              >
+                管理者にメールで連絡する
+              </a>
+            )}
+          </div>
+        )}
+
+      {req.status === '完了' && req.delivered_avatar_id && isOwner && (
         <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm">
           <p className="font-bold text-green-800">
             ブレインが利用できます
           </p>
           <Link
-            href={`/avatars/${req.result_avatar_id}`}
+            href={`/avatars/${req.delivered_avatar_id}`}
             className="mt-2 inline-block rounded-full bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white"
           >
             ブレインを開く

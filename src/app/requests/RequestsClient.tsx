@@ -9,14 +9,14 @@ type Req = {
   requester_label?: string | null;
   title: string;
   purpose: string;
-  status: '申請中' | '対応中' | '完了' | '却下';
+  status: '申請中' | '受理' | '対応中' | '完了' | '却下';
   assignee_email: string | null;
   result_avatar_id: string | null;
   created_at: string;
   completed_at: string | null;
 };
 
-const STATUSES: Req['status'][] = ['申請中', '対応中', '完了', '却下'];
+const STATUSES: Req['status'][] = ['申請中', '受理', '対応中', '完了', '却下'];
 
 export default function RequestsClient() {
   const [me, setMe] = useState<{ email: string; role: 'admin' | 'member' } | null>(null);
@@ -206,6 +206,7 @@ function FilterButton({
 export function StatusPill({ status }: { status: Req['status'] }) {
   const style = {
     申請中: 'bg-amber-100 text-amber-800',
+    受理: 'bg-emerald-100 text-emerald-800',
     対応中: 'bg-blue-100 text-blue-800',
     完了: 'bg-green-100 text-green-800',
     却下: 'bg-neutral-200 text-neutral-600',

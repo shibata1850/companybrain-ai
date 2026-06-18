@@ -20,6 +20,7 @@ type Usage = {
 export default function MyPageClient() {
   const [me, setMe] = useState<Me | null>(null);
   const [usage, setUsage] = useState<Usage | null>(null);
+  const [requestCount, setRequestCount] = useState(0);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
 
@@ -33,6 +34,10 @@ export default function MyPageClient() {
       .then((j) => {
         if (j.plan) setUsage(j as Usage);
       })
+      .catch(() => {});
+    fetch('/api/requests/count', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => setRequestCount(j?.count ?? 0))
       .catch(() => {});
   }, []);
 
@@ -129,7 +134,11 @@ export default function MyPageClient() {
 
       {/* Menu */}
       <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
-        <MenuLink href="/requests" label="ブレイン作成の依頼" />
+        <MenuLink
+          href="/requests"
+          label="ブレイン作成の依頼"
+          badge={requestCount}
+        />
         <MenuLink href="/audit" label="監査ログ" />
         <MenuLink href="/trash" label="ゴミ箱" />
         <MenuLink href="/account/password" label="パスワード変更" />
@@ -155,13 +164,28 @@ export default function MyPageClient() {
   );
 }
 
-function MenuLink({ href, label }: { href: string; label: string }) {
+function MenuLink({
+  href,
+  label,
+  badge,
+}: {
+  href: string;
+  label: string;
+  badge?: number;
+}) {
   return (
     <Link
       href={href}
       className="flex items-center justify-between border-b border-neutral-100 px-4 py-4 text-sm font-bold text-neutral-900 transition last:border-b-0 hover:bg-neutral-50"
     >
-      <span>{label}</span>
+      <span className="flex items-center gap-2">
+        {label}
+        {!!badge && badge > 0 && (
+          <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white">
+            {badge > 99 ? '99+' : badge}
+          </span>
+        )}
+      </span>
       <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden className="text-neutral-400">
         <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
       </svg>

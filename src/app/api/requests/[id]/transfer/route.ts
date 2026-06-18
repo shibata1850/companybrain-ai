@@ -55,28 +55,41 @@ export async function POST(
   }
 
   const now = new Date().toISOString();
-  // 1. transfer ownership + tag as a request-built brain (this exempts
-  //    it from the requester's plan limits and locks material additions)
-  const { error: e1 } = await db
-    .from('avatars')
-    .update({ owner_email: r.requester_email, request_id: r.id })
-    .eq('id', avatar.id);
-  if (e1) return NextResponse.json({ error: e1.message }, { status: 500 });
+  // 1. Deliver a COPY, not the original. The admin's brain stays
+  //    untouched in their account; the requester receives an
+  //    independent duplicate (own avatar + copied knowledge chunks),
+  //    tagged request_id so it's plan-exempt and material-locked.
+  const { data: copyId, error: e1 } = await db.rpc('copy_brain', {
+    source_id: avatar.id,
+    new_owner: r.requester_email,
+    req_id: r.id,
+  });
+  if (e1 || !copyId) {
+    return NextResponse.json(
+      { error: e1?.message || 'コピーの作成に失敗しました' },
+      { status: 500 },
+    );
+  }
 
-  // 2. complete the request
+  // 2. complete the request, recording which copy was delivered.
   const { error: e2 } = await db
     .from('brain_requests')
-    .update({ status: '完了', completed_at: now, updated_at: now })
+    .update({
+      status: '完了',
+      delivered_avatar_id: copyId,
+      completed_at: now,
+      updated_at: now,
+    })
     .eq('id', params.id);
   if (e2) return NextResponse.json({ error: e2.message }, { status: 500 });
 
-  // 3. notify the requester
+  // 3. notify the requester (link to their copy)
   await db.from('notifications').insert({
     recipient_email: r.requester_email,
     kind: 'request_completed',
     title: 'ブレイン作成依頼が完了しました',
     body: `「${r.title}」が利用できるようになりました。`,
-    link: `/avatars/${avatar.id}`,
+    link: `/avatars/${copyId}`,
   });
 
   return NextResponse.json({ ok: true });

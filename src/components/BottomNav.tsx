@@ -14,13 +14,16 @@ import { useCallback, useEffect, useState } from 'react';
 export default function BottomNav({ show }: { show: boolean }) {
   const pathname = usePathname() || '';
   const [unread, setUnread] = useState(0);
+  const [requestCount, setRequestCount] = useState(0);
 
-  const loadUnread = useCallback(async () => {
+  const loadBadges = useCallback(async () => {
     try {
-      const r = await fetch('/api/notifications', { cache: 'no-store' });
-      if (!r.ok) return;
-      const j = (await r.json()) as { unread_count?: number };
-      setUnread(j.unread_count ?? 0);
+      const [n, r] = await Promise.all([
+        fetch('/api/notifications', { cache: 'no-store' }).then((x) => x.json()),
+        fetch('/api/requests/count', { cache: 'no-store' }).then((x) => x.json()),
+      ]);
+      setUnread(n?.unread_count ?? 0);
+      setRequestCount(r?.count ?? 0);
     } catch {
       // ignore
     }
@@ -28,10 +31,10 @@ export default function BottomNav({ show }: { show: boolean }) {
 
   useEffect(() => {
     if (!show) return;
-    loadUnread();
-    const t = setInterval(loadUnread, 60_000);
+    loadBadges();
+    const t = setInterval(loadBadges, 60_000);
     return () => clearInterval(t);
-  }, [show, loadUnread, pathname]);
+  }, [show, loadBadges, pathname]);
 
   if (!show) return null;
 
@@ -57,6 +60,7 @@ export default function BottomNav({ show }: { show: boolean }) {
         pathname.startsWith('/requests') ||
         pathname.startsWith('/audit') ||
         pathname.startsWith('/trash'),
+      badge: requestCount,
     },
   ];
 
