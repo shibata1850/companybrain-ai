@@ -76,29 +76,26 @@ section[id] {
 }
 
 /* ---------- Landing page: soft animated pastel gradient ----------
-   The 4 radial layers each follow their own path (translated via
-   background-size 300% and unique keyframes) for visibly moving
-   blobs rather than a static glow.                                  */
+   The 4 radial layers stay anchored near the center area at all
+   keyframe steps so a colourful blob is always visible — earlier
+   versions sent the blobs to extreme corners which made the screen
+   look like a flat color part-way through the loop.                */
 @keyframes lp-bg-shift {
-  0% {
+  0%, 100% {
     background-position:
-      0% 0%, 100% 0%, 50% 100%, 0% 60%;
+      20% 30%, 80% 30%, 40% 80%, 70% 60%;
   }
   25% {
     background-position:
-      80% 30%, 20% 60%, 70% 20%, 60% 90%;
+      40% 50%, 60% 20%, 70% 70%, 30% 70%;
   }
   50% {
     background-position:
-      100% 70%, 0% 100%, 30% 0%, 100% 30%;
+      60% 30%, 40% 60%, 30% 50%, 70% 40%;
   }
   75% {
     background-position:
-      30% 100%, 70% 40%, 90% 60%, 20% 10%;
-  }
-  100% {
-    background-position:
-      0% 0%, 100% 0%, 50% 100%, 0% 60%;
+      30% 60%, 70% 40%, 60% 30%, 40% 80%;
   }
 }
 .lp-bg {
@@ -110,8 +107,8 @@ section[id] {
     radial-gradient(650px circle at 50% 100%, rgba(45, 212, 191, 0.55), transparent 60%),
     radial-gradient(600px circle at 0% 80%, rgba(251, 191, 36, 0.50), transparent 60%);
   background-attachment: fixed;
-  background-size: 300% 300%, 300% 300%, 300% 300%, 300% 300%;
-  animation: lp-bg-shift 10s ease-in-out infinite;
+  background-size: 180% 180%, 180% 180%, 180% 180%, 180% 180%;
+  animation: lp-bg-shift 18s ease-in-out infinite;
 }
 /* Translucent section backgrounds so the animated gradient peeks
    through subtly between content blocks. */
