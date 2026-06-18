@@ -1,11 +1,22 @@
 /**
- * Plan catalog. Pricing is set to comfortably absorb the Gemini API
- * spend at the upper bound of each tier's limits:
- *   - Voice (Gemini Live) is the dominant cost: ~¥70/min audio out.
- *     So voice minutes are the tightest knob.
- *   - Text Q&A on Flash is ~¥2-5 per 1k tokens; Pro is ~10×.
- *   - Embedding/ingest is comparatively cheap.
- * Headroom on top covers Supabase + Vercel + SOFTDOING overhead.
+ * Plan catalog.
+ *
+ * Cost basis (SOFTDOING, regional Iwate SMB market):
+ *   - The DOMINANT cost is labor: ¥5,000,000 / month fixed.
+ *   - Gemini API + Supabase/Vercel are minor at SMB usage
+ *     (~¥500-2,000 / company / month combined).
+ *   - So required revenue ≈ ¥5.35M / month, and the only real lever
+ *     is ARPU × customer count.
+ *
+ * Strategy chosen: MARKET-SHARE PRIORITY (low price). Standard is the
+ * floor that still keeps a coherent ladder; break-even sits beyond the
+ * 3-year target (135 cos) at roughly ~269 paying companies, i.e. the
+ * first years are intentionally funded losses to drive adoption.
+ *
+ *   blended ARPU ≈ 0.3×4,980 + 0.55×19,800 + 0.15×49,800 ≈ ¥19,850
+ *   break-even   ≈ ¥5.35M / ¥19,850 ≈ 269 companies
+ *
+ * Targets (for reference): initial year 45 cos, 3-year 135 cos.
  */
 export type PlanId = 'free' | 'starter' | 'standard' | 'pro';
 
@@ -94,7 +105,7 @@ export const PLANS: Plan[] = [
     id: 'standard',
     name: 'スタンダード',
     tagline: '事業の中核に AI を入れる中小企業に',
-    priceJpy: 14800,
+    priceJpy: 19800,
     bestFor: '5〜30 名',
     priceNote: 'ユーザー 30 名まで・最人気',
     ctaLabel: '申し込む',
