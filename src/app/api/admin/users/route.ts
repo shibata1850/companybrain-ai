@@ -21,7 +21,7 @@ export async function GET() {
   // NOT the user's own display_name, which is private to that user.
   const { data, error } = await db
     .from('app_users')
-    .select('email, role, admin_label, created_at')
+    .select('email, role, admin_label, created_at, suspended_at')
     .order('created_at', { ascending: true });
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

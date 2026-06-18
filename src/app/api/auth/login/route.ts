@@ -39,13 +39,20 @@ export async function POST(req: NextRequest) {
   const db = supabaseAdmin();
   const { data: allowed } = await db
     .from('app_users')
-    .select('email, role')
+    .select('email, role, suspended_at')
     .eq('email', email.trim().toLowerCase())
     .single();
   if (!allowed) {
     await supa.auth.signOut();
     return NextResponse.json(
       { error: 'このアカウントは利用を許可されていません。管理者にお問い合わせください。' },
+      { status: 403 },
+    );
+  }
+  if (allowed.suspended_at) {
+    await supa.auth.signOut();
+    return NextResponse.json(
+      { error: 'このアカウントは一時停止中です。管理者にお問い合わせください。' },
       { status: 403 },
     );
   }

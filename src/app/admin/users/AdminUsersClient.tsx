@@ -2,12 +2,14 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
+import SlideToConfirm from '@/components/SlideToConfirm';
 
 type User = {
   email: string;
   role: 'admin' | 'member';
   admin_label: string | null;
   created_at: string;
+  suspended_at: string | null;
 };
 
 export default function AdminUsersClient() {
@@ -180,7 +182,11 @@ export default function AdminUsersClient() {
               <li key={u.email} className="flex items-center justify-between gap-3 px-4 py-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate text-sm text-neutral-900">
+                    <span
+                      className={`truncate text-sm ${
+                        u.suspended_at ? 'text-neutral-400 line-through' : 'text-neutral-900'
+                      }`}
+                    >
                       {u.email}
                     </span>
                     <span
@@ -192,6 +198,11 @@ export default function AdminUsersClient() {
                     >
                       {u.role === 'admin' ? '管理者' : '一般'}
                     </span>
+                    {u.suspended_at && (
+                      <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                        ⏸ 一時停止中
+                      </span>
+                    )}
                   </div>
                   <LabelEditor
                     email={u.email}
@@ -201,6 +212,11 @@ export default function AdminUsersClient() {
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
                   <ResetPasswordButton email={u.email} />
+                  <SuspendButton
+                    email={u.email}
+                    suspended={!!u.suspended_at}
+                    onChanged={load}
+                  />
                   <button
                     type="button"
                     onClick={() => removeUser(u.email)}
@@ -215,6 +231,84 @@ export default function AdminUsersClient() {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Two-step suspend / resume action: first tap opens a slide-to-confirm
+ * modal, dragging the thumb to the end commits. Suspension is fully
+ * reversible — the user's brains, history and allowlist row stay put.
+ */
+function SuspendButton({
+  email,
+  suspended,
+  onChanged,
+}: {
+  email: string;
+  suspended: boolean;
+  onChanged: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function commit() {
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/users/suspend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, suspend: !suspended }),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      setOpen(false);
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        title={
+          suspended
+            ? 'このユーザーの利用を再開します'
+            : 'このユーザーのログインを一時的に止めます。データは消えません'
+        }
+        className={`text-xs transition ${
+          suspended
+            ? 'text-green-700 hover:text-green-900'
+            : 'text-neutral-400 hover:text-amber-700'
+        }`}
+      >
+        {suspended ? '▶ 再開' : '⏸ 一時停止'}
+      </button>
+      <SlideToConfirm
+        open={open}
+        title={suspended ? '利用を再開しますか?' : '一時停止しますか?'}
+        description={
+          suspended
+            ? `${email} のログインを再び許可します。`
+            : `${email} は次回ログイン以降ログインできなくなります。ブレインや履歴は残るため、いつでも再開できます。`
+        }
+        actionLabel={
+          error
+            ? `失敗: ${error}`
+            : suspended
+            ? '→ スライドして再開'
+            : '→ スライドして一時停止'
+        }
+        tone={suspended ? 'green' : 'amber'}
+        onConfirm={commit}
+        onClose={() => {
+          setOpen(false);
+          setError(null);
+        }}
+      />
+    </>
   );
 }
 

@@ -54,10 +54,13 @@ export async function getAppUser(): Promise<AppUser | null> {
   const db = supabaseAdmin();
   const { data } = await db
     .from('app_users')
-    .select('email, role, display_name')
+    .select('email, role, display_name, suspended_at')
     .eq('email', email)
     .single();
   if (!data) return null;
+  // Suspended accounts are treated as if they don't exist for the rest
+  // of the app — no brain access, no audit visibility, no requests.
+  if (data.suspended_at) return null;
   return {
     email: data.email,
     role: data.role === 'admin' ? 'admin' : 'member',
