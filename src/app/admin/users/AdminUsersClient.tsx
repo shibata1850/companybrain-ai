@@ -199,19 +199,99 @@ export default function AdminUsersClient() {
                     onSaved={load}
                   />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => removeUser(u.email)}
-                  className="shrink-0 text-xs text-neutral-400 transition hover:text-red-600"
-                >
-                  利用停止
-                </button>
+                <div className="flex shrink-0 items-center gap-3">
+                  <ResetPasswordButton email={u.email} />
+                  <button
+                    type="button"
+                    onClick={() => removeUser(u.email)}
+                    className="text-xs text-neutral-400 transition hover:text-red-600"
+                  >
+                    利用停止
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Issues a one-shot temporary password for a user who forgot theirs.
+ * The plaintext is shown ONCE in a copyable inline panel; closing the
+ * panel discards it. The admin should pass it to the user out-of-band.
+ */
+function ResetPasswordButton({ email }: { email: string }) {
+  const [busy, setBusy] = useState(false);
+  const [temp, setTemp] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function issue() {
+    if (
+      !confirm(
+        `${email} の仮パスワードを発行しますか?\n現在のパスワードは使えなくなります。`,
+      )
+    )
+      return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/users/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const json = (await res.json()) as { password?: string; error?: string };
+      if (!res.ok || !json.password) {
+        throw new Error(json.error || `HTTP ${res.status}`);
+      }
+      setTemp(json.password);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (temp) {
+    return (
+      <div className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px]">
+        <span className="mr-1.5 text-neutral-500">仮パスワード:</span>
+        <code className="select-all rounded bg-white px-1.5 py-0.5 font-mono text-neutral-900">
+          {temp}
+        </code>
+        <button
+          type="button"
+          onClick={() => void navigator.clipboard.writeText(temp)}
+          className="ml-1.5 text-neutral-500 hover:text-neutral-900"
+          title="コピー"
+        >
+          📋
+        </button>
+        <button
+          type="button"
+          onClick={() => setTemp(null)}
+          className="ml-1.5 text-neutral-400 hover:text-neutral-900"
+          title="閉じる(以後表示できません)"
+        >
+          ✕
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={issue}
+      disabled={busy}
+      title="仮パスワードを発行して画面に1度だけ表示します"
+      className="text-xs text-neutral-400 transition hover:text-neutral-900 disabled:opacity-50"
+    >
+      {busy ? '発行中…' : error ? `失敗: ${error}` : '🔑 仮パスワード発行'}
+    </button>
   );
 }
 

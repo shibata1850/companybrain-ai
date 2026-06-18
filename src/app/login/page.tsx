@@ -88,7 +88,15 @@ function LoginForm() {
           {submitting ? 'ログイン中…' : 'ログイン'}
         </button>
       </form>
-      <p className="mt-4 text-center text-[11px] text-neutral-400">
+      <div className="mt-4 text-center">
+        <a
+          href="/login/forgot"
+          className="text-xs text-neutral-500 underline-offset-2 transition hover:text-neutral-900 hover:underline"
+        >
+          メアド・パスワードを忘れた方
+        </a>
+      </div>
+      <p className="mt-3 text-center text-[11px] text-neutral-400">
         アカウントは管理者が発行します。利用できない場合は管理者にご連絡ください。
       </p>
     </div>
