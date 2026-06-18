@@ -1,0 +1,63 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { authorizeAvatar } from '@/lib/authServer';
+import { revalidatePath } from 'next/cache';
+import { storageBucket, supabaseAdmin } from '@/lib/supabase';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
+/**
+ * Replace an avatar's cover photo. The client sends a cropped JPEG as
+ * a `photo` field on a multipart form. We upload it to the storage
+ * bucket and point the avatar's cover_image_path at it.
+ */
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  const auth = await authorizeAvatar(params.id);
+  if (!auth.ok) {
+    return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
+  }
+  const form = await req.formData();
+  const file = form.get('photo');
+  if (!(file instanceof File)) {
+    return NextResponse.json(
+      { error: 'photo file is required' },
+      { status: 400 },
+    );
+  }
+
+  const db = supabaseAdmin();
+  const { data: avatar } = await db
+    .from('avatars')
+    .select('id')
+    .eq('id', params.id)
+    .single();
+  if (!avatar) {
+    return NextResponse.json({ error: 'avatar not found' }, { status: 404 });
+  }
+
+  const bytes = Buffer.from(await file.arrayBuffer());
+  // Always overwrite a stable filename so signed URLs cycle predictably.
+  const coverPath = `${params.id}/cover.jpg`;
+  const { error: upErr } = await db.storage
+    .from(storageBucket())
+    .upload(coverPath, bytes, {
+      contentType: 'image/jpeg',
+      upsert: true,
+    });
+  if (upErr) {
+    return NextResponse.json({ error: upErr.message }, { status: 500 });
+  }
+
+  await db
+    .from('avatars')
+    .update({ cover_image_path: coverPath })
+    .eq('id', params.id);
+
+  revalidatePath('/');
+  revalidatePath(`/avatars/${params.id}`);
+  return NextResponse.json({ ok: true });
+}
