@@ -90,15 +90,15 @@ export default function LoginBackground() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-gradient-to-br from-indigo-50 via-rose-50 to-amber-50"
+      className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-gradient-to-br from-slate-50 via-white to-indigo-50/40"
     >
-      {/* soft colored gradient light */}
-      <div className="absolute -left-24 top-10 h-[420px] w-[420px] rounded-full bg-gradient-to-br from-indigo-300/50 to-violet-300/50 blur-3xl" />
-      <div className="absolute -right-24 top-1/3 h-[440px] w-[440px] rounded-full bg-gradient-to-br from-rose-300/50 to-orange-200/50 blur-3xl" />
-      <div className="absolute bottom-0 left-1/3 h-[380px] w-[380px] rounded-full bg-gradient-to-br from-emerald-200/50 to-cyan-300/50 blur-3xl" />
+      {/* very soft, low-saturation gradient light */}
+      <div className="absolute -left-24 top-10 h-[420px] w-[420px] rounded-full bg-gradient-to-br from-indigo-200/25 to-violet-200/25 blur-3xl" />
+      <div className="absolute -right-24 top-1/3 h-[440px] w-[440px] rounded-full bg-gradient-to-br from-rose-200/20 to-orange-100/20 blur-3xl" />
+      <div className="absolute bottom-0 left-1/3 h-[380px] w-[380px] rounded-full bg-gradient-to-br from-emerald-100/25 to-cyan-200/25 blur-3xl" />
 
-      {/* drifting columns, blurred */}
-      <div className="absolute inset-0 flex justify-center gap-5 opacity-70 blur-[3px] sm:gap-7">
+      {/* drifting columns, blurred + faded */}
+      <div className="absolute inset-0 flex justify-center gap-5 opacity-45 blur-[4px] sm:gap-7">
         <Column cards={colA} duration={34} />
         <Column cards={colB} duration={42} delay={-6} />
         <Column cards={colC} duration={30} delay={-12} />
@@ -107,13 +107,13 @@ export default function LoginBackground() {
       </div>
 
       {/* light wash so the foreground login card stays readable */}
-      <div className="absolute inset-0 bg-white/45" />
+      <div className="absolute inset-0 bg-white/65" />
       {/* soft radial focus behind the centered card */}
       <div
         className="absolute inset-0"
         style={{
           background:
-            'radial-gradient(440px circle at 50% 45%, rgba(255,255,255,0.9), transparent 72%)',
+            'radial-gradient(440px circle at 50% 45%, rgba(255,255,255,0.92), transparent 72%)',
         }}
       />
     </div>

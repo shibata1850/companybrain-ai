@@ -396,44 +396,151 @@ function Dot({ delay }: { delay: number }) {
 }
 
 /* ===================================================================
-   FEATURES — 6 clean cards
+   FEATURES — dynamic cards with line icons + accent + detail chips
    =================================================================== */
 
+type Feature = {
+  icon: keyof typeof ICONS;
+  title: string;
+  body: string;
+  detail: string;
+  accent: string; // gradient for icon + hover glow
+};
+
 function Features() {
-  const items = [
-    { icon: '🎥', title: '動画から人格を学習', body: '対象人物の動画をアップロードするだけ。表情・話し方・口癖まで取り込みます。' },
-    { icon: '🎙️', title: 'リアルタイム音声会話', body: 'Gemini Live で 1〜3 秒の超低遅延応答。会議の壁打ち相手として使えます。' },
-    { icon: '📚', title: '社内資料を一括学習', body: 'PDF・議事録・規程・URL をまとめて投入。pgvector で意味検索します。' },
-    { icon: '🛡️', title: '完全プライベート', body: 'ブレインは作成者本人だけが利用可能。他のユーザーには見えません。' },
-    { icon: '📋', title: '監査ログ完備', body: '質問・回答・素材投入まで全履歴を保存。コンプライアンス要件に対応。' },
-    { icon: '📨', title: 'ブレイン作成を依頼', body: '「こういうブレインが欲しい」と社員が管理者に依頼できる。完成後は依頼者に所有権譲渡。' },
+  const items: Feature[] = [
+    {
+      icon: 'video',
+      title: '動画から人格を学習',
+      body: '対象人物の動画をアップロードするだけで、表情・話し方・口癖まで取り込みます。',
+      detail: '話者の口調をそのまま再現',
+      accent: 'from-indigo-500 to-violet-600',
+    },
+    {
+      icon: 'mic',
+      title: 'リアルタイム音声会話',
+      body: 'Gemini Live による 1〜3 秒の超低遅延応答。会議中の壁打ち相手としても。',
+      detail: '応答 1〜3 秒・押して話す',
+      accent: 'from-rose-500 to-orange-500',
+    },
+    {
+      icon: 'docs',
+      title: '社内資料を一括学習',
+      body: 'PDF・議事録・規程・URL をまとめて投入。意味で検索して答えます。',
+      detail: 'pgvector 意味検索',
+      accent: 'from-sky-500 to-cyan-500',
+    },
+    {
+      icon: 'shield',
+      title: '完全プライベート',
+      body: 'ブレインは作成者本人だけが利用可能。他のユーザーや管理者にも中身は見えません。',
+      detail: '所有者のみアクセス',
+      accent: 'from-emerald-500 to-teal-600',
+    },
+    {
+      icon: 'log',
+      title: '監査ログ完備',
+      body: '質問・回答・素材投入まで全履歴を記録。コンプライアンス要件にも対応します。',
+      detail: '全操作を追跡・CSV 出力',
+      accent: 'from-amber-500 to-yellow-500',
+    },
+    {
+      icon: 'handoff',
+      title: 'ブレイン作成を依頼',
+      body: '「こういうブレインが欲しい」と社員が管理者に依頼。完成後は依頼者へ所有権を譲渡。',
+      detail: '依頼 → 作成 → 譲渡',
+      accent: 'from-fuchsia-500 to-purple-600',
+    },
   ];
   return (
     <section id="features" className="bg-white py-24 sm:py-28">
       <div className="mx-auto max-w-6xl px-6">
-        <SectionHeading eyebrow="FEATURES" title="必要な機能を、過不足なく。" />
-        <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((f) => (
-            <div
-              key={f.title}
-              className="rounded-2xl border border-neutral-200 bg-white p-6 transition hover:border-neutral-900"
-            >
-              <div className="grid h-11 w-11 place-items-center rounded-xl bg-neutral-900 text-xl text-white">
-                {f.icon}
+        <SectionHeading
+          eyebrow="FEATURES"
+          title="必要な機能を、過不足なく。"
+          subtitle="ナレッジを「人」に紐付けて残すための機能を、ひと通り。"
+        />
+        <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {items.map((f) => {
+            const Icon = ICONS[f.icon];
+            return (
+              <div
+                key={f.title}
+                className="group relative overflow-hidden rounded-2xl border border-neutral-200 bg-white p-6 transition duration-300 hover:-translate-y-1 hover:border-transparent hover:shadow-2xl"
+              >
+                {/* hover glow */}
+                <div
+                  aria-hidden
+                  className={`pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-gradient-to-br ${f.accent} opacity-0 blur-2xl transition duration-500 group-hover:opacity-20`}
+                />
+                {/* top accent line on hover */}
+                <div
+                  aria-hidden
+                  className={`absolute inset-x-0 top-0 h-1 origin-left scale-x-0 bg-gradient-to-r ${f.accent} transition-transform duration-300 group-hover:scale-x-100`}
+                />
+                <div
+                  className={`grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br ${f.accent} text-white shadow-lg transition duration-300 group-hover:scale-110 group-hover:-rotate-3`}
+                >
+                  <Icon />
+                </div>
+                <h3 className="mt-5 text-lg font-semibold tracking-tight">
+                  {f.title}
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-neutral-600">
+                  {f.body}
+                </p>
+                <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-3 py-1 text-[11px] font-medium text-neutral-600 transition group-hover:bg-neutral-900 group-hover:text-white">
+                  <span className="text-[9px]">●</span>
+                  {f.detail}
+                </div>
               </div>
-              <h3 className="mt-4 text-base font-semibold tracking-tight">
-                {f.title}
-              </h3>
-              <p className="mt-2 text-sm leading-relaxed text-neutral-600">
-                {f.body}
-              </p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </section>
   );
 }
+
+/* Inline line-icon set (stroke style, 24px grid). */
+const ICONS = {
+  video: () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="2.5" y="6" width="13" height="12" rx="2.5" />
+      <path d="M15.5 10l6-3.2v10.4l-6-3.2" />
+    </svg>
+  ),
+  mic: () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="9" y="2.5" width="6" height="11" rx="3" />
+      <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" />
+    </svg>
+  ),
+  docs: () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M14 2.5H7A2.5 2.5 0 0 0 4.5 5v14A2.5 2.5 0 0 0 7 21.5h10A2.5 2.5 0 0 0 19.5 19V8z" />
+      <path d="M14 2.5V8h5.5M8 13h8M8 16.5h5" />
+    </svg>
+  ),
+  shield: () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 2.5l7.5 3v5.5c0 4.7-3.2 8.3-7.5 10-4.3-1.7-7.5-5.3-7.5-10V5.5z" />
+      <path d="M9 12l2 2 4-4.5" />
+    </svg>
+  ),
+  log: () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="4" y="3" width="16" height="18" rx="2.5" />
+      <path d="M8 8h8M8 12h8M8 16h5" />
+    </svg>
+  ),
+  handoff: () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 8h13M12 4l4 4-4 4" />
+      <path d="M21 16H8M12 12l-4 4 4 4" />
+    </svg>
+  ),
+};
 
 /* ===================================================================
    SAMPLE PREVIEWS — tabbed mock-ups for the marquee features
@@ -826,7 +933,12 @@ function Pricing() {
           title="まずは無料で。成長に合わせて選べる 4 プラン。"
           subtitle="年契約で 2 ヶ月分無料 · いつでもアップグレード / 解約可能 · 税抜"
         />
-        <div className="mt-14 grid gap-5 lg:grid-cols-4">
+        <div className="mx-auto mt-6 max-w-2xl rounded-2xl border border-neutral-200 bg-neutral-50 px-5 py-3 text-center text-sm text-neutral-700">
+          ✨ <span className="font-medium">上位プランほど、より高精度な AI モデルを利用できます。</span>
+          フリー / スターターは高速モデル、スタンダードは高精度モデル、
+          プロは常に最新最上位モデルへ自動アップグレードされます。
+        </div>
+        <div className="mt-12 grid gap-5 lg:grid-cols-4">
           {PLANS.map((p) => (
             <PlanCard key={p.id} plan={p} />
           ))}

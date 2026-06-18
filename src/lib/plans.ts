@@ -107,9 +107,8 @@ export const PLANS: Plan[] = [
     tagline: '事業の中核に AI を入れる中小企業に',
     priceJpy: 19800,
     bestFor: '5〜30 名',
-    priceNote: 'ユーザー 30 名まで・最人気',
+    priceNote: 'ユーザー 30 名まで',
     ctaLabel: '申し込む',
-    highlighted: true,
     limits: {
       brains: 8,
       monthlyQuestions: 2000,
