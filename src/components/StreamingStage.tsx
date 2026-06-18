@@ -1437,7 +1437,7 @@ export default function StreamingStage({
               }}
               onContextMenu={(e) => e.preventDefault()}
               disabled={muted}
-              className={`flex-1 select-none rounded-full px-4 py-2 text-sm font-semibold shadow-md backdrop-blur transition active:scale-[0.98] disabled:opacity-50 ${
+              className={`flex-1 select-none rounded-full px-4 py-2 text-sm font-bold shadow-md backdrop-blur transition active:scale-[0.98] disabled:opacity-50 ${
                 isTalking
                   ? 'animate-pulse bg-red-500 text-white ring-4 ring-red-300/60'
                   : 'bg-white/95 text-neutral-900 hover:bg-white'
@@ -1445,8 +1445,8 @@ export default function StreamingStage({
               title="長押し(またはSpace長押し)で話す。離すと送信"
             >
               {isTalking
-                ? '🎙 録音中… 離すと送信'
-                : '🎙 押している間だけ話す (またはSpace長押し)'}
+                ? '録音中… 離すと送信'
+                : '押している間だけ話す (またはSpace長押し)'}
             </button>
             <button
               type="button"

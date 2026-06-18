@@ -392,10 +392,10 @@ export default function AvatarDetail({ id }: { id: string }) {
       const who = m.role === 'user' ? 'あなた' : brainName;
       const time = d.toLocaleTimeString('ja-JP');
       const flags: string[] = [];
-      if (m.pinned) flags.push('📌');
-      if (m.rating === 'up') flags.push('👍');
-      if (m.rating === 'down') flags.push('👎');
-      if (m.escalation) flags.push('⚠️');
+      if (m.pinned) flags.push('[ピン]');
+      if (m.rating === 'up') flags.push('[高評価]');
+      if (m.rating === 'down') flags.push('[低評価]');
+      if (m.escalation) flags.push('[要確認]');
       const flagStr = flags.length > 0 ? ` ${flags.join(' ')}` : '';
       lines.push(`**${who}** _(${time})_${flagStr}  `);
       lines.push(m.text, '');
@@ -404,7 +404,7 @@ export default function AvatarDetail({ id }: { id: string }) {
           .map((c) => escalationLabel(c as EscalationCategory))
           .join(' / ');
         lines.push(
-          `> ⚠️ **上長確認推奨** (${cats})`,
+          `> **上長確認推奨** (${cats})`,
           m.escalation.hints.length > 0
             ? `> 検出語: ${m.escalation.hints.join('、')}`
             : '',
@@ -1617,7 +1617,7 @@ function TranscriptPanel({
               className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-800"
               title="上長確認推奨と判定された質問・回答の件数"
             >
-              ⚠️ {escalationCount}
+              要確認 {escalationCount}
             </span>
           )}
           {pinnedCount > 0 && (
@@ -1631,7 +1631,7 @@ function TranscriptPanel({
               }`}
               title="ピン留めだけ表示"
             >
-              📌 {pinnedCount}
+              ピン {pinnedCount}
             </button>
           )}
           {messages.length > 0 && (
@@ -2057,12 +2057,14 @@ function MessageRow({
           <button
             type="button"
             onClick={() => onUpdate({ pinned: !m.pinned })}
-            className={`rounded-full px-1 text-[12px] leading-none transition ${
-              m.pinned ? 'opacity-100' : 'opacity-40 hover:opacity-100'
+            className={`rounded-full px-1.5 text-[11px] font-bold leading-none transition ${
+              m.pinned
+                ? 'text-neutral-900'
+                : 'text-neutral-400 hover:text-neutral-900'
             }`}
             title={m.pinned ? 'ピンを外す' : 'ピン留め'}
           >
-            📌
+            ピン
           </button>
           <button
             type="button"
@@ -2084,28 +2086,28 @@ function MessageRow({
                 onClick={() =>
                   onUpdate({ rating: m.rating === 'up' ? null : 'up' })
                 }
-                className={`rounded-full px-1 text-[12px] leading-none transition ${
+                className={`rounded-full px-1.5 text-[11px] font-bold leading-none transition ${
                   m.rating === 'up'
-                    ? 'opacity-100'
-                    : 'opacity-40 hover:opacity-100'
+                    ? 'text-emerald-600'
+                    : 'text-neutral-400 hover:text-neutral-900'
                 }`}
                 title="良い回答"
               >
-                👍
+                高評価
               </button>
               <button
                 type="button"
                 onClick={() =>
                   onUpdate({ rating: m.rating === 'down' ? null : 'down' })
                 }
-                className={`rounded-full px-1 text-[12px] leading-none transition ${
+                className={`rounded-full px-1.5 text-[11px] font-bold leading-none transition ${
                   m.rating === 'down'
-                    ? 'opacity-100'
-                    : 'opacity-40 hover:opacity-100'
+                    ? 'text-neutral-900'
+                    : 'text-neutral-400 hover:text-neutral-900'
                 }`}
                 title="改善が必要"
               >
-                👎
+                低評価
               </button>
             </>
           )}
@@ -2128,11 +2130,21 @@ function MessageRow({
                 minute: '2-digit',
               })}
             </span>
-            {m.pinned && <span title="ピン留め済み">📌</span>}
-            {m.rating === 'up' && <span>👍</span>}
-            {m.rating === 'down' && <span>👎</span>}
+            {m.pinned && (
+              <span className="font-bold text-neutral-500" title="ピン留め済み">
+                ピン
+              </span>
+            )}
+            {m.rating === 'up' && (
+              <span className="font-bold text-emerald-600">高評価</span>
+            )}
+            {m.rating === 'down' && (
+              <span className="font-bold text-neutral-500">低評価</span>
+            )}
             {m.escalation && (
-              <span title="上長確認推奨を検出">⚠️</span>
+              <span className="font-bold text-amber-600" title="上長確認推奨を検出">
+                要確認
+              </span>
             )}
           </div>
           <p className="mt-1 whitespace-pre-wrap leading-relaxed">
@@ -2147,8 +2159,8 @@ function MessageRow({
                   : 'border-amber-400 bg-amber-50 text-amber-900'
               }`}
             >
-              <p className="font-semibold">
-                ⚠️ 上長確認推奨{!isUser ? '(この回答は参考情報です)' : ''}
+              <p className="font-bold">
+                上長確認推奨{!isUser ? '(この回答は参考情報です)' : ''}
               </p>
               <p className="mt-0.5">
                 判断カテゴリ:{' '}
@@ -2188,7 +2200,7 @@ function MessageRow({
               className="mt-1.5 text-[10px] text-amber-600/80"
               title="この回答は学習素材を検索せずに生成されています。重要な内容は素材や原典で確認してください。"
             >
-              ⚠ 根拠未参照(素材を検索せずに回答)
+              根拠未参照(素材を検索せずに回答)
             </p>
           )}
           {hasSources && sourcesOpen && (
@@ -2405,7 +2417,7 @@ function PersonaPromptButton({
           '回答のルール(口調・専門分野・答えてはいけないこと等)を設定'
         }
       >
-        📋 回答ルール{current ? '(設定済み)' : ''}
+        回答ルール{current ? '(設定済み)' : ''}
       </button>
       {open && (
         <div
@@ -2415,8 +2427,8 @@ function PersonaPromptButton({
           }}
         >
           <div className="w-full max-w-xl rounded-2xl bg-white p-5 shadow-xl">
-            <h3 className="text-sm font-semibold text-neutral-900">
-              📋 回答ルールの設定
+            <h3 className="text-sm font-bold text-neutral-900">
+              回答ルールの設定
             </h3>
             <p className="mt-1 text-[11px] leading-relaxed text-neutral-500">
               このブレインの「話し方」と「答え方のルール」をここに書きます。
@@ -2543,7 +2555,7 @@ function VoicePicker({
                   : 'text-neutral-700'
               }`}
             >
-              <span>🔊 {v.id}</span>
+              <span className="font-bold">{v.id}</span>
               <span className="text-[10px] text-neutral-400">{v.hint}</span>
             </button>
           ))}

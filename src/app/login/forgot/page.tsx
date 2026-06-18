@@ -16,8 +16,8 @@ export default function ForgotPage() {
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-sm flex-col justify-center">
       <div className="mb-6 text-center">
-        <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-neutral-900 text-xl text-white">
-          🧠
+        <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-neutral-900 text-sm font-bold tracking-tight text-white">
+          CB
         </div>
         <h1 className="text-xl font-semibold tracking-tight">
           メアド・パスワードを忘れた方
@@ -62,9 +62,9 @@ export default function ForgotPage() {
           </summary>
           <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs leading-relaxed text-neutral-600">
             <li>管理ページ → ユーザー管理 を開く</li>
-            <li>該当ユーザーの「🔑 仮パスワード発行」を押す</li>
+            <li>該当ユーザーの「仮パスワード発行」を押す</li>
             <li>表示された仮パスワードを本人に伝える</li>
-            <li>本人はログイン後、「🔑 パスワード」から新しい物に変更</li>
+            <li>本人はログイン後、「パスワード変更」から新しい物に変更</li>
           </ol>
         </details>
       </div>

@@ -252,7 +252,7 @@ export default function RequestDetailClient({ id }: { id: string }) {
             disabled={busy || !req.result_avatar_id}
             className="w-full rounded-full bg-green-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-green-500 disabled:opacity-50"
           >
-            ✅ 依頼者({req.requester_email})へ譲渡して完了
+            依頼者({req.requester_email})へ譲渡して完了
           </button>
 
           {/* Reject */}
@@ -301,8 +301,8 @@ export default function RequestDetailClient({ id }: { id: string }) {
 
       {req.status === '完了' && req.result_avatar_id && isOwner && (
         <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm">
-          <p className="font-medium text-green-800">
-            ✅ ブレインが利用できます
+          <p className="font-bold text-green-800">
+            ブレインが利用できます
           </p>
           <Link
             href={`/avatars/${req.result_avatar_id}`}

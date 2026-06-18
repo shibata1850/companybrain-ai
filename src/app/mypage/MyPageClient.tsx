@@ -129,17 +129,17 @@ export default function MyPageClient() {
 
       {/* Menu */}
       <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
-        <MenuLink href="/requests" icon="📨" label="ブレイン作成の依頼" />
-        <MenuLink href="/audit" icon="📋" label="監査ログ" />
-        <MenuLink href="/trash" icon="🗑" label="ゴミ箱" />
-        <MenuLink href="/account/password" icon="🔑" label="パスワード変更" />
+        <MenuLink href="/requests" label="ブレイン作成の依頼" />
+        <MenuLink href="/audit" label="監査ログ" />
+        <MenuLink href="/trash" label="ゴミ箱" />
+        <MenuLink href="/account/password" label="パスワード変更" />
         {isAdmin && (
           <>
-            <div className="border-t border-neutral-100 bg-neutral-50/60 px-4 py-1.5 text-[10px] font-medium uppercase tracking-wider text-neutral-400">
+            <div className="border-t border-neutral-100 bg-neutral-50/60 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wider text-neutral-500">
               管理者
             </div>
-            <MenuLink href="/admin/avatars" icon="🛡" label="管理ページ" />
-            <MenuLink href="/admin/users" icon="👤" label="ユーザー管理" />
+            <MenuLink href="/admin/avatars" label="管理ページ" />
+            <MenuLink href="/admin/users" label="ユーザー管理" />
           </>
         )}
       </section>
@@ -155,24 +155,15 @@ export default function MyPageClient() {
   );
 }
 
-function MenuLink({
-  href,
-  icon,
-  label,
-}: {
-  href: string;
-  icon: string;
-  label: string;
-}) {
+function MenuLink({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
-      className="flex items-center gap-3 border-b border-neutral-100 px-4 py-3.5 text-sm text-neutral-800 transition last:border-b-0 hover:bg-neutral-50"
+      className="flex items-center justify-between border-b border-neutral-100 px-4 py-4 text-sm font-bold text-neutral-900 transition last:border-b-0 hover:bg-neutral-50"
     >
-      <span className="text-base">{icon}</span>
-      <span className="flex-1">{label}</span>
-      <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden className="text-neutral-300">
-        <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <span>{label}</span>
+      <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden className="text-neutral-400">
+        <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     </Link>
   );

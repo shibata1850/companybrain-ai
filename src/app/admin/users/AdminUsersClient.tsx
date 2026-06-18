@@ -201,13 +201,13 @@ export default function AdminUsersClient() {
                       {u.role === 'admin' ? '管理者' : '一般'}
                     </span>
                     {u.suspended_at && (
-                      <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
-                        ⏸ 一時停止中
+                      <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                        一時停止中
                       </span>
                     )}
                     {u.company && (
-                      <span className="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
-                        🏢 {u.company}
+                      <span className="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-bold text-neutral-600">
+                        {u.company}
                       </span>
                     )}
                   </div>
@@ -339,7 +339,7 @@ function SuspendButton({
             : 'text-neutral-400 hover:text-amber-700'
         }`}
       >
-        {suspended ? '▶ 再開' : '⏸ 一時停止'}
+        {suspended ? '再開' : '一時停止'}
       </button>
       <SlideToConfirm
         open={open}
@@ -414,10 +414,10 @@ function ResetPasswordButton({ email }: { email: string }) {
         <button
           type="button"
           onClick={() => void navigator.clipboard.writeText(temp)}
-          className="ml-1.5 text-neutral-500 hover:text-neutral-900"
+          className="ml-1.5 font-bold text-neutral-500 hover:text-neutral-900"
           title="コピー"
         >
-          📋
+          コピー
         </button>
         <button
           type="button"
@@ -439,7 +439,7 @@ function ResetPasswordButton({ email }: { email: string }) {
       title="仮パスワードを発行して画面に1度だけ表示します"
       className="text-xs text-neutral-400 transition hover:text-neutral-900 disabled:opacity-50"
     >
-      {busy ? '発行中…' : error ? `失敗: ${error}` : '🔑 仮パスワード発行'}
+      {busy ? '発行中…' : error ? `失敗: ${error}` : '仮パスワード発行'}
     </button>
   );
 }

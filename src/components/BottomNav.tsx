@@ -9,7 +9,7 @@ import { useCallback, useEffect, useState } from 'react';
  *   質問する  → /dashboard (brain list)
  *   お知らせ  → /notifications (with unread badge)
  *   マイページ → /mypage (profile, plan, links, logout)
- * Rendered only for logged-in users (the layout passes `show`).
+ * Text-only, bold labels (no icons). Shown only for logged-in users.
  */
 export default function BottomNav({ show }: { show: boolean }) {
   const pathname = usePathname() || '';
@@ -40,35 +40,23 @@ export default function BottomNav({ show }: { show: boolean }) {
       href: '/dashboard',
       label: '質問する',
       active: pathname === '/dashboard' || pathname.startsWith('/avatars'),
-      icon: (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8A2.5 2.5 0 0 1 17.5 16H9l-4 4v-4H6.5" />
-          <path d="M8.5 8h7M8.5 11h4" />
-        </svg>
-      ),
     },
     {
       href: '/notifications',
       label: 'お知らせ',
       active: pathname.startsWith('/notifications'),
       badge: unread,
-      icon: (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d="M6 9a6 6 0 1 1 12 0c0 4 1.5 5.5 2 6.2H4c.5-.7 2-2.2 2-6.2Z" />
-          <path d="M10 19a2 2 0 0 0 4 0" />
-        </svg>
-      ),
     },
     {
       href: '/mypage',
       label: 'マイページ',
-      active: pathname.startsWith('/mypage') || pathname.startsWith('/account') || pathname.startsWith('/admin') || pathname.startsWith('/requests') || pathname.startsWith('/audit') || pathname.startsWith('/trash'),
-      icon: (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <circle cx="12" cy="8" r="3.5" />
-          <path d="M5 20c0-3.3 3.1-5.5 7-5.5s7 2.2 7 5.5" />
-        </svg>
-      ),
+      active:
+        pathname.startsWith('/mypage') ||
+        pathname.startsWith('/account') ||
+        pathname.startsWith('/admin') ||
+        pathname.startsWith('/requests') ||
+        pathname.startsWith('/audit') ||
+        pathname.startsWith('/trash'),
     },
   ];
 
@@ -79,19 +67,23 @@ export default function BottomNav({ show }: { show: boolean }) {
           <Link
             key={it.href}
             href={it.href}
-            className={`relative flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[10px] font-medium transition ${
-              it.active ? 'text-neutral-900' : 'text-neutral-400 hover:text-neutral-700'
+            className={`relative flex flex-1 items-center justify-center py-4 text-sm font-bold transition ${
+              it.active
+                ? 'text-neutral-900'
+                : 'text-neutral-400 hover:text-neutral-700'
             }`}
           >
             <span className="relative">
-              {it.icon}
+              {it.label}
               {!!it.badge && it.badge > 0 && (
-                <span className="absolute -right-2 -top-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-semibold text-white">
+                <span className="absolute -right-5 -top-2 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
                   {it.badge > 99 ? '99+' : it.badge}
                 </span>
               )}
             </span>
-            {it.label}
+            {it.active && (
+              <span className="absolute inset-x-6 top-0 h-0.5 rounded-full bg-neutral-900" />
+            )}
           </Link>
         ))}
       </div>

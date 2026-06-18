@@ -56,8 +56,8 @@ function LoginForm() {
         サービス紹介に戻る
       </Link>
       <div className="mb-6 text-center">
-        <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-neutral-900 text-xl text-white shadow-lg">
-          🧠
+        <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-neutral-900 text-sm font-bold tracking-tight text-white shadow-lg">
+          CB
         </div>
         <h1 className="text-xl font-semibold tracking-tight">CompanyBrain</h1>
         <p className="mt-1 text-xs text-neutral-500">
