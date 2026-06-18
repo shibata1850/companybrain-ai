@@ -19,6 +19,7 @@ export async function middleware(req: NextRequest) {
     pathname === '/' ||
     pathname === '/login' ||
     pathname.startsWith('/login/') ||
+    pathname === '/signup' ||
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/ingest');
   if (isPublic) return NextResponse.next();

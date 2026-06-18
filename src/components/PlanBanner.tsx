@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import type { Plan } from '@/lib/plans';
+import { PLANS, type Plan } from '@/lib/plans';
 
 type Usage = {
   plan: Plan;
@@ -13,11 +13,13 @@ type Usage = {
 
 /**
  * Slim "ご利用状況" strip shown above the brain list. Shows the user's
- * current plan, how many brains they've used, and how many questions
- * they've asked this month — with a tiny progress bar for each.
+ * current plan + usage, and a 「プラン変更」 button that opens a modal
+ * to email the admin (upgrades are arranged manually via invoice).
  */
 export default function PlanBanner() {
   const [u, setU] = useState<Usage | null>(null);
+  const [email, setEmail] = useState<string>('');
+  const [showUpgrade, setShowUpgrade] = useState(false);
 
   useEffect(() => {
     fetch('/api/plan', { cache: 'no-store' })
@@ -25,6 +27,10 @@ export default function PlanBanner() {
       .then((j) => {
         if (j.plan) setU(j as Usage);
       })
+      .catch(() => {});
+    fetch('/api/auth/me', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => setEmail(j.user?.email ?? ''))
       .catch(() => {});
   }, []);
 
@@ -38,23 +44,21 @@ export default function PlanBanner() {
       <span className="rounded-full bg-neutral-900 px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide text-white">
         {u.plan.name}
       </span>
-      <Meter
-        label="ブレイン"
-        used={u.brainsUsed}
-        limit={brainsLimit}
-      />
-      <Meter
-        label="今月の質問"
-        used={u.questionsThisMonth}
-        limit={qLimit}
-      />
-      {u.plan.id !== 'pro' && (
-        <Link
-          href="/#pricing"
-          className="ml-auto rounded-full border border-neutral-300 bg-white px-3 py-1 text-[11px] font-medium text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900"
-        >
-          プラン比較 ↗
-        </Link>
+      <Meter label="ブレイン" used={u.brainsUsed} limit={brainsLimit} />
+      <Meter label="今月の質問" used={u.questionsThisMonth} limit={qLimit} />
+      <button
+        type="button"
+        onClick={() => setShowUpgrade(true)}
+        className="ml-auto rounded-full bg-neutral-900 px-3 py-1 text-[11px] font-medium text-white transition hover:bg-neutral-700"
+      >
+        プラン変更
+      </button>
+      {showUpgrade && (
+        <UpgradeModal
+          current={u.plan}
+          email={email}
+          onClose={() => setShowUpgrade(false)}
+        />
       )}
     </section>
   );
@@ -92,6 +96,135 @@ function Meter({
       >
         {used.toLocaleString()} / {isUnlimited ? '∞' : limit.toLocaleString()}
       </span>
+    </div>
+  );
+}
+
+/**
+ * Plan-change modal. Lets the user pick a target plan, then opens a
+ * pre-filled email to the admin(s). Billing is invoice/bank transfer,
+ * so the admin handles the rest and flips the plan manually.
+ */
+function UpgradeModal({
+  current,
+  email,
+  onClose,
+}: {
+  current: Plan;
+  email: string;
+  onClose: () => void;
+}) {
+  const [admins, setAdmins] = useState<string[]>([]);
+  const [target, setTarget] = useState<Plan>(
+    PLANS.find((p) => p.id !== current.id && p.priceJpy > current.priceJpy) ??
+      current,
+  );
+
+  useEffect(() => {
+    fetch('/api/auth/admins', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => setAdmins(j.admins ?? []))
+      .catch(() => {});
+  }, []);
+
+  const mailto = (() => {
+    const to = admins.join(',');
+    const subject = `【プラン変更申請】${current.name} → ${target.name}`;
+    const body = [
+      'CompanyBrain のプラン変更を申請します。',
+      '',
+      `申請者: ${email || '(メールアドレス未取得)'}`,
+      `現在のプラン: ${current.name}(¥${current.priceJpy.toLocaleString()}/月)`,
+      `希望プラン: ${target.name}(¥${target.priceJpy.toLocaleString()}/月)`,
+      '',
+      'お支払いは請求書/銀行振込を希望します。',
+      '請求先(会社名・部署・担当者)などあればご記入ください:',
+      '',
+    ].join('\n');
+    return `mailto:${to}?subject=${encodeURIComponent(
+      subject,
+    )}&body=${encodeURIComponent(body)}`;
+  })();
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="border-b border-neutral-100 px-5 py-4">
+          <h3 className="text-base font-semibold text-neutral-900">
+            プランを変更する
+          </h3>
+          <p className="mt-1 text-xs text-neutral-500">
+            お支払いは請求書/銀行振込です。希望プランを選んで管理者にメールしてください。
+          </p>
+        </div>
+
+        <div className="space-y-2 px-5 py-4">
+          {PLANS.map((p) => {
+            const isCurrent = p.id === current.id;
+            const selected = p.id === target.id;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                disabled={isCurrent}
+                onClick={() => setTarget(p)}
+                className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition ${
+                  isCurrent
+                    ? 'cursor-default border-neutral-200 bg-neutral-50 opacity-60'
+                    : selected
+                    ? 'border-neutral-900 bg-neutral-50'
+                    : 'border-neutral-200 bg-white hover:border-neutral-400'
+                }`}
+              >
+                <div>
+                  <p className="text-sm font-medium text-neutral-900">
+                    {p.name}
+                    {isCurrent && (
+                      <span className="ml-2 text-[10px] text-neutral-400">
+                        現在のプラン
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-[11px] text-neutral-500">{p.tagline}</p>
+                </div>
+                <span className="text-sm font-semibold tabular-nums">
+                  ¥{p.priceJpy.toLocaleString()}
+                  <span className="text-[10px] font-normal text-neutral-400">
+                    /月
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center justify-between gap-2 border-t border-neutral-100 px-5 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-xs font-medium text-neutral-600 transition hover:border-neutral-900"
+          >
+            閉じる
+          </button>
+          <a
+            href={mailto}
+            onClick={onClose}
+            className={`rounded-full px-4 py-2 text-xs font-medium text-white transition ${
+              target.id === current.id
+                ? 'pointer-events-none bg-neutral-300'
+                : 'bg-neutral-900 hover:bg-neutral-700'
+            }`}
+          >
+            管理者にメールで申請する
+          </a>
+        </div>
+      </div>
     </div>
   );
 }

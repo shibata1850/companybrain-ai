@@ -11,6 +11,7 @@ type User = {
   created_at: string;
   suspended_at: string | null;
   plan: 'free' | 'starter' | 'standard' | 'pro';
+  company: string | null;
 };
 
 export default function AdminUsersClient() {
@@ -202,6 +203,11 @@ export default function AdminUsersClient() {
                     {u.suspended_at && (
                       <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
                         ⏸ 一時停止中
+                      </span>
+                    )}
+                    {u.company && (
+                      <span className="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
+                        🏢 {u.company}
                       </span>
                     )}
                   </div>

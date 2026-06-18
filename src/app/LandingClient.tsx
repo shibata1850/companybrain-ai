@@ -73,7 +73,7 @@ function Hero() {
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
-              href="/login"
+              href="/signup"
               className="inline-flex items-center gap-2 rounded-full bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-700"
             >
               無料ではじめる
@@ -1005,7 +1005,7 @@ function PlanCard({ plan }: { plan: Plan }) {
       </div>
 
       <Link
-        href="/login"
+        href="/signup"
         className={`mt-5 inline-flex items-center justify-center rounded-full px-4 py-2.5 text-sm font-medium transition ${
           plan.highlighted
             ? 'bg-white text-neutral-900 hover:bg-neutral-100'
@@ -1112,7 +1112,7 @@ function FinalCta() {
         </p>
         <div className="mt-7 flex justify-center gap-3">
           <Link
-            href="/login"
+            href="/signup"
             className="inline-flex items-center justify-center rounded-full bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-700"
           >
             無料ではじめる

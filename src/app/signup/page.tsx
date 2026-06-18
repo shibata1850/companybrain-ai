@@ -1,16 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { Suspense, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
 import LoginBackground from '@/components/LoginBackground';
 
-function LoginForm() {
-  const router = useRouter();
-  const params = useSearchParams();
-  const next = params.get('next') || '/dashboard';
+export default function SignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [company, setCompany] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,17 +16,21 @@ function LoginForm() {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, company }),
       });
-      const json = (await res.json()) as { ok?: boolean; error?: string };
+      const json = (await res.json()) as {
+        ok?: boolean;
+        signedIn?: boolean;
+        error?: string;
+      };
       if (!res.ok || !json.ok) {
         throw new Error(json.error || `HTTP ${res.status}`);
       }
       // Full reload so the new session cookie is picked up everywhere.
-      window.location.href = next;
+      window.location.href = json.signedIn ? '/dashboard' : '/login';
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setSubmitting(false);
@@ -55,15 +56,17 @@ function LoginForm() {
         </svg>
         サービス紹介に戻る
       </Link>
+
       <div className="mb-6 text-center">
         <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-neutral-900 text-xl text-white shadow-lg">
           🧠
         </div>
-        <h1 className="text-xl font-semibold tracking-tight">CompanyBrain</h1>
+        <h1 className="text-xl font-semibold tracking-tight">無料で始める</h1>
         <p className="mt-1 text-xs text-neutral-500">
-          ログインして続行してください
+          フリープランでアカウントを作成します
         </p>
       </div>
+
       <form
         onSubmit={onSubmit}
         className="space-y-4 rounded-2xl border border-white/70 bg-white/90 p-6 shadow-xl shadow-indigo-500/5 backdrop-blur-sm"
@@ -83,14 +86,27 @@ function LoginForm() {
         </div>
         <div>
           <label className="block text-sm font-medium text-neutral-700">
-            パスワード
+            会社名 <span className="text-neutral-400">(任意)</span>
+          </label>
+          <input
+            type="text"
+            value={company}
+            onChange={(e) => setCompany(e.target.value)}
+            placeholder="例: 株式会社サンプル"
+            className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-neutral-700">
+            パスワード <span className="text-neutral-400">(8文字以上)</span>
           </label>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
+            autoComplete="new-password"
             required
+            minLength={8}
             className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
           />
         </div>
@@ -104,31 +120,18 @@ function LoginForm() {
           disabled={submitting}
           className="w-full rounded-full bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:opacity-50"
         >
-          {submitting ? 'ログイン中…' : 'ログイン'}
+          {submitting ? '作成中…' : '無料で始める'}
         </button>
       </form>
-      <div className="mt-4 flex flex-col items-center gap-2">
+
+      <div className="mt-4 text-center">
         <Link
-          href="/signup"
-          className="text-xs font-medium text-neutral-900 underline-offset-2 transition hover:underline"
+          href="/login"
+          className="text-xs text-neutral-500 transition hover:text-neutral-900"
         >
-          アカウントをお持ちでない方は新規登録(無料)
+          すでにアカウントをお持ちの方はログイン
         </Link>
-        <a
-          href="/login/forgot"
-          className="text-xs text-neutral-500 underline-offset-2 transition hover:text-neutral-900 hover:underline"
-        >
-          メアド・パスワードを忘れた方
-        </a>
       </div>
     </div>
-  );
-}
-
-export default function LoginPage() {
-  return (
-    <Suspense fallback={null}>
-      <LoginForm />
-    </Suspense>
   );
 }
