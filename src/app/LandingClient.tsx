@@ -21,7 +21,7 @@ export default function LandingClient() {
   }, []);
 
   return (
-    <div className="lp-bleed -mt-6 -mb-6 sm:-mt-8 sm:-mb-8">
+    <div className="lp-bleed lp-bg -mt-6 -mb-6 sm:-mt-8 sm:-mb-8">
       <Hero />
       <PlaygroundDemo />
       <Features />
@@ -45,7 +45,7 @@ export default function LandingClient() {
 
 function Hero() {
   return (
-    <section className="relative isolate overflow-hidden bg-white">
+    <section className="lp-sect-light relative isolate overflow-hidden">
       {/* very subtle dot grid, barely visible — gives depth without noise */}
       <div
         aria-hidden
@@ -268,7 +268,7 @@ function PlaygroundDemo() {
   }, [activeQ, persona]);
 
   return (
-    <section id="demo" className="bg-neutral-50 py-24 sm:py-28">
+    <section id="demo" className="lp-sect-soft py-24 sm:py-28">
       <div className="mx-auto max-w-6xl px-6">
         <SectionHeading
           eyebrow="DEMO"
@@ -453,7 +453,7 @@ function Features() {
     },
   ];
   return (
-    <section id="features" className="bg-white py-24 sm:py-28">
+    <section id="features" className="lp-sect-light py-24 sm:py-28">
       <div className="mx-auto max-w-6xl px-6">
         <SectionHeading
           eyebrow="FEATURES"
@@ -556,7 +556,7 @@ const SAMPLE_TABS: { key: SampleKey; label: string; emoji: string }[] = [
 function SamplePreviews() {
   const [tab, setTab] = useState<SampleKey>('video');
   return (
-    <section className="bg-white py-24 sm:py-28">
+    <section className="lp-sect-light py-24 sm:py-28">
       <div className="mx-auto max-w-6xl px-6">
         <SectionHeading
           eyebrow="SAMPLES"
@@ -782,7 +782,7 @@ function HowItWorks() {
     { n: 3, title: 'チームに渡す', body: '完成したブレインは「依頼ワークフロー」で同僚に譲渡。組織知が個人を越えて残る。' },
   ];
   return (
-    <section className="bg-neutral-50 py-24 sm:py-28">
+    <section className="lp-sect-soft py-24 sm:py-28">
       <div className="mx-auto max-w-6xl px-6">
         <SectionHeading eyebrow="HOW IT WORKS" title="3 ステップで導入。" />
         <div className="mt-12 grid gap-5 md:grid-cols-3">
@@ -822,7 +822,7 @@ function UseCases() {
     { icon: '🛍️', title: '小売・EC', body: '商品 FAQ・返品ルール・店舗別の運用差異。カスタマーサポートを支援。' },
   ];
   return (
-    <section className="bg-white py-24 sm:py-28">
+    <section className="lp-sect-light py-24 sm:py-28">
       <div className="mx-auto max-w-6xl px-6">
         <SectionHeading
           eyebrow="USE CASES"
@@ -858,7 +858,7 @@ function UseCases() {
 
 function BeforeAfter() {
   return (
-    <section className="bg-neutral-50 py-24 sm:py-28">
+    <section className="lp-sect-soft py-24 sm:py-28">
       <div className="mx-auto max-w-5xl px-6">
         <SectionHeading
           eyebrow="BEFORE / AFTER"
@@ -926,7 +926,7 @@ function Bullet({
 
 function Pricing() {
   return (
-    <section id="pricing" className="bg-white py-24 sm:py-32">
+    <section id="pricing" className="lp-sect-light py-24 sm:py-32">
       <div className="mx-auto max-w-7xl px-6">
         <SectionHeading
           eyebrow="PRICING"
@@ -1065,7 +1065,7 @@ function FaqSection() {
     { q: '個人事業主でも使えますか?', a: 'もちろんです。フリー / スタータープランが特に個人 〜 小規模事業者向けに作られています。' },
   ];
   return (
-    <section className="bg-neutral-50 py-24 sm:py-28">
+    <section className="lp-sect-soft py-24 sm:py-28">
       <div className="mx-auto max-w-3xl px-6">
         <SectionHeading eyebrow="FAQ" title="よくあるご質問" />
         <dl className="mt-10 space-y-3">
@@ -1097,7 +1097,7 @@ function FaqSection() {
 
 function FinalCta() {
   return (
-    <section className="bg-white py-24 sm:py-32">
+    <section className="lp-sect-light py-24 sm:py-32">
       <div className="mx-auto max-w-md px-6 text-center">
         <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-neutral-900 text-xl text-white">
           🧠
@@ -1135,7 +1135,7 @@ function FinalCta() {
 
 function Footer() {
   return (
-    <footer className="border-t border-neutral-200 bg-white py-10">
+    <footer className="lp-sect-light border-t border-neutral-200 py-10">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6">
         <div className="flex items-center gap-2">
           <span className="grid h-7 w-7 place-items-center rounded-lg bg-neutral-900 text-[11px] font-bold text-white">
