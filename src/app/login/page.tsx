@@ -56,7 +56,7 @@ function LoginForm() {
         サービス紹介に戻る
       </Link>
       <div className="mb-6 text-center">
-        <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500 text-xl text-white shadow-lg shadow-indigo-500/20">
+        <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-neutral-900 text-xl text-white shadow-lg">
           🧠
         </div>
         <h1 className="text-xl font-semibold tracking-tight">CompanyBrain</h1>
@@ -102,7 +102,7 @@ function LoginForm() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full rounded-full bg-gradient-to-r from-indigo-600 via-violet-600 to-pink-600 px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-indigo-500/20 transition hover:opacity-90 disabled:opacity-50"
+          className="w-full rounded-full bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:opacity-50"
         >
           {submitting ? 'ログイン中…' : 'ログイン'}
         </button>
