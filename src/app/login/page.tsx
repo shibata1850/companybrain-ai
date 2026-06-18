@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
@@ -36,6 +37,24 @@ function LoginForm() {
 
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-sm flex-col justify-center">
+      <div className="mb-4 text-center">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1 text-[11px] text-neutral-500 transition hover:text-neutral-900"
+        >
+          <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden>
+            <path
+              d="M7.5 2.5L4 6l3.5 3.5"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          サービス紹介に戻る
+        </Link>
+      </div>
       <div className="mb-6 text-center">
         <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-neutral-900 text-xl text-white">
           🧠

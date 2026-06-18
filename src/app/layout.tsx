@@ -76,13 +76,13 @@ export default async function RootLayout({
               ) : (
                 <>
                   <a
-                    href="#features"
+                    href="/#features"
                     className="hidden rounded-full px-3 py-1.5 text-xs font-medium text-neutral-500 transition duration-200 hover:bg-neutral-100 hover:text-neutral-900 sm:inline"
                   >
                     機能
                   </a>
                   <a
-                    href="#pricing"
+                    href="/#pricing"
                     className="hidden rounded-full px-3 py-1.5 text-xs font-medium text-neutral-500 transition duration-200 hover:bg-neutral-100 hover:text-neutral-900 sm:inline"
                   >
                     料金
