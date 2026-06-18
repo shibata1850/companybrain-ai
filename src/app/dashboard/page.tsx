@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import NotificationsBell from '@/components/NotificationsBell';
 import PlanBanner from '@/components/PlanBanner';
 
 type Avatar = {
@@ -22,39 +21,6 @@ export default function HomePage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
-  const [me, setMe] = useState<{
-    email: string;
-    role: string;
-    display_name: string | null;
-  } | null>(null);
-  const [editingName, setEditingName] = useState(false);
-  const [nameDraft, setNameDraft] = useState('');
-
-  useEffect(() => {
-    fetch('/api/auth/me', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((j) => setMe(j.user ?? null))
-      .catch(() => {});
-  }, []);
-
-  async function logout() {
-    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
-    window.location.href = '/login';
-  }
-
-  async function saveName() {
-    const value = nameDraft.trim();
-    setEditingName(false);
-    const res = await fetch('/api/auth/profile', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ display_name: value }),
-    });
-    if (res.ok) {
-      const j = (await res.json()) as { display_name: string | null };
-      setMe((m) => (m ? { ...m, display_name: j.display_name } : m));
-    }
-  }
 
   const filteredAvatars = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -115,89 +81,12 @@ export default function HomePage() {
 
   return (
     <div className="space-y-10">
-      <section className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">ブレイン</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-500">
-            動画から学習した人物に質問すると、その人の口調と知識で答える動画が
-            自動生成されます。
-          </p>
-        </div>
-        <div className="mt-1 flex shrink-0 flex-wrap items-center justify-end gap-2">
-          {me?.role === 'admin' && (
-            <>
-              <Link
-                href="/admin/avatars"
-                className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900"
-              >
-                🛡 管理ページ
-              </Link>
-              <Link
-                href="/admin/users"
-                className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900"
-              >
-                👤 ユーザー管理
-              </Link>
-            </>
-          )}
-          <Link
-            href="/requests"
-            className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900"
-          >
-            📨 依頼
-          </Link>
-          <Link
-            href="/audit"
-            className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900"
-          >
-            📋 監査ログ
-          </Link>
-          {me && <NotificationsBell />}
-          {me && (
-            <div className="flex items-center gap-2">
-              {editingName ? (
-                <input
-                  autoFocus
-                  value={nameDraft}
-                  onChange={(e) => setNameDraft(e.target.value)}
-                  onBlur={saveName}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') void saveName();
-                    else if (e.key === 'Escape') setEditingName(false);
-                  }}
-                  placeholder="表示名"
-                  className="w-28 rounded-full border border-neutral-300 px-2.5 py-1 text-[11px] focus:border-neutral-900 focus:outline-none"
-                />
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNameDraft(me.display_name ?? '');
-                    setEditingName(true);
-                  }}
-                  title="表示名を変更（自分だけに反映されます）"
-                  className="hidden items-center gap-1 text-[11px] text-neutral-500 transition hover:text-neutral-900 sm:inline-flex"
-                >
-                  {me.display_name || me.email}
-                  <PencilGlyph />
-                </button>
-              )}
-              <Link
-                href="/account/password"
-                className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900"
-              >
-                🔑 パスワード
-              </Link>
-              <button
-                type="button"
-                onClick={logout}
-                className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900"
-              >
-                ログアウト
-              </button>
-            </div>
-          )}
-        </div>
+      <section>
+        <h1 className="text-3xl font-semibold tracking-tight">ブレイン</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-500">
+          動画から学習した人物に質問すると、その人の口調と知識で答える動画が
+          自動生成されます。
+        </p>
       </section>
 
       <PlanBanner />
@@ -418,20 +307,5 @@ function BrainCard({
         <div className="pointer-events-none absolute inset-0 bg-white/60" />
       )}
     </div>
-  );
-}
-
-function PencilGlyph() {
-  return (
-    <svg width="9" height="9" viewBox="0 0 16 16" aria-hidden>
-      <path
-        d="M11 1.5l3.5 3.5L5 14.5H1.5V11L11 1.5z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }

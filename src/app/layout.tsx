@@ -4,6 +4,7 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import NavProgress from '@/components/NavProgress';
 import PageTransition from '@/components/PageTransition';
+import BottomNav from '@/components/BottomNav';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -84,9 +85,14 @@ export default async function RootLayout({
             </nav>
           </div>
         </header>
-        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+        <main
+          className={`mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 ${
+            loggedIn ? 'pb-24' : ''
+          }`}
+        >
           <PageTransition>{children}</PageTransition>
         </main>
+        <BottomNav show={loggedIn} />
       </body>
     </html>
   );
