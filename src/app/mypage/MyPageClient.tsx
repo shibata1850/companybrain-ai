@@ -147,7 +147,7 @@ export default function MyPageClient() {
             <div className="border-t border-neutral-100 bg-neutral-50/60 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wider text-neutral-500">
               管理者
             </div>
-            <MenuLink href="/admin/avatars" label="管理ページ" />
+            <MenuLink href="/admin/avatars" label="ユーザーブレイン管理" />
             <MenuLink href="/admin/users" label="ユーザー管理" />
           </>
         )}

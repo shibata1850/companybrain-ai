@@ -113,7 +113,7 @@ export default function AdminAvatarsClient() {
       </Link>
 
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">ブレイン管理</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">ユーザーブレイン管理</h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-500">
           全ユーザーのブレインをユーザーごとに一覧します（閲覧専用）。
           各ブレインは作成者本人だけが利用・編集でき、管理者でも中身は開けません。

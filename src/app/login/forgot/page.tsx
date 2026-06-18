@@ -61,7 +61,7 @@ export default function ForgotPage() {
             管理者が行うこと
           </summary>
           <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs leading-relaxed text-neutral-600">
-            <li>管理ページ → ユーザー管理 を開く</li>
+            <li>マイページ → ユーザー管理 を開く</li>
             <li>該当ユーザーの「仮パスワード発行」を押す</li>
             <li>表示された仮パスワードを本人に伝える</li>
             <li>本人はログイン後、「パスワード変更」から新しい物に変更</li>
