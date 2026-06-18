@@ -10,6 +10,7 @@ type User = {
   admin_label: string | null;
   created_at: string;
   suspended_at: string | null;
+  plan: 'free' | 'starter' | 'standard' | 'pro';
 };
 
 export default function AdminUsersClient() {
@@ -211,6 +212,11 @@ export default function AdminUsersClient() {
                   />
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
+                  <PlanSelect
+                    email={u.email}
+                    value={u.plan}
+                    onSaved={load}
+                  />
                   <ResetPasswordButton email={u.email} />
                   <SuspendButton
                     email={u.email}
@@ -231,6 +237,47 @@ export default function AdminUsersClient() {
         )}
       </div>
     </div>
+  );
+}
+
+function PlanSelect({
+  email,
+  value,
+  onSaved,
+}: {
+  email: string;
+  value: User['plan'];
+  onSaved: () => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  async function onChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const next = e.target.value;
+    if (next === value) return;
+    setSaving(true);
+    try {
+      await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, plan: next }),
+      });
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <select
+      value={value}
+      onChange={onChange}
+      disabled={saving}
+      title="プラン"
+      className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-[11px] focus:border-neutral-900 focus:outline-none disabled:opacity-50"
+    >
+      <option value="free">フリー</option>
+      <option value="starter">スターター</option>
+      <option value="standard">スタンダード</option>
+      <option value="pro">プロ</option>
+    </select>
   );
 }
 

@@ -218,6 +218,20 @@ body {
     opacity: 0;
   }
 }
+@keyframes lp-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
 
 @layer utilities {
   .lp-blob {
@@ -273,6 +287,9 @@ body {
     width: 100vw;
     margin-left: calc(50% - 50vw);
     margin-right: calc(50% - 50vw);
+  }
+  .lp-pop {
+    animation: lp-pop 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 }
 

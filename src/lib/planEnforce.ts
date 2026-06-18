@@ -1,0 +1,119 @@
+import { PLANS, type Plan, type PlanId } from './plans';
+import { supabaseAdmin } from './supabase';
+import type { AppUser } from './authServer';
+
+export type PlanUsage = {
+  plan: Plan;
+  brainsUsed: number;
+  questionsThisMonth: number;
+};
+
+/**
+ * Resolve a user's current plan and tally usage against the limits
+ * that matter for runtime enforcement (brain count, monthly questions).
+ * Voice minutes and material size enforcement live where those events
+ * actually happen.
+ */
+export async function getPlanUsage(user: AppUser): Promise<PlanUsage> {
+  const db = supabaseAdmin();
+
+  const { data: row } = await db
+    .from('app_users')
+    .select('plan')
+    .eq('email', user.email.toLowerCase())
+    .single();
+  const planId = (row?.plan ?? 'free') as PlanId;
+  const plan = PLANS.find((p) => p.id === planId) ?? PLANS[0];
+
+  // Active brains (excludes trashed).
+  const { count: brainsUsed } = await db
+    .from('avatars')
+    .select('id', { count: 'exact', head: true })
+    .eq('owner_email', user.email)
+    .is('deleted_at', null);
+
+  // Questions asked this month across all the user's brains.
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+
+  const { data: ownedBrains } = await db
+    .from('avatars')
+    .select('id')
+    .eq('owner_email', user.email);
+  const brainIds = (ownedBrains ?? []).map((b) => b.id as string);
+
+  let questionsThisMonth = 0;
+  if (brainIds.length > 0) {
+    const { count } = await db
+      .from('generations')
+      .select('id', { count: 'exact', head: true })
+      .in('avatar_id', brainIds)
+      .gte('created_at', monthStart.toISOString());
+    questionsThisMonth = count ?? 0;
+  }
+
+  return {
+    plan,
+    brainsUsed: brainsUsed ?? 0,
+    questionsThisMonth,
+  };
+}
+
+export function canCreateBrain(usage: PlanUsage): boolean {
+  const limit = usage.plan.limits.brains;
+  if (limit === 'unlimited') return true;
+  return usage.brainsUsed < limit;
+}
+
+export function canAsk(usage: PlanUsage): boolean {
+  const limit = usage.plan.limits.monthlyQuestions;
+  if (limit === 'unlimited') return true;
+  return usage.questionsThisMonth < limit;
+}
+
+/** Shape the upgrade nudge into a consistent response across routes. */
+export function planLimitResponse(
+  reason: 'brains' | 'questions' | 'voice' | 'materials',
+  usage: PlanUsage,
+) {
+  const messages: Record<typeof reason, string> = {
+    brains: `${usage.plan.name}プランのブレイン上限(${
+      usage.plan.limits.brains === 'unlimited'
+        ? '無制限'
+        : `${usage.plan.limits.brains}個`
+    })に達しました。`,
+    questions: `${usage.plan.name}プランの月間質問上限(${
+      usage.plan.limits.monthlyQuestions === 'unlimited'
+        ? '無制限'
+        : `${usage.plan.limits.monthlyQuestions.toLocaleString()}回`
+    })に達しました。`,
+    voice: `${usage.plan.name}プランの音声会話上限に達しました。`,
+    materials: `${usage.plan.name}プランの素材容量上限に達しました。`,
+  };
+  return {
+    error: messages[reason],
+    code: 'plan_limit_exceeded',
+    plan: usage.plan.id,
+    upgrade_to: usage.plan.id === 'pro' ? null : nextPlanId(usage.plan.id),
+  };
+}
+
+function nextPlanId(current: PlanId): PlanId {
+  const order: PlanId[] = ['free', 'starter', 'standard', 'pro'];
+  const i = order.indexOf(current);
+  return order[Math.min(i + 1, order.length - 1)];
+}
+
+/** Map the plan's modelTier knob to a concrete Gemini model id. */
+export function answerModelForPlan(plan: Plan): string {
+  switch (plan.limits.modelTier) {
+    case 'pro-2.5':
+      return 'gemini-2.5-pro';
+    case 'pro':
+      return 'gemini-1.5-pro-latest';
+    case 'flash':
+    default:
+      return 'gemini-1.5-flash-latest';
+  }
+}

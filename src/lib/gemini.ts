@@ -168,8 +168,16 @@ export async function answerAsPersona(params: {
   question: string;
   knowledge: string[];
   length?: AnswerLength;
+  /** Optional model override (used by plan-tier routing). */
+  model?: string;
 }): Promise<string> {
-  const { personaName, question, knowledge, length = 'standard' } = params;
+  const {
+    personaName,
+    question,
+    knowledge,
+    length = 'standard',
+    model,
+  } = params;
 
   const contextBlock =
     knowledge.length === 0
@@ -209,7 +217,7 @@ ${question}`,
   ];
 
   const text = await generateWithFallback({
-    preferred: env.geminiAnswerModel(),
+    preferred: model ?? env.geminiAnswerModel(),
     fallbacks: ANSWER_MODEL_FALLBACKS,
     contents,
   });

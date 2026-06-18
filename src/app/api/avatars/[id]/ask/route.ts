@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase';
 import { answerAsPersona, embedTexts, type AnswerLength } from '@/lib/gemini';
+import { authorizeAvatar } from '@/lib/authServer';
+import {
+  answerModelForPlan,
+  canAsk,
+  getPlanUsage,
+  planLimitResponse,
+} from '@/lib/planEnforce';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,6 +26,20 @@ export async function POST(
   { params }: { params: { id: string } },
 ) {
   const avatarId = params.id;
+
+  // Auth + brain ownership.
+  const auth = await authorizeAvatar(avatarId);
+  if (!auth.ok) {
+    return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
+  }
+  // Plan enforcement: monthly question quota.
+  const usage = await getPlanUsage(auth.me);
+  if (!canAsk(usage)) {
+    return NextResponse.json(planLimitResponse('questions', usage), {
+      status: 403,
+    });
+  }
+
   const body = (await req.json()) as {
     question?: string;
     length?: AnswerLength;
@@ -74,6 +95,8 @@ export async function POST(
       question,
       knowledge,
       length,
+      // Higher plans route to higher-tier Gemini models automatically.
+      model: answerModelForPlan(usage.plan),
     });
 
     await db

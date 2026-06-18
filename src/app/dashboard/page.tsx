@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import NotificationsBell from '@/components/NotificationsBell';
+import PlanBanner from '@/components/PlanBanner';
 
 type Avatar = {
   id: string;
@@ -197,6 +198,8 @@ export default function HomePage() {
           )}
         </div>
       </section>
+
+      <PlanBanner />
 
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 anim-fade-in">

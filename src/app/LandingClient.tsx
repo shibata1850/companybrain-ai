@@ -9,9 +9,12 @@ export default function LandingClient() {
     <div className="lp-bleed -mt-6 -mb-6 sm:-mt-8 sm:-mb-8">
       <Hero />
       <LogosStrip />
+      <GachaSection />
       <PlaygroundDemo />
       <Features />
       <HowItWorks />
+      <UseCases />
+      <BeforeAfter />
       <Pricing />
       <FaqSection />
       <FinalCta />
@@ -906,6 +909,398 @@ function FinalCta() {
         </div>
       </div>
     </section>
+  );
+}
+
+/* ===================================================================
+   GACHA — slot-machine style "ブレインガチャ" mini-game
+   Three reels (人格 × 業務 × 口調) spin and stop one after another.
+   Lands on a random combo + shows a generated greeting for that brain.
+   =================================================================== */
+
+const GACHA_PERSONAS = [
+  '営業マン',
+  '経理スタッフ',
+  'エンジニア',
+  'デザイナー',
+  'マーケター',
+  '法務担当',
+  'CS スタッフ',
+  '人事',
+];
+const GACHA_THEMES = [
+  '見積もり提案',
+  '議事録要約',
+  '社内規程',
+  'バグ修正の相談',
+  'クライアント説明',
+  '採用面接',
+  '問い合わせ対応',
+  '社内 FAQ',
+];
+const GACHA_TONES = [
+  '丁寧',
+  'フランク',
+  '関西弁',
+  '体育会系',
+  'ロジカル',
+  'クリエイティブ',
+  '慎重派',
+  '熱血',
+];
+
+const TONE_GREETING: Record<string, (persona: string, theme: string) => string> = {
+  丁寧: (p, th) => `はじめまして、${p}の${th}担当でございます。なんなりとお申し付けください。`,
+  フランク: (p, th) => `どもー、${p}担当の AI です!${th}のことなら気軽に聞いてね。`,
+  関西弁: (p, th) => `おおきに、${p}やで。${th}のことは任せてや、なんでも聞いて。`,
+  体育会系: (p, th) => `お疲れさまっす!${p}担当の AI っす!${th}、全力でいきましょう!`,
+  ロジカル: (p, th) => `${p}としてお答えします。${th}は前提と制約を整理してから論じましょう。`,
+  クリエイティブ: (p, th) => `やほー!${p}の AI だよ✨ ${th}、面白い切り口で一緒に考えよ?`,
+  慎重派: (p, th) => `${p}です。${th}についてはリスクと根拠を確認しながら進めましょう。`,
+  熱血: (p, th) => `${p}の AI、参上!${th}、絶対に解決してみせます!!`,
+};
+
+function GachaSection() {
+  const [r1, setR1] = useState(0);
+  const [r2, setR2] = useState(0);
+  const [r3, setR3] = useState(0);
+  const [spinning, setSpinning] = useState(false);
+  const [result, setResult] = useState<
+    null | { p: string; th: string; to: string; line: string }
+  >(null);
+
+  function spin() {
+    if (spinning) return;
+    setResult(null);
+    setSpinning(true);
+
+    const fp = Math.floor(Math.random() * GACHA_PERSONAS.length);
+    const ft = Math.floor(Math.random() * GACHA_THEMES.length);
+    const fto = Math.floor(Math.random() * GACHA_TONES.length);
+
+    let count = 0;
+    let s1 = false;
+    let s2 = false;
+    const interval = setInterval(() => {
+      if (!s1) setR1((r) => (r + 1) % GACHA_PERSONAS.length);
+      if (!s2) setR2((r) => (r + 1) % GACHA_THEMES.length);
+      setR3((r) => (r + 1) % GACHA_TONES.length);
+      count++;
+      if (count === 14) {
+        setR1(fp);
+        s1 = true;
+      }
+      if (count === 22) {
+        setR2(ft);
+        s2 = true;
+      }
+      if (count === 30) {
+        setR3(fto);
+        clearInterval(interval);
+        setSpinning(false);
+        const p = GACHA_PERSONAS[fp];
+        const th = GACHA_THEMES[ft];
+        const to = GACHA_TONES[fto];
+        const line = (TONE_GREETING[to] || TONE_GREETING['丁寧'])(p, th);
+        setResult({ p, th, to, line });
+      }
+    }, 70);
+  }
+
+  return (
+    <section className="relative overflow-hidden bg-gradient-to-b from-amber-50 via-pink-50 to-white py-24 sm:py-28">
+      <div
+        aria-hidden
+        className="lp-blob absolute -right-32 top-10 h-[360px] w-[360px] rounded-full bg-gradient-to-br from-yellow-300 to-pink-400 opacity-30 blur-3xl"
+      />
+      <div className="relative mx-auto max-w-5xl px-6">
+        <div className="text-center">
+          <span className="inline-flex items-center gap-2 rounded-full bg-amber-200 px-3 py-1 text-[11px] font-medium text-amber-900">
+            🎰 遊んでみる
+          </span>
+          <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
+            ブレインガチャ
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl text-sm text-neutral-600">
+            <strong>人格 × 業務 × 口調</strong>をランダムに組み合わせて、
+            ありえそうな AI ブレインを 1 体生成。引いて遊んで、自社でも作りたくなったらサインアップを。
+          </p>
+        </div>
+
+        {/* slot machine */}
+        <div className="mx-auto mt-10 max-w-3xl rounded-3xl border-4 border-amber-300 bg-gradient-to-b from-amber-100 to-amber-50 p-6 shadow-2xl">
+          <div className="grid grid-cols-3 gap-3">
+            <Reel label="人格" items={GACHA_PERSONAS} idx={r1} />
+            <Reel label="業務" items={GACHA_THEMES} idx={r2} />
+            <Reel label="口調" items={GACHA_TONES} idx={r3} />
+          </div>
+          <div className="mt-5 flex justify-center">
+            <button
+              type="button"
+              onClick={spin}
+              disabled={spinning}
+              className={`group relative overflow-hidden rounded-full bg-gradient-to-r from-red-500 via-orange-500 to-amber-500 px-8 py-3 text-base font-bold text-white shadow-lg transition active:scale-95 disabled:opacity-60 ${
+                spinning ? '' : 'hover:scale-[1.03] hover:shadow-xl'
+              }`}
+            >
+              <span className="relative z-10 flex items-center gap-2">
+                {spinning ? '🎰 SPIN…' : '🎰 GACHA!'}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* result card */}
+        <div className="mx-auto mt-8 max-w-2xl">
+          {result ? (
+            <div className="lp-pop overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-lg">
+              <div className="bg-gradient-to-r from-indigo-600 via-pink-500 to-amber-500 px-5 py-2 text-xs font-medium uppercase tracking-wider text-white">
+                ✨ あなたが引いたブレイン
+              </div>
+              <div className="space-y-3 p-5">
+                <div className="flex items-center gap-3">
+                  <span className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-2xl text-white">
+                    🧠
+                  </span>
+                  <div>
+                    <p className="text-base font-semibold tracking-tight text-neutral-900">
+                      {result.to}な{result.p}
+                    </p>
+                    <p className="text-xs text-neutral-500">
+                      担当業務: {result.th}
+                    </p>
+                  </div>
+                </div>
+                <p className="rounded-xl bg-neutral-50 px-3.5 py-3 text-sm leading-relaxed text-neutral-800">
+                  {result.line}
+                </p>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Link
+                    href="/login"
+                    className="rounded-full bg-neutral-900 px-4 py-1.5 text-xs font-medium text-white transition hover:bg-neutral-700"
+                  >
+                    このスタイルで作ってみる →
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={spin}
+                    className="rounded-full border border-neutral-300 bg-white px-4 py-1.5 text-xs font-medium text-neutral-700 transition hover:border-neutral-900"
+                  >
+                    🎰 もう 1 回引く
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-center text-xs text-neutral-400">
+              {spinning ? 'スピン中…' : 'レバーを引いてみよう ↑'}
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Reel({
+  label,
+  items,
+  idx,
+}: {
+  label: string;
+  items: string[];
+  idx: number;
+}) {
+  return (
+    <div className="overflow-hidden rounded-2xl border-2 border-amber-300 bg-white">
+      <p className="border-b border-amber-200 bg-amber-100/60 py-1 text-center text-[10px] font-medium uppercase tracking-wide text-amber-900">
+        {label}
+      </p>
+      <div className="grid h-24 place-items-center px-2">
+        <span
+          key={idx}
+          className="lp-pop text-center text-base font-bold tracking-tight text-neutral-900 sm:text-lg"
+        >
+          {items[idx]}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* ===================================================================
+   USE CASES — industry tiles (HeyGen-like gallery)
+   =================================================================== */
+
+function UseCases() {
+  const cases = [
+    {
+      icon: '🏗️',
+      title: '建設業',
+      body: '建築基準法・社内安全規程・現場マニュアルを学習。新人が「あの規定どこ?」と聞かなくていい。',
+      tint: 'from-orange-100 to-amber-200',
+    },
+    {
+      icon: '⚖️',
+      title: '士業事務所',
+      body: '判例・税法・規程を所長の口調で。お客様への一次回答を AI が下書き。',
+      tint: 'from-emerald-100 to-cyan-200',
+    },
+    {
+      icon: '🏭',
+      title: '製造業',
+      body: '機械別の保守マニュアル・トラブル事例を蓄積。属人化していたベテランの知見を残す。',
+      tint: 'from-slate-200 to-blue-200',
+    },
+    {
+      icon: '🏥',
+      title: '医療・介護',
+      body: '院内ルール・薬剤情報・引き継ぎノート。夜勤帯の問い合わせ激減。',
+      tint: 'from-rose-100 to-pink-200',
+    },
+    {
+      icon: '🚚',
+      title: '物流・運送',
+      body: '配車ルール・輸送規程・取引先別の特記事項。電話問い合わせを 60% 削減した事例も。',
+      tint: 'from-yellow-100 to-orange-200',
+    },
+    {
+      icon: '🛍️',
+      title: '小売・EC',
+      body: '商品 FAQ・返品ルール・店舗別の運用差異。カスタマーサポートの一次対応を全自動化。',
+      tint: 'from-violet-100 to-fuchsia-200',
+    },
+  ];
+  return (
+    <section className="bg-white py-24 sm:py-28">
+      <div className="mx-auto max-w-7xl px-6">
+        <div className="mx-auto max-w-2xl text-center">
+          <span className="inline-flex items-center gap-2 rounded-full bg-indigo-100 px-3 py-1 text-[11px] font-medium text-indigo-700">
+            USE CASES
+          </span>
+          <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
+            業種を問わず、
+            <br className="hidden sm:block" />
+            社内ナレッジは「人」に紐付いている。
+          </h2>
+          <p className="mt-3 text-sm text-neutral-600">
+            ベテランの頭の中を、辞めても残る形に。
+          </p>
+        </div>
+
+        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {cases.map((c) => (
+            <div
+              key={c.title}
+              className="group relative overflow-hidden rounded-2xl border border-neutral-200 bg-white p-6 transition hover:-translate-y-1 hover:border-neutral-900 hover:shadow-xl"
+            >
+              <div
+                aria-hidden
+                className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${c.tint}`}
+              />
+              <div
+                className={`mb-4 inline-grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br ${c.tint} text-3xl`}
+              >
+                {c.icon}
+              </div>
+              <h3 className="text-base font-semibold tracking-tight">
+                {c.title}
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-neutral-600">
+                {c.body}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ===================================================================
+   BEFORE / AFTER comparison
+   =================================================================== */
+
+function BeforeAfter() {
+  return (
+    <section className="bg-gradient-to-br from-neutral-50 to-neutral-100 py-24 sm:py-28">
+      <div className="mx-auto max-w-6xl px-6">
+        <div className="mx-auto max-w-2xl text-center">
+          <span className="inline-flex items-center gap-2 rounded-full bg-rose-100 px-3 py-1 text-[11px] font-medium text-rose-700">
+            BEFORE / AFTER
+          </span>
+          <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
+            「あの人に聞かないと分からない」を、
+            <br className="hidden sm:block" />
+            無くす。
+          </h2>
+        </div>
+
+        <div className="mt-12 grid gap-6 md:grid-cols-2">
+          <div className="rounded-2xl border-2 border-dashed border-neutral-300 bg-white/60 p-6">
+            <p className="mb-3 text-xs font-medium uppercase tracking-wider text-neutral-500">
+              Before · CompanyBrain なし
+            </p>
+            <ul className="space-y-3 text-sm leading-relaxed text-neutral-700">
+              <Bullet bad>
+                経理の田中さんが休むと、誰も精算ルールが分からない
+              </Bullet>
+              <Bullet bad>
+                ベテラン営業のノウハウは、本人退職と同時に消える
+              </Bullet>
+              <Bullet bad>
+                マニュアルは膨大すぎて誰も読まず、結局 Slack で質問
+              </Bullet>
+              <Bullet bad>
+                新人教育に毎回同じ説明を 3 時間
+              </Bullet>
+            </ul>
+          </div>
+          <div className="rounded-2xl border-2 border-neutral-900 bg-white p-6 shadow-xl">
+            <p className="mb-3 text-xs font-medium uppercase tracking-wider text-indigo-700">
+              After · CompanyBrain あり
+            </p>
+            <ul className="space-y-3 text-sm leading-relaxed text-neutral-800">
+              <Bullet>
+                田中さんが休んでも「田中ブレイン」が同じ口調で答える
+              </Bullet>
+              <Bullet>
+                ノウハウはブレインに蓄積、退職後も会社の資産
+              </Bullet>
+              <Bullet>
+                マニュアルは読まずに「質問するだけ」で OK
+              </Bullet>
+              <Bullet>
+                新人は自分のペースでブレインに質問、教育コスト大幅減
+              </Bullet>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Bullet({
+  children,
+  bad,
+}: {
+  children: React.ReactNode;
+  bad?: boolean;
+}) {
+  return (
+    <li className="flex items-start gap-2">
+      <span
+        className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-bold ${
+          bad
+            ? 'bg-rose-100 text-rose-700'
+            : 'bg-emerald-100 text-emerald-700'
+        }`}
+      >
+        {bad ? '×' : '✓'}
+      </span>
+      <span>{children}</span>
+    </li>
   );
 }
 

@@ -21,7 +21,7 @@ export async function GET() {
   // NOT the user's own display_name, which is private to that user.
   const { data, error } = await db
     .from('app_users')
-    .select('email, role, admin_label, created_at, suspended_at')
+    .select('email, role, admin_label, created_at, suspended_at, plan')
     .order('created_at', { ascending: true });
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -38,10 +38,13 @@ export async function PATCH(req: NextRequest) {
   if (!(await requireAdmin())) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
-  const { email, admin_label, role } = (await req.json().catch(() => ({}))) as {
+  const { email, admin_label, role, plan } = (await req
+    .json()
+    .catch(() => ({}))) as {
     email?: string;
     admin_label?: string | null;
     role?: string;
+    plan?: string;
   };
   const cleanEmail = email?.trim().toLowerCase();
   if (!cleanEmail) {
@@ -54,6 +57,9 @@ export async function PATCH(req: NextRequest) {
   }
   if (role === 'admin' || role === 'member') {
     updates.role = role;
+  }
+  if (plan === 'free' || plan === 'starter' || plan === 'standard' || plan === 'pro') {
+    updates.plan = plan;
   }
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ ok: true });
