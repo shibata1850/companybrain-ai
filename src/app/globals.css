@@ -75,37 +75,52 @@ section[id] {
   animation: app-bg-shift 28s ease-in-out infinite;
 }
 
-/* ---------- Landing page: soft animated pastel gradient ---------- */
+/* ---------- Landing page: soft animated pastel gradient ----------
+   The 4 radial layers each follow their own path (translated via
+   background-size 300% and unique keyframes) for visibly moving
+   blobs rather than a static glow.                                  */
 @keyframes lp-bg-shift {
-  0%, 100% {
+  0% {
     background-position:
       0% 0%, 100% 0%, 50% 100%, 0% 60%;
   }
+  25% {
+    background-position:
+      80% 30%, 20% 60%, 70% 20%, 60% 90%;
+  }
   50% {
     background-position:
-      100% 50%, 0% 100%, 50% 0%, 100% 40%;
+      100% 70%, 0% 100%, 30% 0%, 100% 30%;
+  }
+  75% {
+    background-position:
+      30% 100%, 70% 40%, 90% 60%, 20% 10%;
+  }
+  100% {
+    background-position:
+      0% 0%, 100% 0%, 50% 100%, 0% 60%;
   }
 }
 .lp-bg {
   position: relative;
-  background-color: #dccfff;
+  background-color: #efe9ff;
   background-image:
-    radial-gradient(900px circle at 10% 0%, rgba(129, 140, 248, 0.90), transparent 60%),
-    radial-gradient(900px circle at 100% 20%, rgba(244, 114, 182, 0.80), transparent 60%),
-    radial-gradient(800px circle at 50% 100%, rgba(45, 212, 191, 0.75), transparent 60%),
-    radial-gradient(700px circle at 0% 80%, rgba(251, 191, 36, 0.70), transparent 60%);
+    radial-gradient(700px circle at 10% 0%, rgba(129, 140, 248, 0.70), transparent 60%),
+    radial-gradient(700px circle at 100% 20%, rgba(244, 114, 182, 0.60), transparent 60%),
+    radial-gradient(650px circle at 50% 100%, rgba(45, 212, 191, 0.55), transparent 60%),
+    radial-gradient(600px circle at 0% 80%, rgba(251, 191, 36, 0.50), transparent 60%);
   background-attachment: fixed;
-  background-size: 200% 200%, 200% 200%, 200% 200%, 200% 200%;
-  animation: lp-bg-shift 32s ease-in-out infinite;
+  background-size: 300% 300%, 300% 300%, 300% 300%, 300% 300%;
+  animation: lp-bg-shift 18s ease-in-out infinite;
 }
 /* Translucent section backgrounds so the animated gradient peeks
    through subtly between content blocks. */
 .lp-bg .lp-sect-light {
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: rgba(255, 255, 255, 0.10);
   backdrop-filter: blur(2px);
 }
 .lp-bg .lp-sect-soft {
-  background-color: rgba(245, 245, 247, 0.04);
+  background-color: rgba(245, 245, 247, 0.08);
   backdrop-filter: blur(2px);
 }
 
