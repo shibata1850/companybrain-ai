@@ -77,7 +77,8 @@ export async function getAppUser(): Promise<AppUser | null> {
 export async function authorizeAvatar(
   avatarId: string,
 ): Promise<
-  { ok: true; me: AppUser } | { ok: false; status: number }
+  | { ok: true; me: AppUser; fromRequest: boolean }
+  | { ok: false; status: number }
 > {
   const me = await getAppUser();
   if (!me) return { ok: false, status: 401 };
@@ -85,7 +86,7 @@ export async function authorizeAvatar(
   const db = supabaseAdmin();
   const { data } = await db
     .from('avatars')
-    .select('owner_email')
+    .select('owner_email, request_id')
     .eq('id', avatarId)
     .single();
   if (!data) return { ok: false, status: 404 };
@@ -94,5 +95,7 @@ export async function authorizeAvatar(
   ) {
     return { ok: false, status: 403 };
   }
-  return { ok: true, me };
+  // request_id != null ⇒ this brain was built by an admin on request
+  // and gifted; the owner may use it but not add learning material.
+  return { ok: true, me, fromRequest: data.request_id != null };
 }

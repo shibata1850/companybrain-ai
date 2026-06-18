@@ -21,6 +21,7 @@ type Avatar = {
   stage_url: string | null;
   voice: string | null;
   language: string | null;
+  request_id: string | null;
 };
 
 type ChatThread = {
@@ -722,17 +723,24 @@ export default function AvatarDetail({ id }: { id: string }) {
               className="w-full rounded-md border border-neutral-300 bg-white px-2 py-1 text-xl font-semibold tracking-tight focus:border-neutral-900 focus:outline-none"
             />
           ) : (
-            <button
-              type="button"
-              onClick={() => {
-                setNameDraft(avatar.name);
-                setEditingName(true);
-              }}
-              className="block max-w-full truncate rounded-md text-left text-xl font-semibold tracking-tight transition hover:bg-neutral-100"
-              title="クリックで編集"
-            >
-              {avatar.name}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setNameDraft(avatar.name);
+                  setEditingName(true);
+                }}
+                className="block max-w-full truncate rounded-md text-left text-xl font-semibold tracking-tight transition hover:bg-neutral-100"
+                title="クリックで編集"
+              >
+                {avatar.name}
+              </button>
+              {avatar.request_id && (
+                <span className="shrink-0 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700">
+                  依頼で作成
+                </span>
+              )}
+            </div>
           )}
 
           {editingDesc ? (
@@ -868,23 +876,39 @@ export default function AvatarDetail({ id }: { id: string }) {
         </div>
 
         <div className="md:col-span-1">
-          <TrainingPanel
-            avatarId={avatar.id}
-            avatarName={avatar.name}
-            videos={training_videos}
-            trainFile={trainFile}
-            onPickFile={setTrainFile}
-            onSubmitVideo={addTrainingVideo}
-            submittingVideo={training}
-            trainText={trainText}
-            onChangeText={setTrainText}
-            trainTextTitle={trainTextTitle}
-            onChangeTextTitle={setTrainTextTitle}
-            onSubmitText={addTrainingText}
-            submittingText={trainingText}
-            trainFolder={trainFolder}
-            onChangeFolder={setTrainFolder}
-          />
+          {avatar.request_id ? (
+            <div className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-5">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-neutral-900">学習させる</h2>
+                <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700">
+                  依頼で作成
+                </span>
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-neutral-600">
+                このブレインは管理者が依頼を受けて作成したものです。
+                内容を保つため、素材の追加・学習はできません。
+                変更が必要な場合は管理者にご相談ください。
+              </p>
+            </div>
+          ) : (
+            <TrainingPanel
+              avatarId={avatar.id}
+              avatarName={avatar.name}
+              videos={training_videos}
+              trainFile={trainFile}
+              onPickFile={setTrainFile}
+              onSubmitVideo={addTrainingVideo}
+              submittingVideo={training}
+              trainText={trainText}
+              onChangeText={setTrainText}
+              trainTextTitle={trainTextTitle}
+              onChangeTextTitle={setTrainTextTitle}
+              onSubmitText={addTrainingText}
+              submittingText={trainingText}
+              trainFolder={trainFolder}
+              onChangeFolder={setTrainFolder}
+            />
+          )}
         </div>
       </div>
 

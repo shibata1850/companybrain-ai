@@ -25,14 +25,17 @@ export async function getPlanUsage(user: AppUser): Promise<PlanUsage> {
   const planId = (row?.plan ?? 'free') as PlanId;
   const plan = PLANS.find((p) => p.id === planId) ?? PLANS[0];
 
-  // Active brains (excludes trashed).
+  // Active brains (excludes trashed). Request-built brains (gifted by
+  // an admin) are exempt from plan limits, so we never count them.
   const { count: brainsUsed } = await db
     .from('avatars')
     .select('id', { count: 'exact', head: true })
     .eq('owner_email', user.email)
-    .is('deleted_at', null);
+    .is('deleted_at', null)
+    .is('request_id', null);
 
-  // Questions asked this month across all the user's brains.
+  // Questions asked this month — only across the user's OWN (non-request)
+  // brains; questions to gifted request-brains don't count.
   const monthStart = new Date();
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
@@ -40,7 +43,8 @@ export async function getPlanUsage(user: AppUser): Promise<PlanUsage> {
   const { data: ownedBrains } = await db
     .from('avatars')
     .select('id')
-    .eq('owner_email', user.email);
+    .eq('owner_email', user.email)
+    .is('request_id', null);
   const brainIds = (ownedBrains ?? []).map((b) => b.id as string);
 
   let questionsThisMonth = 0;

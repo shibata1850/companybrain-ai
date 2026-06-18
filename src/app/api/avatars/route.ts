@@ -34,7 +34,7 @@ export async function GET() {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from('avatars')
-    .select('id, name, description, cover_image_path, owner_email, created_at')
+    .select('id, name, description, cover_image_path, owner_email, created_at, request_id')
     .is('deleted_at', null)
     .eq('owner_email', me.email)
     .order('created_at', { ascending: false });
@@ -51,7 +51,8 @@ export async function GET() {
           .createSignedUrl(a.cover_image_path, 60 * 60);
         cover_url = s?.signedUrl ?? null;
       }
-      return { ...a, cover_url };
+      const { request_id, ...rest } = a;
+      return { ...rest, cover_url, from_request: request_id != null };
     }),
   );
   return NextResponse.json({ avatars });

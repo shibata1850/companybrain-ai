@@ -55,10 +55,11 @@ export async function POST(
   }
 
   const now = new Date().toISOString();
-  // 1. transfer ownership
+  // 1. transfer ownership + tag as a request-built brain (this exempts
+  //    it from the requester's plan limits and locks material additions)
   const { error: e1 } = await db
     .from('avatars')
-    .update({ owner_email: r.requester_email })
+    .update({ owner_email: r.requester_email, request_id: r.id })
     .eq('id', avatar.id);
   if (e1) return NextResponse.json({ error: e1.message }, { status: 500 });
 

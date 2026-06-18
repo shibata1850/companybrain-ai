@@ -12,6 +12,7 @@ type Avatar = {
   cover_url: string | null;
   cover_image_path: string | null;
   created_at: string;
+  from_request?: boolean;
 };
 
 export default function HomePage() {
@@ -362,7 +363,14 @@ function BrainCard({
           )}
         </div>
         <div className="p-4">
-          <h3 className="font-medium tracking-tight">{avatar.name}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-medium tracking-tight">{avatar.name}</h3>
+            {avatar.from_request && (
+              <span className="shrink-0 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700">
+                依頼で作成
+              </span>
+            )}
+          </div>
           {avatar.description && (
             <p className="mt-1 line-clamp-2 text-sm text-neutral-500">
               {avatar.description}

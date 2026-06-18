@@ -21,6 +21,15 @@ export async function POST(
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }
+  if (auth.fromRequest) {
+    return NextResponse.json(
+      {
+        error: '依頼で作成されたブレインには素材を追加できません。',
+        code: 'request_brain_locked',
+      },
+      { status: 403 },
+    );
+  }
   const body = (await req.json()) as {
     text?: string;
     title?: string;
