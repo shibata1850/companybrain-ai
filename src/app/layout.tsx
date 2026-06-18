@@ -75,18 +75,20 @@ export default async function RootLayout({
                 </>
               ) : (
                 <>
-                  <a
+                  <Link
                     href="/#features"
+                    scroll
                     className="hidden rounded-full px-3 py-1.5 text-xs font-medium text-neutral-500 transition duration-200 hover:bg-neutral-100 hover:text-neutral-900 sm:inline"
                   >
                     機能
-                  </a>
-                  <a
+                  </Link>
+                  <Link
                     href="/#pricing"
+                    scroll
                     className="hidden rounded-full px-3 py-1.5 text-xs font-medium text-neutral-500 transition duration-200 hover:bg-neutral-100 hover:text-neutral-900 sm:inline"
                   >
                     料金
-                  </a>
+                  </Link>
                   <Link
                     href="/login"
                     className="rounded-full bg-neutral-900 px-4 py-1.5 text-xs font-medium text-white transition duration-200 hover:bg-neutral-700 active:scale-[0.98]"

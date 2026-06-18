@@ -212,11 +212,13 @@ export default function AdminUsersClient() {
                   />
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
-                  <PlanSelect
-                    email={u.email}
-                    value={u.plan}
-                    onSaved={load}
-                  />
+                  {u.role !== 'admin' && (
+                    <PlanSelect
+                      email={u.email}
+                      value={u.plan}
+                      onSaved={load}
+                    />
+                  )}
                   <ResetPasswordButton email={u.email} />
                   <SuspendButton
                     email={u.email}

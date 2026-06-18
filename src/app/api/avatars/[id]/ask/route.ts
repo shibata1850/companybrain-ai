@@ -32,9 +32,10 @@ export async function POST(
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }
-  // Plan enforcement: monthly question quota.
-  const usage = await getPlanUsage(auth.me);
-  if (!canAsk(usage)) {
+  // Plan enforcement: members only. Admins have no plan / no caps.
+  const usage =
+    auth.me.role === 'admin' ? null : await getPlanUsage(auth.me);
+  if (usage && !canAsk(usage)) {
     return NextResponse.json(planLimitResponse('questions', usage), {
       status: 403,
     });
@@ -96,7 +97,8 @@ export async function POST(
       knowledge,
       length,
       // Higher plans route to higher-tier Gemini models automatically.
-      model: answerModelForPlan(usage.plan),
+      // Admins (no plan) fall through to the default model in gemini.ts.
+      model: usage ? answerModelForPlan(usage.plan) : undefined,
     });
 
     await db

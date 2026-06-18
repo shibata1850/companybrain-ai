@@ -62,12 +62,14 @@ export async function POST(req: NextRequest) {
   if (!me) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
-  // Plan enforcement: refuse brain creation if the user is at cap.
-  const usage = await getPlanUsage(me);
-  if (!canCreateBrain(usage)) {
-    return NextResponse.json(planLimitResponse('brains', usage), {
-      status: 403,
-    });
+  // Plan enforcement: members only. Admins have no plan / no caps.
+  if (me.role !== 'admin') {
+    const usage = await getPlanUsage(me);
+    if (!canCreateBrain(usage)) {
+      return NextResponse.json(planLimitResponse('brains', usage), {
+        status: 403,
+      });
+    }
   }
   const form = await req.formData();
   const file = form.get('video');

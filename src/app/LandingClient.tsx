@@ -5,11 +5,27 @@ import { useEffect, useMemo, useState } from 'react';
 import { PLANS, type Plan } from '@/lib/plans';
 
 export default function LandingClient() {
+  // If the user arrived from /login (or anywhere) with a hash like
+  // /#features, React mounts after the browser's first scroll attempt,
+  // so the section often isn't there yet. Re-scroll once we're mounted.
+  useEffect(() => {
+    const hash = window.location.hash.replace('#', '');
+    if (!hash) return;
+    const el = document.getElementById(hash);
+    if (el) {
+      // Defer one frame so layout has settled.
+      requestAnimationFrame(() =>
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      );
+    }
+  }, []);
+
   return (
     <div className="lp-bleed -mt-6 -mb-6 sm:-mt-8 sm:-mb-8">
       <Hero />
       <PlaygroundDemo />
       <Features />
+      <SamplePreviews />
       <HowItWorks />
       <UseCases />
       <BeforeAfter />
@@ -390,7 +406,7 @@ function Features() {
     { icon: '📚', title: '社内資料を一括学習', body: 'PDF・議事録・規程・URL をまとめて投入。pgvector で意味検索します。' },
     { icon: '🛡️', title: '完全プライベート', body: 'ブレインは作成者本人だけが利用可能。他のユーザーには見えません。' },
     { icon: '📋', title: '監査ログ完備', body: '質問・回答・素材投入まで全履歴を保存。コンプライアンス要件に対応。' },
-    { icon: '🔌', title: 'Make / Webhook 連携', body: 'Notion / Slack / Google Drive と連携して自動でブレインに学習させられます。' },
+    { icon: '📨', title: 'ブレイン作成を依頼', body: '「こういうブレインが欲しい」と社員が管理者に依頼できる。完成後は依頼者に所有権譲渡。' },
   ];
   return (
     <section id="features" className="bg-white py-24 sm:py-28">
@@ -416,6 +432,235 @@ function Features() {
         </div>
       </div>
     </section>
+  );
+}
+
+/* ===================================================================
+   SAMPLE PREVIEWS — tabbed mock-ups for the marquee features
+   =================================================================== */
+
+type SampleKey = 'video' | 'voice' | 'audit';
+const SAMPLE_TABS: { key: SampleKey; label: string; emoji: string }[] = [
+  { key: 'video', label: '動画から人格を学習', emoji: '🎥' },
+  { key: 'voice', label: 'リアルタイム音声会話', emoji: '🎙️' },
+  { key: 'audit', label: '監査ログ完備', emoji: '📋' },
+];
+
+function SamplePreviews() {
+  const [tab, setTab] = useState<SampleKey>('video');
+  return (
+    <section className="bg-white py-24 sm:py-28">
+      <div className="mx-auto max-w-6xl px-6">
+        <SectionHeading
+          eyebrow="SAMPLES"
+          title="主要機能の見本"
+          subtitle="実際の画面にどう映るかをイメージ用にお見せします。"
+        />
+        <div className="mt-10 flex flex-wrap justify-center gap-2">
+          {SAMPLE_TABS.map((t) => {
+            const active = t.key === tab;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setTab(t.key)}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-medium transition ${
+                  active
+                    ? 'border-neutral-900 bg-neutral-900 text-white'
+                    : 'border-neutral-300 bg-white text-neutral-700 hover:border-neutral-900'
+                }`}
+              >
+                <span>{t.emoji}</span>
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-8">
+          {tab === 'video' && <VideoLearnMock />}
+          {tab === 'voice' && <VoiceChatMock />}
+          {tab === 'audit' && <AuditLogMock />}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ----- Mock 1: 動画から人格を学習 ----- */
+function VideoLearnMock() {
+  const steps = [
+    { done: true, label: '動画アップロード', detail: '田中部長_社内研修.mp4 (42 MB)' },
+    { done: true, label: '音声を文字起こし', detail: '24 分 13 秒 / 4,872 文字' },
+    { done: true, label: '発言を意味で分割', detail: '152 チャンク生成' },
+    { done: true, label: 'ベクトル化して保存', detail: 'pgvector に 152 件登録' },
+    { done: true, label: '人格プロファイル完成', detail: '口調・価値観・話し方を抽出済み' },
+  ];
+  return (
+    <div className="grid gap-5 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm md:grid-cols-[1.1fr_1fr]">
+      <div>
+        <div className="overflow-hidden rounded-xl bg-neutral-900">
+          <div className="grid aspect-video place-items-center text-neutral-500">
+            <div className="text-center">
+              <div className="text-4xl">▶</div>
+              <p className="mt-2 text-xs">田中部長_社内研修.mp4</p>
+              <p className="text-[10px] text-neutral-600">24:13</p>
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 flex items-center gap-2">
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-neutral-900 text-white">
+            🧠
+          </span>
+          <div>
+            <p className="text-sm font-medium text-neutral-900">
+              経理部 田中部長
+            </p>
+            <p className="text-[11px] text-emerald-700">学習完了 · 質問できます</p>
+          </div>
+        </div>
+      </div>
+      <ol className="space-y-3">
+        {steps.map((s, i) => (
+          <li key={s.label} className="flex items-start gap-3">
+            <span
+              className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-bold ${
+                s.done
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : 'bg-neutral-100 text-neutral-400'
+              }`}
+            >
+              {s.done ? '✓' : i + 1}
+            </span>
+            <div>
+              <p className="text-sm font-medium text-neutral-900">{s.label}</p>
+              <p className="text-[11px] text-neutral-500">{s.detail}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+/* ----- Mock 2: リアルタイム音声会話 ----- */
+function VoiceChatMock() {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+      <div className="flex items-center gap-2 border-b border-neutral-100 px-4 py-2.5">
+        <span className="h-2 w-2 rounded-full bg-emerald-500" />
+        <span className="text-[11px] text-neutral-500">
+          ライブ中 · 応答 1.4 秒 · Gemini Live
+        </span>
+      </div>
+      <div className="grid gap-6 p-6 md:grid-cols-[1fr_1.1fr]">
+        <div className="flex flex-col items-center justify-center rounded-2xl bg-neutral-50 p-6 text-center">
+          <div className="relative">
+            <span className="grid h-24 w-24 place-items-center rounded-full bg-neutral-900 text-4xl text-white">
+              🧠
+            </span>
+            <span className="absolute -inset-2 rounded-full border-2 border-emerald-500/40" />
+          </div>
+          <p className="mt-4 text-sm font-medium text-neutral-900">
+            営業部 佐藤さん
+          </p>
+          <p className="text-[11px] text-neutral-500">音声で対話中</p>
+          <button
+            type="button"
+            disabled
+            className="mt-4 inline-flex items-center gap-2 rounded-full bg-red-500 px-4 py-2 text-xs font-medium text-white shadow"
+          >
+            🎙 押して話す
+          </button>
+          <div className="mt-4 flex h-8 w-32 items-end justify-center gap-1">
+            {[8, 14, 22, 30, 24, 32, 18, 26, 12, 20].map((h, i) => (
+              <span
+                key={i}
+                className="w-1.5 rounded-sm bg-neutral-400"
+                style={{ height: `${h}px` }}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="space-y-3 text-sm">
+          <div className="flex justify-end">
+            <div className="max-w-[85%] rounded-2xl rounded-tr-md bg-neutral-900 px-3.5 py-2 text-white">
+              先方が値引き要請してきたんだけど、どう返すべき?
+            </div>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-neutral-900 text-sm text-white">
+              🧠
+            </span>
+            <div className="max-w-[85%] rounded-2xl rounded-tl-md bg-neutral-100 px-3.5 py-2 leading-relaxed text-neutral-800">
+              ゼロ条件で値引きしちゃダメだ。「年契約なら 10% 引きます」とか、必ず条件交換にしよう。相場を崩すと後で全部刺さるよ。
+            </div>
+          </div>
+          <p className="pt-2 text-[10px] text-neutral-400">
+            ※ 録音は監査ログに残ります
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ----- Mock 3: 監査ログ完備 ----- */
+function AuditLogMock() {
+  const rows = [
+    { time: '2026/06/18 10:23', user: '田中', action: '質問', target: '経理ブレイン', detail: '出張交通費の上限は?' },
+    { time: '2026/06/18 10:45', user: '山田', action: '素材投入', target: '営業ブレイン', detail: '営業手帳_2026.pdf を追加' },
+    { time: '2026/06/18 11:02', user: '佐藤', action: '音声会話', target: '営業ブレイン', detail: '4 分 18 秒' },
+    { time: '2026/06/18 11:30', user: '田中', action: '質問', target: '経理ブレイン', detail: '海外出張のレート換算は?' },
+    { time: '2026/06/18 12:14', user: '管理者', action: '譲渡', target: '法務ブレイン', detail: '佐藤 → 鈴木 へ' },
+  ];
+  return (
+    <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 bg-neutral-50/60 px-4 py-2.5">
+        <span className="text-[11px] font-medium text-neutral-700">
+          📋 監査ログ
+        </span>
+        <div className="flex gap-2">
+          <span className="rounded-full border border-neutral-300 bg-white px-2.5 py-1 text-[10px] text-neutral-500">
+            🔍 ユーザーで絞り込み
+          </span>
+          <span className="rounded-full border border-neutral-300 bg-white px-2.5 py-1 text-[10px] text-neutral-500">
+            ⇩ CSV ダウンロード
+          </span>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead className="bg-neutral-50/60 text-neutral-500">
+            <tr>
+              <th className="px-4 py-2 text-left font-medium">時刻</th>
+              <th className="px-4 py-2 text-left font-medium">ユーザー</th>
+              <th className="px-4 py-2 text-left font-medium">アクション</th>
+              <th className="px-4 py-2 text-left font-medium">対象</th>
+              <th className="px-4 py-2 text-left font-medium">詳細</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-neutral-100 text-neutral-800">
+            {rows.map((r, i) => (
+              <tr key={i}>
+                <td className="whitespace-nowrap px-4 py-2 text-neutral-500">
+                  {r.time}
+                </td>
+                <td className="whitespace-nowrap px-4 py-2 font-medium">
+                  {r.user}
+                </td>
+                <td className="whitespace-nowrap px-4 py-2">
+                  <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] text-neutral-700">
+                    {r.action}
+                  </span>
+                </td>
+                <td className="whitespace-nowrap px-4 py-2">{r.target}</td>
+                <td className="px-4 py-2 text-neutral-600">{r.detail}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 

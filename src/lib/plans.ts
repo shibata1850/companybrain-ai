@@ -70,7 +70,7 @@ export const PLANS: Plan[] = [
     priceJpy: 4980,
     bestFor: '1〜5 名',
     priceNote: 'ユーザー 5 名まで',
-    ctaLabel: '14 日間無料で試す',
+    ctaLabel: '申し込む',
     limits: {
       brains: 5,
       monthlyQuestions: 1000,
@@ -97,7 +97,7 @@ export const PLANS: Plan[] = [
     priceJpy: 14800,
     bestFor: '5〜30 名',
     priceNote: 'ユーザー 30 名まで・最人気',
-    ctaLabel: '14 日間無料で試す',
+    ctaLabel: '申し込む',
     highlighted: true,
     limits: {
       brains: 20,
@@ -126,7 +126,7 @@ export const PLANS: Plan[] = [
     priceJpy: 49800,
     bestFor: '30 名 〜',
     priceNote: 'ユーザー無制限',
-    ctaLabel: '営業に相談する',
+    ctaLabel: '申し込む',
     limits: {
       brains: 'unlimited',
       monthlyQuestions: 50000,

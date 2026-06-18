@@ -21,6 +21,14 @@ body {
   color: var(--fg);
   font-feature-settings: 'palt';
   -webkit-font-smoothing: antialiased;
+  scroll-behavior: smooth;
+}
+
+/* Account for the sticky header (~56px tall) when jumping to anchor
+   sections like /#features or /#pricing — otherwise the heading hides
+   behind the header. */
+section[id] {
+  scroll-margin-top: 72px;
 }
 
 body {

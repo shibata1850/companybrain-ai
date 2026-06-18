@@ -8,6 +8,7 @@ type Usage = {
   plan: Plan;
   brainsUsed: number;
   questionsThisMonth: number;
+  role?: 'admin' | 'member';
 };
 
 /**
@@ -28,6 +29,8 @@ export default function PlanBanner() {
   }, []);
 
   if (!u) return null;
+  // Admins have no plan and no limits — no banner.
+  if (u.role === 'admin') return null;
   const brainsLimit = u.plan.limits.brains;
   const qLimit = u.plan.limits.monthlyQuestions;
   return (

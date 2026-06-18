@@ -19,5 +19,6 @@ export async function GET() {
     plan: usage.plan,
     brainsUsed: usage.brainsUsed,
     questionsThisMonth: usage.questionsThisMonth,
+    role: me.role,
   });
 }
