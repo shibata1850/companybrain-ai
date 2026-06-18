@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PlanBanner from '@/components/PlanBanner';
+import SortableGrid from '@/components/SortableGrid';
 
 type Avatar = {
   id: string;
@@ -172,7 +173,8 @@ export default function HomePage() {
             <div className="rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 p-12 text-center text-sm text-neutral-500 anim-fade-in">
               「{search}」に一致するブレインがありません。
             </div>
-          ) : (
+          ) : search ? (
+            // Search active: drag-and-drop disabled (visual order is filtered).
             <div className="grid grid-cols-1 gap-4 anim-stagger sm:grid-cols-2 lg:grid-cols-3">
               {filteredAvatars.map((a) => (
                 <BrainCard
@@ -184,6 +186,41 @@ export default function HomePage() {
                 />
               ))}
             </div>
+          ) : (
+            <>
+              <p className="text-[11px] text-neutral-400">
+                スマホは長押し、PC はドラッグでブレインの並びを変更できます。
+              </p>
+              <SortableGrid
+                ids={avatars.map((a) => a.id)}
+                onReorder={(next) => {
+                  // Optimistic: reorder locally, persist in background.
+                  setAvatars((prev) => {
+                    const byId = new Map(prev.map((a) => [a.id, a]));
+                    return next
+                      .map((id) => byId.get(id))
+                      .filter(Boolean) as typeof prev;
+                  });
+                  void fetch('/api/avatars/order', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: next }),
+                  });
+                }}
+                className="grid grid-cols-1 gap-4 anim-stagger sm:grid-cols-2 lg:grid-cols-3"
+              >
+                {avatars.map((a) => (
+                  <div key={a.id} data-sort-id={a.id}>
+                    <BrainCard
+                      avatar={a}
+                      busy={busyId === a.id}
+                      removing={removingIds.has(a.id)}
+                      onTrash={() => moveToTrash(a.id)}
+                    />
+                  </div>
+                ))}
+              </SortableGrid>
+            </>
           )}
         </>
       )}

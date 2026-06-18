@@ -34,9 +34,10 @@ export async function GET() {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from('avatars')
-    .select('id, name, description, cover_image_path, owner_email, created_at, request_id')
+    .select('id, name, description, cover_image_path, owner_email, created_at, request_id, sort_order')
     .is('deleted_at', null)
     .eq('owner_email', me.email)
+    .order('sort_order', { ascending: false })
     .order('created_at', { ascending: false });
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
+import SlideToConfirm from '@/components/SlideToConfirm';
 
 type TrashedAvatar = {
   id: string;
@@ -18,6 +19,8 @@ export default function TrashClient() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmEmpty, setConfirmEmpty] = useState(false);
+  // Brain pending hard-delete; null when the slide modal is closed.
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,9 +61,6 @@ export default function TrashClient() {
   }
 
   async function deleteOne(id: string) {
-    if (!window.confirm('このブレインを完全に削除しますか？元に戻せません。')) {
-      return;
-    }
     setBusy(id);
     setError(null);
     try {
@@ -76,6 +76,7 @@ export default function TrashClient() {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(null);
+      setConfirmDeleteId(null);
     }
   }
 
@@ -209,7 +210,7 @@ export default function TrashClient() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => deleteOne(a.id)}
+                  onClick={() => setConfirmDeleteId(a.id)}
                   disabled={busy === a.id}
                   className="flex-1 rounded-full border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-40"
                 >
@@ -220,6 +221,25 @@ export default function TrashClient() {
           </li>
         ))}
       </ul>
+
+      <SlideToConfirm
+        open={confirmDeleteId !== null}
+        title="完全に削除しますか?"
+        description={
+          (() => {
+            const a = avatars.find((x) => x.id === confirmDeleteId);
+            return a
+              ? `「${a.name}」を完全に削除します。学習素材・履歴ともに復元できなくなります。`
+              : 'このブレインを完全に削除します。復元できません。';
+          })()
+        }
+        actionLabel="→ スライドして完全削除"
+        tone="red"
+        onConfirm={async () => {
+          if (confirmDeleteId) await deleteOne(confirmDeleteId);
+        }}
+        onClose={() => setConfirmDeleteId(null)}
+      />
     </div>
   );
 }

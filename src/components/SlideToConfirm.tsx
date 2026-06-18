@@ -162,12 +162,15 @@ export default function SlideToConfirm({
               updateFromClientX(e.clientX);
             }}
           >
-            {/* progress fill */}
+            {/* progress fill — width matches the thumb's right edge so
+                it visually fills the entire track at progress=1 */}
             <div
               className={`absolute inset-y-0 left-0 ${palette.fill} transition-[width] ${
                 dragging ? 'duration-0' : 'duration-200'
               }`}
-              style={{ width: `calc(28px + ${progress * 100}% * (1 - 56 / 100))` }}
+              style={{
+                width: `calc(52px + (100% - 56px) * ${progress})`,
+              }}
             />
             {/* label */}
             <div

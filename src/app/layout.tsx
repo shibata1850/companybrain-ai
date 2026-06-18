@@ -43,9 +43,13 @@ export default async function RootLayout({
   const loggedIn = await hasSession();
   return (
     <html lang="ja">
-      <body className="min-h-screen bg-white text-neutral-900">
+      <body
+        className={`min-h-screen text-neutral-900 ${
+          loggedIn ? 'app-bg' : 'bg-white'
+        }`}
+      >
         <NavProgress />
-        <header className="sticky top-0 z-30 border-b border-neutral-200 bg-white/85 backdrop-blur">
+        <header className="sticky top-0 z-30 border-b border-neutral-200/70 bg-white/70 backdrop-blur">
           <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
             <Link
               href={loggedIn ? '/dashboard' : '/'}
