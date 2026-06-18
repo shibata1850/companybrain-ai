@@ -195,35 +195,28 @@ export default function RequestDetailClient({ id }: { id: string }) {
             </div>
           )}
 
-          {/* Status */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-neutral-500">ステータス:</span>
-            {(['申請中', '受理', '対応中'] as const).map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => patch({ status: s })}
-                disabled={busy || req.status === s}
-                className={`rounded-full px-3 py-1 text-xs transition ${
-                  req.status === s
-                    ? 'bg-neutral-900 text-white'
-                    : 'border border-neutral-300 bg-white text-neutral-700 hover:border-neutral-900'
-                }`}
-              >
-                {s}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => patch({ assignee_email: me?.email })}
-              disabled={busy || req.assignee_email === me?.email}
-              className="rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs text-neutral-700 hover:border-neutral-900 disabled:opacity-50"
-            >
-              {req.assignee_email === me?.email
-                ? '自分が担当中'
-                : '自分を担当にする'}
-            </button>
-          </div>
+          {/* Status — only after acceptance. Toggle 受理 / 対応中.
+              (Before acceptance the only decision is 受理する / 却下.) */}
+          {req.status !== '申請中' && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-neutral-500">ステータス:</span>
+              {(['受理', '対応中'] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => patch({ status: s })}
+                  disabled={busy || req.status === s}
+                  className={`rounded-full px-3 py-1 text-xs transition ${
+                    req.status === s
+                      ? 'bg-neutral-900 text-white'
+                      : 'border border-neutral-300 bg-white text-neutral-700 hover:border-neutral-900'
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Create + attach */}
           <div className="rounded-xl border border-neutral-200 bg-white p-4 text-sm">
