@@ -111,7 +111,7 @@ section[id] {
     radial-gradient(600px circle at 0% 80%, rgba(251, 191, 36, 0.50), transparent 60%);
   background-attachment: fixed;
   background-size: 300% 300%, 300% 300%, 300% 300%, 300% 300%;
-  animation: lp-bg-shift 18s ease-in-out infinite;
+  animation: lp-bg-shift 10s ease-in-out infinite;
 }
 /* Translucent section backgrounds so the animated gradient peeks
    through subtly between content blocks. */
