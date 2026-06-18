@@ -17,6 +17,7 @@ export default function NotificationsClient() {
   const [items, setItems] = useState<N[]>([]);
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -34,6 +35,10 @@ export default function NotificationsClient() {
 
   useEffect(() => {
     load();
+    fetch('/api/auth/me', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => setIsAdmin(j.user?.role === 'admin'))
+      .catch(() => {});
   }, [load]);
 
   async function markRead(id?: string) {
@@ -59,6 +64,8 @@ export default function NotificationsClient() {
           </button>
         )}
       </header>
+
+      {isAdmin && <Compose onSent={load} />}
 
       {loading ? (
         <p className="py-12 text-center text-sm text-neutral-400">読み込み中…</p>
@@ -123,6 +130,122 @@ export default function NotificationsClient() {
           })}
         </ul>
       )}
+    </div>
+  );
+}
+
+type AdminUser = { email: string; admin_label: string | null; company: string | null };
+
+/**
+ * Admin-only composer: write an announcement to all users or a single
+ * user. Members never see this — they can only read notifications.
+ */
+function Compose({ onSent }: { onSent: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [target, setTarget] = useState('all');
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [sending, setSending] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || users.length > 0) return;
+    fetch('/api/admin/users', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => setUsers(j.users ?? []))
+      .catch(() => {});
+  }, [open, users.length]);
+
+  async function send() {
+    setSending(true);
+    setMsg(null);
+    try {
+      const res = await fetch('/api/admin/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, body, target }),
+      });
+      const j = (await res.json()) as { ok?: boolean; sent?: number; error?: string };
+      if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setMsg(`${j.sent} 件に送信しました`);
+      setTitle('');
+      setBody('');
+      onSent();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="w-full rounded-2xl border border-dashed border-neutral-300 bg-white px-4 py-3 text-sm font-bold text-neutral-700 transition hover:border-neutral-900"
+      >
+        ＋ お知らせを作成(管理者)
+      </button>
+    );
+  }
+
+  return (
+    <div className="space-y-3 rounded-2xl border border-neutral-300 bg-white p-5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-bold text-neutral-900">お知らせを作成</h2>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="text-xs text-neutral-400 hover:text-neutral-900"
+        >
+          閉じる
+        </button>
+      </div>
+
+      <div>
+        <label className="block text-xs font-bold text-neutral-600">宛先</label>
+        <select
+          value={target}
+          onChange={(e) => setTarget(e.target.value)}
+          className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+        >
+          <option value="all">全ユーザー</option>
+          {users.map((u) => (
+            <option key={u.email} value={u.email}>
+              {u.admin_label || u.company || u.email}({u.email})
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <input
+        type="text"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="タイトル"
+        maxLength={120}
+        className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+      />
+      <textarea
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        placeholder="本文(任意)"
+        rows={3}
+        className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+      />
+
+      {msg && <p className="text-xs text-neutral-600">{msg}</p>}
+
+      <button
+        type="button"
+        onClick={send}
+        disabled={sending || !title.trim()}
+        className="w-full rounded-full bg-neutral-900 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-neutral-700 disabled:opacity-50"
+      >
+        {sending ? '送信中…' : '送信する'}
+      </button>
     </div>
   );
 }
