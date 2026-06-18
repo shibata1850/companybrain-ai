@@ -59,22 +59,7 @@ export default async function RootLayout({
               </span>
             </Link>
             <nav className="flex items-center gap-2">
-              {loggedIn ? (
-                <>
-                  <Link
-                    href="/trash"
-                    className="rounded-full px-3 py-1.5 text-xs font-medium text-neutral-500 transition duration-200 hover:bg-neutral-100 hover:text-neutral-900"
-                  >
-                    ゴミ箱
-                  </Link>
-                  <Link
-                    href="/avatars/new"
-                    className="rounded-full bg-neutral-900 px-4 py-1.5 text-xs font-medium text-white transition duration-200 hover:bg-neutral-700 active:scale-[0.98]"
-                  >
-                    + 新しいブレイン
-                  </Link>
-                </>
-              ) : (
+              {!loggedIn && (
                 <Link
                   href="/login"
                   className="rounded-full bg-neutral-900 px-4 py-1.5 text-xs font-medium text-white transition duration-200 hover:bg-neutral-700 active:scale-[0.98]"

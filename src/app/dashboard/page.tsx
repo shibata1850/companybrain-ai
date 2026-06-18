@@ -81,12 +81,20 @@ export default function HomePage() {
 
   return (
     <div className="space-y-10">
-      <section>
-        <h1 className="text-3xl font-semibold tracking-tight">ブレイン</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-500">
-          動画から学習した人物に質問すると、その人の口調と知識で答える動画が
-          自動生成されます。
-        </p>
+      <section className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">ブレイン</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-500">
+            動画から学習した人物に質問すると、その人の口調と知識で答える動画が
+            自動生成されます。
+          </p>
+        </div>
+        <Link
+          href="/avatars/new"
+          className="mt-1 inline-flex shrink-0 items-center gap-1.5 rounded-full bg-neutral-900 px-4 py-2 text-xs font-medium text-white transition hover:bg-neutral-700 active:scale-[0.98]"
+        >
+          ＋ 新しいブレイン
+        </Link>
       </section>
 
       <PlanBanner />
