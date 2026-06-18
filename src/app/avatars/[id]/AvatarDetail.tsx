@@ -479,7 +479,7 @@ export default function AvatarDetail({ id }: { id: string }) {
       const res = await fetch(`/api/avatars/${id}`, { method: 'DELETE' });
       const json = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-      router.push('/');
+      router.push('/dashboard');
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

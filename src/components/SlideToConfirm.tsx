@@ -106,6 +106,8 @@ export default function SlideToConfirm({
       const clientX =
         'touches' in e ? e.touches[0]?.clientX ?? 0 : (e as MouseEvent).clientX;
       updateFromClientX(clientX);
+      // Stop the page from scrolling while the thumb is being dragged.
+      if ('touches' in e) e.preventDefault();
     }
     function onUp(e: MouseEvent | TouchEvent) {
       const clientX =
