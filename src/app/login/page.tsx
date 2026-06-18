@@ -39,26 +39,24 @@ function LoginForm() {
   return (
     <div className="relative mx-auto flex min-h-[70vh] max-w-sm flex-col justify-center">
       <LoginBackground />
-      <div className="mb-4 text-center">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1 text-[11px] text-neutral-500 transition hover:text-neutral-900"
-        >
-          <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden>
-            <path
-              d="M7.5 2.5L4 6l3.5 3.5"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          サービス紹介に戻る
-        </Link>
-      </div>
+      <Link
+        href="/"
+        className="fixed left-4 top-[68px] z-20 inline-flex items-center gap-1.5 rounded-full border border-white/70 bg-white/80 px-3 py-1.5 text-xs font-medium text-indigo-600 shadow-sm backdrop-blur transition hover:border-indigo-300 hover:text-indigo-700 sm:left-6"
+      >
+        <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
+          <path
+            d="M7.5 2.5L4 6l3.5 3.5"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        サービス紹介に戻る
+      </Link>
       <div className="mb-6 text-center">
-        <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-neutral-900 text-xl text-white">
+        <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500 text-xl text-white shadow-lg shadow-indigo-500/20">
           🧠
         </div>
         <h1 className="text-xl font-semibold tracking-tight">CompanyBrain</h1>
@@ -68,7 +66,7 @@ function LoginForm() {
       </div>
       <form
         onSubmit={onSubmit}
-        className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm"
+        className="space-y-4 rounded-2xl border border-white/70 bg-white/90 p-6 shadow-xl shadow-indigo-500/5 backdrop-blur-sm"
       >
         <div>
           <label className="block text-sm font-medium text-neutral-700">
@@ -104,7 +102,7 @@ function LoginForm() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full rounded-full bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:opacity-50"
+          className="w-full rounded-full bg-gradient-to-r from-indigo-600 via-violet-600 to-pink-600 px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-indigo-500/20 transition hover:opacity-90 disabled:opacity-50"
         >
           {submitting ? 'ログイン中…' : 'ログイン'}
         </button>
