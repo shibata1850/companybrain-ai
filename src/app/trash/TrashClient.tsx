@@ -125,41 +125,16 @@ export default function TrashClient() {
             ことができます。
           </p>
         </div>
-        {avatars.length > 0 && !confirmEmpty && (
+        {avatars.length > 0 && (
           <button
             type="button"
             onClick={() => setConfirmEmpty(true)}
-            className="rounded-full border border-red-200 px-4 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+            className="shrink-0 rounded-full border border-red-200 px-4 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
           >
             ゴミ箱を空にする
           </button>
         )}
       </div>
-
-      {confirmEmpty && (
-        <div className="flex items-center justify-between gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          <span>
-            ゴミ箱の {avatars.length} 件すべてを完全に削除します。元に戻せません。
-          </span>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setConfirmEmpty(false)}
-              className="rounded-full bg-white px-3 py-1.5 text-xs text-neutral-700"
-            >
-              キャンセル
-            </button>
-            <button
-              type="button"
-              onClick={emptyTrash}
-              disabled={busy === '__empty__'}
-              className="rounded-full bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-500 disabled:opacity-50"
-            >
-              {busy === '__empty__' ? '削除中…' : '完全に削除する'}
-            </button>
-          </div>
-        </div>
-      )}
 
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -239,6 +214,16 @@ export default function TrashClient() {
           if (confirmDeleteId) await deleteOne(confirmDeleteId);
         }}
         onClose={() => setConfirmDeleteId(null)}
+      />
+
+      <SlideToConfirm
+        open={confirmEmpty}
+        title="ゴミ箱を空にしますか?"
+        description={`ゴミ箱の ${avatars.length} 件すべてを完全に削除します。学習素材・履歴ともに復元できなくなります。`}
+        actionLabel="→ スライドして全件削除"
+        tone="red"
+        onConfirm={emptyTrash}
+        onClose={() => setConfirmEmpty(false)}
       />
     </div>
   );

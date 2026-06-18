@@ -38,11 +38,11 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="relative mx-auto flex min-h-[70vh] max-w-sm flex-col justify-center">
+    <div className="relative mx-auto flex min-h-[70vh] max-w-sm flex-col justify-center pt-16">
       <LoginBackground />
       <Link
         href="/"
-        className="fixed left-4 top-[68px] z-20 inline-flex items-center gap-1.5 rounded-full border border-white/70 bg-white/80 px-3 py-1.5 text-xs font-medium text-indigo-600 shadow-sm backdrop-blur transition hover:border-indigo-300 hover:text-indigo-700 sm:left-6"
+        className="absolute left-0 top-2 z-20 inline-flex items-center gap-1.5 rounded-full border border-white/70 bg-white/80 px-3 py-1.5 text-xs font-medium text-indigo-600 shadow-sm backdrop-blur transition hover:border-indigo-300 hover:text-indigo-700"
       >
         <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
           <path
