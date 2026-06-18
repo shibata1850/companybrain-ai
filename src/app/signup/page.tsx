@@ -38,26 +38,28 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="relative mx-auto flex min-h-[70vh] max-w-sm flex-col justify-center pt-16">
+    <div className="relative mx-auto max-w-sm">
       <LoginBackground />
-      <Link
-        href="/"
-        className="absolute left-0 top-2 z-20 inline-flex items-center gap-1.5 rounded-full border border-white/70 bg-white/80 px-3 py-1.5 text-xs font-medium text-indigo-600 shadow-sm backdrop-blur transition hover:border-indigo-300 hover:text-indigo-700"
-      >
-        <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
-          <path
-            d="M7.5 2.5L4 6l3.5 3.5"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            fill="none"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        サービス紹介に戻る
-      </Link>
+      <div className="pt-4">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 rounded-full border border-white/70 bg-white/80 px-3 py-1.5 text-xs font-medium text-indigo-600 shadow-sm backdrop-blur transition hover:border-indigo-300 hover:text-indigo-700"
+        >
+          <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
+            <path
+              d="M7.5 2.5L4 6l3.5 3.5"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          サービス紹介に戻る
+        </Link>
+      </div>
 
-      <div className="mb-6 text-center">
+      <div className="mb-6 mt-8 text-center">
         <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-neutral-900 text-sm font-bold tracking-tight text-white shadow-lg">
           CB
         </div>
