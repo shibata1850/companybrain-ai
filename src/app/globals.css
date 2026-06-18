@@ -88,12 +88,12 @@ section[id] {
 }
 .lp-bg {
   position: relative;
-  background-color: #e9e3ff;
+  background-color: #dccfff;
   background-image:
-    radial-gradient(900px circle at 10% 0%, rgba(129, 140, 248, 0.65), transparent 60%),
-    radial-gradient(900px circle at 100% 20%, rgba(244, 114, 182, 0.55), transparent 60%),
-    radial-gradient(800px circle at 50% 100%, rgba(45, 212, 191, 0.50), transparent 60%),
-    radial-gradient(700px circle at 0% 80%, rgba(251, 191, 36, 0.45), transparent 60%);
+    radial-gradient(900px circle at 10% 0%, rgba(129, 140, 248, 0.90), transparent 60%),
+    radial-gradient(900px circle at 100% 20%, rgba(244, 114, 182, 0.80), transparent 60%),
+    radial-gradient(800px circle at 50% 100%, rgba(45, 212, 191, 0.75), transparent 60%),
+    radial-gradient(700px circle at 0% 80%, rgba(251, 191, 36, 0.70), transparent 60%);
   background-attachment: fixed;
   background-size: 200% 200%, 200% 200%, 200% 200%, 200% 200%;
   animation: lp-bg-shift 32s ease-in-out infinite;
@@ -101,11 +101,11 @@ section[id] {
 /* Translucent section backgrounds so the animated gradient peeks
    through subtly between content blocks. */
 .lp-bg .lp-sect-light {
-  background-color: rgba(255, 255, 255, 0.12);
+  background-color: rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(2px);
 }
 .lp-bg .lp-sect-soft {
-  background-color: rgba(245, 245, 247, 0.10);
+  background-color: rgba(245, 245, 247, 0.04);
   backdrop-filter: blur(2px);
 }
 
