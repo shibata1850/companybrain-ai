@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import NotificationsBell from '@/components/NotificationsBell';
 
 type Avatar = {
   id: string;
@@ -138,11 +139,18 @@ export default function HomePage() {
             </>
           )}
           <Link
+            href="/requests"
+            className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900"
+          >
+            📨 依頼
+          </Link>
+          <Link
             href="/audit"
             className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900"
           >
             📋 監査ログ
           </Link>
+          {me && <NotificationsBell />}
           {me && (
             <div className="flex items-center gap-2">
               {editingName ? (
