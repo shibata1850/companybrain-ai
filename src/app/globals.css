@@ -165,7 +165,23 @@ body {
   }
 }
 
+/* Vertical upward drift for the login screen background columns.
+   The card list is duplicated, so -50% lands exactly on the seam. */
+@keyframes lp-rise {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
+  }
+}
+
 @layer utilities {
+  .lp-rise {
+    animation-name: lp-rise;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
   .lp-caret::after {
     content: '▍';
     color: #6366f1;

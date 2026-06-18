@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import LoginBackground from '@/components/LoginBackground';
 
 function LoginForm() {
   const router = useRouter();
@@ -36,7 +37,8 @@ function LoginForm() {
   }
 
   return (
-    <div className="mx-auto flex min-h-[70vh] max-w-sm flex-col justify-center">
+    <div className="relative mx-auto flex min-h-[70vh] max-w-sm flex-col justify-center">
+      <LoginBackground />
       <div className="mb-4 text-center">
         <Link
           href="/"
