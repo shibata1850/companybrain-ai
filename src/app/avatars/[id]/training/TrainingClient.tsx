@@ -70,7 +70,7 @@ export default function TrainingClient({ avatarId }: { avatarId: string }) {
     setBulkMoving(true);
     setError(null);
     try {
-      await Promise.all(
+      const results = await Promise.all(
         Array.from(selectedIds).map((id) =>
           fetch(`/api/training-videos/${id}`, {
             method: 'PATCH',
@@ -79,6 +79,10 @@ export default function TrainingClient({ avatarId }: { avatarId: string }) {
           }),
         ),
       );
+      const failed = results.filter((r) => !r.ok).length;
+      if (failed > 0) {
+        throw new Error(`${failed} 件の移動に失敗しました`);
+      }
       await load();
       clearSelection();
     } catch (e) {

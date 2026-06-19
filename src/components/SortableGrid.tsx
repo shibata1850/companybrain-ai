@@ -46,6 +46,22 @@ export default function SortableGrid({
   const ghostStyleRef = useRef<{ x: number; y: number } | null>(null);
   const [, force] = useState(0);
 
+  // Mirrors so the global drag listeners can be attached once per drag
+  // (deps: [draggingId]) instead of re-subscribing on every pointermove
+  // (which previously happened because draftIds was a dependency).
+  const draftIdsRef = useRef<string[] | null>(null);
+  const idsRef = useRef<string[]>(ids);
+  const onReorderRef = useRef(onReorder);
+  useEffect(() => {
+    draftIdsRef.current = draftIds;
+  }, [draftIds]);
+  useEffect(() => {
+    idsRef.current = ids;
+  }, [ids]);
+  useEffect(() => {
+    onReorderRef.current = onReorder;
+  }, [onReorder]);
+
   const view = draftIds ?? ids;
 
   const cancelLongPress = useCallback(() => {
@@ -103,14 +119,15 @@ export default function SortableGrid({
       if (overId && overId !== draggingId) move(draggingId!, overId);
     }
     function onUp() {
-      const finalOrder = draftIds ?? ids;
+      const baseIds = idsRef.current;
+      const finalOrder = draftIdsRef.current ?? baseIds;
       setDraggingId(null);
       ghostStyleRef.current = null;
       // Only fire onReorder if anything actually changed.
       const changed =
-        finalOrder.length === ids.length &&
-        finalOrder.some((id, i) => id !== ids[i]);
-      if (changed) onReorder(finalOrder);
+        finalOrder.length === baseIds.length &&
+        finalOrder.some((id, i) => id !== baseIds[i]);
+      if (changed) onReorderRef.current(finalOrder);
       setDraftIds(null);
     }
     window.addEventListener('pointermove', onMove, { passive: false });
@@ -121,7 +138,7 @@ export default function SortableGrid({
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
     };
-  }, [draggingId, draftIds, ids, getTileAt, move, onReorder]);
+  }, [draggingId, getTileAt, move]);
 
   function startDrag(id: string, clientX: number, clientY: number) {
     dragOriginRef.current = { x: clientX, y: clientY };

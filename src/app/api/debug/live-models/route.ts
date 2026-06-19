@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { env } from '@/lib/env';
+import { getAppUser } from '@/lib/authServer';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,6 +12,10 @@ export const dynamic = 'force-dynamic';
  * Live model name we hard-coded keeps coming back as "not found".
  */
 export async function GET() {
+  const me = await getAppUser();
+  if (!me || me.role !== 'admin') {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
   try {
     const apiKey = env.geminiApiKey();
     const variants = [

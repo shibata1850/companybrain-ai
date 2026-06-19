@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { storageBucket, supabaseAdmin } from '@/lib/supabase';
 import { chunkTranscript, embedTexts } from '@/lib/gemini';
+import { authorizeAvatar } from '@/lib/authServer';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -32,6 +33,11 @@ export async function PATCH(
     .single();
   if (getErr || !existing) {
     return NextResponse.json({ error: 'not found' }, { status: 404 });
+  }
+  // Only the owner of the parent brain may edit its material.
+  const auth = await authorizeAvatar(existing.avatar_id as string);
+  if (!auth.ok) {
+    return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }
 
   const updates: Record<string, unknown> = {};
@@ -113,6 +119,10 @@ export async function DELETE(
     .single();
   if (getErr || !existing) {
     return NextResponse.json({ error: 'not found' }, { status: 404 });
+  }
+  const auth = await authorizeAvatar(existing.avatar_id as string);
+  if (!auth.ok) {
+    return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }
 
   if (existing.storage_path) {

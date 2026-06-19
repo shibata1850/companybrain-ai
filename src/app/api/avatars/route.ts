@@ -122,13 +122,25 @@ export async function POST(req: NextRequest) {
   }
   const avatarId = avatar.id as string;
 
+  // If a later step fails, remove the just-created avatar so it doesn't
+  // linger as an orphan (which would also consume the plan's brain cap).
+  const rollback = async (message: string, status = 500) => {
+    try {
+      await db.storage.from(bucket).remove([`${avatarId}/`]);
+    } catch {
+      // best effort
+    }
+    await db.from('avatars').delete().eq('id', avatarId);
+    return NextResponse.json({ error: message }, { status });
+  };
+
   // 2. Upload source video to Supabase Storage.
   const storagePath = `${avatarId}/${randomUUID()}.${ext}`;
   const { error: upErr } = await db.storage
     .from(bucket)
     .upload(storagePath, videoBytes, { contentType: mimeType, upsert: false });
   if (upErr) {
-    return NextResponse.json({ error: upErr.message }, { status: 500 });
+    return rollback(upErr.message);
   }
 
   // 3. Record training video row (status=pending).
@@ -145,10 +157,7 @@ export async function POST(req: NextRequest) {
     .select('id')
     .single();
   if (tvErr || !tv) {
-    return NextResponse.json(
-      { error: tvErr?.message || 'training video insert failed' },
-      { status: 500 },
-    );
+    return rollback(tvErr?.message || 'training video insert failed');
   }
   const videoId = tv.id as string;
 
@@ -161,10 +170,7 @@ export async function POST(req: NextRequest) {
     frame = out.frame;
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    return NextResponse.json(
-      { error: `ffmpeg extraction failed: ${message}` },
-      { status: 500 },
-    );
+    return rollback(`ffmpeg extraction failed: ${message}`);
   }
 
   // 5. Save cover image to Supabase storage so the UI can show it.
