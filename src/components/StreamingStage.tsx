@@ -137,6 +137,10 @@ export default function StreamingStage({
   const [textDraft, setTextDraft] = useState('');
   // Session timer (seconds since the WebSocket opened).
   const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
+  // Mirror of sessionStartedAt for stable callbacks (so `stop` doesn't
+  // get recreated when a session starts — that previously triggered the
+  // unmount-cleanup effect and killed the session immediately).
+  const sessionStartedAtRef = useRef<number | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
   // VAD bookkeeping for the "thinking" state.
   const userTalkingRef = useRef(false);
@@ -298,11 +302,9 @@ export default function StreamingStage({
     // Report how many seconds of voice were actually consumed so plan
     // enforcement can sum per-month usage. Fire-and-forget, must not
     // block the cleanup or surface errors to the user.
-    if (sessionStartedAt !== null) {
-      const seconds = Math.max(
-        0,
-        Math.round((Date.now() - sessionStartedAt) / 1000),
-      );
+    const startedAt = sessionStartedAtRef.current;
+    if (startedAt !== null) {
+      const seconds = Math.max(0, Math.round((Date.now() - startedAt) / 1000));
       if (seconds > 0) {
         try {
           void fetch('/api/streaming/end', {
@@ -316,10 +318,11 @@ export default function StreamingStage({
         }
       }
     }
+    sessionStartedAtRef.current = null;
     setSessionStartedAt(null);
     setElapsedSec(0);
     setStatus((s) => (s === 'error' ? s : 'ended'));
-  }, [avatarId, sessionStartedAt]);
+  }, [avatarId]);
 
   useEffect(() => {
     return () => {
@@ -818,7 +821,11 @@ export default function StreamingStage({
             modelOverrideRef.current = usedModel;
             // Start the session timer on the first successful open; on
             // auto-reconnect we keep the existing timer running.
-            setSessionStartedAt((prev) => prev ?? Date.now());
+            setSessionStartedAt((prev) => {
+              const next = prev ?? Date.now();
+              sessionStartedAtRef.current = next;
+              return next;
+            });
             setStatus('listening');
           },
           onmessage: handleMessage,
