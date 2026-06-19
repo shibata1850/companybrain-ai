@@ -771,38 +771,59 @@ export default function AvatarDetail({ id }: { id: string }) {
         />
       </header>
 
-      {/* Slim horizontal settings row: 声 / 言語 / 回答ルール.
-          Each control sits in an equal column so the row stays clean
-          regardless of label length. */}
-      <div className="grid grid-cols-3 gap-2 rounded-2xl border border-neutral-200 bg-white p-2 shadow-sm">
-        <SettingCell label="声">
-          <VoicePicker
-            current={avatar.voice}
-            onChange={async (v) => {
-              await saveMeta({ voice: v });
-            }}
-            disabled={savingMeta}
-          />
-        </SettingCell>
-        <SettingCell label="言語">
-          <LanguagePicker
-            current={avatar.language}
-            onChange={async (l) => {
-              await saveMeta({ language: l });
-            }}
-            disabled={savingMeta}
-          />
-        </SettingCell>
-        <SettingCell label="回答ルール">
-          <PersonaPromptButton
-            current={avatar.persona_prompt}
-            onSave={async (next) => {
-              await saveMeta({ persona_prompt: next });
-            }}
-            disabled={savingMeta}
-          />
-        </SettingCell>
-      </div>
+      {/* Collapsible settings: 声 / 言語 / 回答ルール. Closed by default
+          to keep the top of the page compact; open to reveal the
+          3-column control row. */}
+      <details className="group overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-2.5 text-sm font-bold text-neutral-700 transition hover:bg-neutral-50">
+          <span>声・言語・回答ルール</span>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 16 16"
+            aria-hidden
+            className="text-neutral-400 transition-transform group-open:rotate-180"
+          >
+            <path
+              d="M4 6l4 4 4-4"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </summary>
+        <div className="grid grid-cols-3 gap-2 border-t border-neutral-100 p-2">
+          <SettingCell label="声">
+            <VoicePicker
+              current={avatar.voice}
+              onChange={async (v) => {
+                await saveMeta({ voice: v });
+              }}
+              disabled={savingMeta}
+            />
+          </SettingCell>
+          <SettingCell label="言語">
+            <LanguagePicker
+              current={avatar.language}
+              onChange={async (l) => {
+                await saveMeta({ language: l });
+              }}
+              disabled={savingMeta}
+            />
+          </SettingCell>
+          <SettingCell label="回答ルール">
+            <PersonaPromptButton
+              current={avatar.persona_prompt}
+              onSave={async (next) => {
+                await saveMeta({ persona_prompt: next });
+              }}
+              disabled={savingMeta}
+            />
+          </SettingCell>
+        </div>
+      </details>
 
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 anim-fade-in">
