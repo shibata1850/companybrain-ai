@@ -943,6 +943,13 @@ export default function StreamingStage({
         },
       });
       micStreamRef.current = stream;
+      // Start with the mic track DISABLED so nothing is captured until
+      // the user explicitly starts a turn (push-to-talk / tap-to-talk).
+      // This keeps the OS mic indicator off and the level meter flat
+      // while idle, so ambient sound is never picked up.
+      stream.getAudioTracks().forEach((t) => {
+        t.enabled = false;
+      });
       const InputCtx = (
         (window as unknown as { webkitAudioContext?: typeof AudioContext })
           .webkitAudioContext || window.AudioContext
@@ -1071,6 +1078,10 @@ export default function StreamingStage({
     isTalkingRef.current = true;
     setIsTalking(true);
     setStatus('listening');
+    // Open the mic only now — capture starts here, not before.
+    micStreamRef.current?.getAudioTracks().forEach((t) => {
+      t.enabled = true;
+    });
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (sessionRef.current as any).sendRealtimeInput?.({ activityStart: {} });
@@ -1083,6 +1094,11 @@ export default function StreamingStage({
     if (!isTalkingRef.current) return;
     isTalkingRef.current = false;
     setIsTalking(false);
+    // Close the mic immediately so nothing is captured between turns.
+    micStreamRef.current?.getAudioTracks().forEach((t) => {
+      t.enabled = false;
+    });
+    setLevel(0);
     if (!sessionRef.current || !sessionOpenRef.current) return;
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
