@@ -75,50 +75,110 @@ section[id] {
   animation: app-bg-shift 28s ease-in-out infinite;
 }
 
-/* ---------- Landing page: soft animated pastel gradient ----------
-   The 4 radial layers stay anchored near the center area at all
-   keyframe steps so a colourful blob is always visible — earlier
-   versions sent the blobs to extreme corners which made the screen
-   look like a flat color part-way through the loop.                */
-@keyframes lp-bg-shift {
-  0%, 100% {
-    background-position:
-      20% 30%, 80% 30%, 40% 80%, 70% 60%;
-  }
-  25% {
-    background-position:
-      40% 50%, 60% 20%, 70% 70%, 30% 70%;
-  }
-  50% {
-    background-position:
-      60% 30%, 40% 60%, 30% 50%, 70% 40%;
-  }
-  75% {
-    background-position:
-      30% 60%, 70% 40%, 60% 30%, 40% 80%;
-  }
-}
+/* ---------- Landing page: floating coloured orbs ----------------
+   Independent DOM blobs (.lp-orb) drift across the viewport with
+   transform animations. transform-based motion is GPU-accelerated and
+   the displacement is obvious to the eye — unlike background-position
+   shifts which barely moved with the previous approach. The orbs sit
+   behind every content section, heavily blurred so they read as a
+   soft, slowly moving glow rather than distinct circles.            */
 .lp-bg {
   position: relative;
-  background-color: #efe9ff;
-  background-image:
-    radial-gradient(700px circle at 10% 0%, rgba(129, 140, 248, 0.70), transparent 60%),
-    radial-gradient(700px circle at 100% 20%, rgba(244, 114, 182, 0.60), transparent 60%),
-    radial-gradient(650px circle at 50% 100%, rgba(45, 212, 191, 0.55), transparent 60%),
-    radial-gradient(600px circle at 0% 80%, rgba(251, 191, 36, 0.50), transparent 60%);
-  background-attachment: fixed;
-  background-size: 180% 180%, 180% 180%, 180% 180%, 180% 180%;
-  animation: lp-bg-shift 18s ease-in-out infinite;
+  background-color: #f5f2ff;
 }
-/* Translucent section backgrounds so the animated gradient peeks
-   through subtly between content blocks. */
+.lp-orbs {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.lp-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(90px);
+  opacity: 0.55;
+  will-change: transform;
+}
+.lp-orb-1 {
+  width: 520px;
+  height: 520px;
+  left: -120px;
+  top: -120px;
+  background: radial-gradient(circle, #818cf8, transparent 65%);
+  animation: lp-orb-path-a 22s ease-in-out infinite;
+}
+.lp-orb-2 {
+  width: 580px;
+  height: 580px;
+  right: -160px;
+  top: 10vh;
+  background: radial-gradient(circle, #f472b6, transparent 65%);
+  animation: lp-orb-path-b 26s ease-in-out infinite;
+}
+.lp-orb-3 {
+  width: 480px;
+  height: 480px;
+  left: 30vw;
+  bottom: -160px;
+  background: radial-gradient(circle, #2dd4bf, transparent 65%);
+  animation: lp-orb-path-c 24s ease-in-out infinite;
+}
+.lp-orb-4 {
+  width: 440px;
+  height: 440px;
+  right: 25vw;
+  bottom: -80px;
+  background: radial-gradient(circle, #fbbf24, transparent 65%);
+  animation: lp-orb-path-d 28s ease-in-out infinite;
+}
+.lp-orb-5 {
+  width: 400px;
+  height: 400px;
+  left: -80px;
+  top: 50vh;
+  background: radial-gradient(circle, #c084fc, transparent 65%);
+  animation: lp-orb-path-e 20s ease-in-out infinite;
+}
+
+@keyframes lp-orb-path-a {
+  0%,   100% { transform: translate(0, 0) scale(1); }
+  33%        { transform: translate(40vw, 20vh) scale(1.15); }
+  66%        { transform: translate(15vw, 55vh) scale(0.9); }
+}
+@keyframes lp-orb-path-b {
+  0%,   100% { transform: translate(0, 0) scale(1); }
+  33%        { transform: translate(-30vw, 30vh) scale(0.85); }
+  66%        { transform: translate(-50vw, 0) scale(1.2); }
+}
+@keyframes lp-orb-path-c {
+  0%,   100% { transform: translate(0, 0) scale(1); }
+  50%        { transform: translate(-25vw, -60vh) scale(1.1); }
+}
+@keyframes lp-orb-path-d {
+  0%,   100% { transform: translate(0, 0) scale(1); }
+  50%        { transform: translate(20vw, -50vh) scale(0.95); }
+}
+@keyframes lp-orb-path-e {
+  0%,   100% { transform: translate(0, 0) scale(1); }
+  50%        { transform: translate(60vw, -25vh) scale(1.1); }
+}
+
+/* Translucent section backgrounds so the floating orbs glow through.
+   The Hero is left at near-opaque so the chat mock-up stays readable
+   above the brightest part of the screen. */
 .lp-bg .lp-sect-light {
-  background-color: rgba(255, 255, 255, 0.10);
-  backdrop-filter: blur(2px);
+  background-color: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(3px);
 }
 .lp-bg .lp-sect-soft {
-  background-color: rgba(245, 245, 247, 0.08);
-  backdrop-filter: blur(2px);
+  background-color: rgba(245, 245, 247, 0.50);
+  backdrop-filter: blur(3px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-orb {
+    animation: none !important;
+  }
 }
 
 body {

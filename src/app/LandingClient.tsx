@@ -22,6 +22,15 @@ export default function LandingClient() {
 
   return (
     <div className="lp-bleed lp-bg -mt-6 -mb-6 sm:-mt-8 sm:-mb-8">
+      {/* Floating coloured orbs that drift across the whole landing.
+          Fixed-position so they stay visible as the user scrolls. */}
+      <div className="lp-orbs" aria-hidden>
+        <div className="lp-orb lp-orb-1" />
+        <div className="lp-orb lp-orb-2" />
+        <div className="lp-orb lp-orb-3" />
+        <div className="lp-orb lp-orb-4" />
+        <div className="lp-orb lp-orb-5" />
+      </div>
       <Hero />
       <PlaygroundDemo />
       <Features />
