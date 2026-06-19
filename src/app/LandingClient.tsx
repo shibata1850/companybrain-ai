@@ -547,6 +547,43 @@ const ICONS = {
       <path d="M21 16H8M12 12l-4 4 4 4" />
     </svg>
   ),
+  /* Industry icons for the Use Cases section. */
+  construction: () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3.5 17.5h17M5.5 17.5v-5.5a6.5 6.5 0 0 1 13 0v5.5M12 5.5V3" />
+    </svg>
+  ),
+  scale: () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 3v18M5 21h14M3 7h18" />
+      <path d="M7 7l-3 6h6zM17 7l-3 6h6z" />
+    </svg>
+  ),
+  factory: () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 21V10l5 3v-3l5 3v-3l5 3v8z" />
+      <path d="M9 17h1M14 17h1" />
+    </svg>
+  ),
+  medical: () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="3" y="3" width="18" height="18" rx="3" />
+      <path d="M12 8v8M8 12h8" />
+    </svg>
+  ),
+  truck: () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M2.5 16.5V6h11v10.5M13.5 9.5h4l3 4v3h-7" />
+      <circle cx="7" cy="18.5" r="1.8" />
+      <circle cx="17" cy="18.5" r="1.8" />
+    </svg>
+  ),
+  bag: () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4.5 8h15l-1.2 12a2 2 0 0 1-2 1.8H7.7a2 2 0 0 1-2-1.8z" />
+      <path d="M8.5 8V5.5a3.5 3.5 0 0 1 7 0V8" />
+    </svg>
+  ),
 };
 
 /* ===================================================================
@@ -820,13 +857,48 @@ function HowItWorks() {
    =================================================================== */
 
 function UseCases() {
-  const cases = [
-    { icon: '🏗️', title: '建設業', body: '建築基準法・社内安全規程・現場マニュアルを学習。新人が「あの規定どこ?」と聞かなくていい。' },
-    { icon: '⚖️', title: '士業事務所', body: '判例・税法・規程を所長の口調で。お客様への一次回答を AI が下書き。' },
-    { icon: '🏭', title: '製造業', body: '機械別の保守マニュアル・トラブル事例を蓄積。属人化していた知見を残す。' },
-    { icon: '🏥', title: '医療・介護', body: '院内ルール・薬剤情報・引き継ぎノート。夜勤帯の問い合わせを削減。' },
-    { icon: '🚚', title: '物流・運送', body: '配車ルール・輸送規程・取引先別の特記事項を瞬時に照会。' },
-    { icon: '🛍️', title: '小売・EC', body: '商品 FAQ・返品ルール・店舗別の運用差異。カスタマーサポートを支援。' },
+  const cases: {
+    icon: keyof typeof ICONS;
+    title: string;
+    body: string;
+    accent: string;
+  }[] = [
+    {
+      icon: 'construction',
+      title: '建設業',
+      body: '建築基準法・社内安全規程・現場マニュアルを学習。新人が「あの規定どこ?」と聞かなくていい。',
+      accent: 'from-orange-500 to-amber-500',
+    },
+    {
+      icon: 'scale',
+      title: '士業事務所',
+      body: '判例・税法・規程を所長の口調で。お客様への一次回答を AI が下書き。',
+      accent: 'from-emerald-500 to-teal-600',
+    },
+    {
+      icon: 'factory',
+      title: '製造業',
+      body: '機械別の保守マニュアル・トラブル事例を蓄積。属人化していた知見を残す。',
+      accent: 'from-slate-500 to-blue-600',
+    },
+    {
+      icon: 'medical',
+      title: '医療・介護',
+      body: '院内ルール・薬剤情報・引き継ぎノート。夜勤帯の問い合わせを削減。',
+      accent: 'from-rose-500 to-pink-600',
+    },
+    {
+      icon: 'truck',
+      title: '物流・運送',
+      body: '配車ルール・輸送規程・取引先別の特記事項を瞬時に照会。',
+      accent: 'from-yellow-500 to-orange-500',
+    },
+    {
+      icon: 'bag',
+      title: '小売・EC',
+      body: '商品 FAQ・返品ルール・店舗別の運用差異。カスタマーサポートを支援。',
+      accent: 'from-violet-500 to-fuchsia-600',
+    },
   ];
   return (
     <section className="lp-sect-light py-24 sm:py-28">
@@ -836,23 +908,36 @@ function UseCases() {
           title="業種を問わず、社内ナレッジは「人」に紐付いている。"
           subtitle="ベテランの頭の中を、辞めても残る形に。"
         />
-        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {cases.map((c) => (
-            <div
-              key={c.title}
-              className="rounded-2xl border border-neutral-200 bg-white p-6 transition hover:border-neutral-900"
-            >
-              <div className="grid h-11 w-11 place-items-center rounded-xl bg-neutral-900 text-xl text-white">
-                {c.icon}
+        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {cases.map((c) => {
+            const Icon = ICONS[c.icon];
+            return (
+              <div
+                key={c.title}
+                className="group relative overflow-hidden rounded-2xl border border-neutral-200 bg-white p-6 transition duration-300 hover:-translate-y-1 hover:border-transparent hover:shadow-2xl"
+              >
+                <div
+                  aria-hidden
+                  className={`pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-gradient-to-br ${c.accent} opacity-0 blur-2xl transition duration-500 group-hover:opacity-20`}
+                />
+                <div
+                  aria-hidden
+                  className={`absolute inset-x-0 top-0 h-1 origin-left scale-x-0 bg-gradient-to-r ${c.accent} transition-transform duration-300 group-hover:scale-x-100`}
+                />
+                <div
+                  className={`grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br ${c.accent} text-white shadow-lg transition duration-300 group-hover:scale-110 group-hover:-rotate-3`}
+                >
+                  <Icon />
+                </div>
+                <h3 className="mt-5 text-lg font-semibold tracking-tight">
+                  {c.title}
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-neutral-600">
+                  {c.body}
+                </p>
               </div>
-              <h3 className="mt-4 text-base font-semibold tracking-tight">
-                {c.title}
-              </h3>
-              <p className="mt-2 text-sm leading-relaxed text-neutral-600">
-                {c.body}
-              </p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </section>
