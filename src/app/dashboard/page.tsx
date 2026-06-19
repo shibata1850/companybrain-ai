@@ -178,7 +178,7 @@ export default function HomePage() {
             </div>
           ) : search ? (
             // Search active: drag-and-drop disabled (visual order is filtered).
-            <div className="grid grid-cols-1 gap-4 anim-stagger sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 anim-stagger sm:grid-cols-4 lg:grid-cols-6">
               {filteredAvatars.map((a) => (
                 <BrainCard
                   key={a.id}
@@ -223,7 +223,7 @@ export default function HomePage() {
                       setError('並び替えの保存に失敗しました');
                     });
                 }}
-                className="grid grid-cols-1 gap-4 anim-stagger sm:grid-cols-2 lg:grid-cols-3"
+                className="grid grid-cols-2 gap-3 anim-stagger sm:grid-cols-4 lg:grid-cols-6"
               >
                 {avatars.map((a) => (
                   <div key={a.id} data-sort-id={a.id}>
@@ -246,13 +246,13 @@ export default function HomePage() {
 
 function SkeletonGrid() {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
       {Array.from({ length: 6 }).map((_, i) => (
         <div
           key={i}
           className="overflow-hidden rounded-2xl border border-neutral-200 bg-white"
         >
-          <div className="aspect-[4/3] anim-shimmer" />
+          <div className="aspect-square anim-shimmer" />
           <div className="space-y-2 p-4">
             <div className="h-4 w-1/2 rounded anim-shimmer" />
             <div className="h-3 w-3/4 rounded anim-shimmer" />
@@ -298,7 +298,7 @@ function BrainCard({
         className="block"
         aria-label={`${avatar.name} の詳細`}
       >
-        <div className="aspect-[4/3] overflow-hidden bg-neutral-100">
+        <div className="aspect-square overflow-hidden bg-neutral-100">
           {avatar.cover_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -312,17 +312,19 @@ function BrainCard({
             </div>
           )}
         </div>
-        <div className="p-4">
-          <div className="flex items-center gap-2">
-            <h3 className="font-medium tracking-tight">{avatar.name}</h3>
+        <div className="p-2.5">
+          <div className="flex items-center gap-1.5">
+            <h3 className="truncate text-[13px] font-medium tracking-tight">
+              {avatar.name}
+            </h3>
             {avatar.from_request && (
-              <span className="shrink-0 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700">
-                依頼で作成
+              <span className="shrink-0 rounded-full bg-indigo-100 px-1.5 py-0.5 text-[9px] font-medium text-indigo-700">
+                依頼
               </span>
             )}
           </div>
           {avatar.description && (
-            <p className="mt-1 line-clamp-2 text-sm text-neutral-500">
+            <p className="mt-0.5 line-clamp-2 text-[11px] text-neutral-500">
               {avatar.description}
             </p>
           )}
@@ -336,9 +338,9 @@ function BrainCard({
         data-drag-handle
         title="ドラッグで並び替え"
         aria-label="ドラッグで並び替え"
-        className="absolute left-2 top-2 grid h-8 w-8 cursor-grab touch-none place-items-center rounded-full bg-white/90 text-neutral-500 opacity-0 shadow-sm ring-1 ring-neutral-200 backdrop-blur transition group-hover:opacity-100 group-focus-within:opacity-100 active:cursor-grabbing sm:opacity-100"
+        className="absolute left-1.5 top-1.5 grid h-6 w-6 cursor-grab touch-none place-items-center rounded-full bg-white/90 text-neutral-500 opacity-0 shadow-sm ring-1 ring-neutral-200 backdrop-blur transition group-hover:opacity-100 group-focus-within:opacity-100 active:cursor-grabbing sm:opacity-100"
       >
-        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+        <svg width="12" height="12" viewBox="0 0 14 14" aria-hidden>
           <circle cx="4.5" cy="3.5" r="1" fill="currentColor" />
           <circle cx="9.5" cy="3.5" r="1" fill="currentColor" />
           <circle cx="4.5" cy="7" r="1" fill="currentColor" />
@@ -356,7 +358,7 @@ function BrainCard({
           setMenuOpen((o) => !o);
         }}
         aria-label="操作メニュー"
-        className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-white/90 text-neutral-700 opacity-0 shadow-sm ring-1 ring-neutral-200 backdrop-blur transition duration-200 hover:bg-white group-hover:opacity-100 group-focus-within:opacity-100"
+        className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-white/90 text-neutral-700 opacity-0 shadow-sm ring-1 ring-neutral-200 backdrop-blur transition duration-200 hover:bg-white group-hover:opacity-100 group-focus-within:opacity-100"
       >
         <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
           <circle cx="3" cy="7" r="1.2" fill="currentColor" />
