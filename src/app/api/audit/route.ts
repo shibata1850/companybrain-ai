@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getAppUser } from '@/lib/authServer';
+import { getPlanUsage } from '@/lib/planEnforce';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -189,6 +190,17 @@ export async function GET(req: NextRequest) {
     .order('created_at', { ascending: false })
     .limit(1000);
   if (q) query = query.ilike('content', `%${q}%`);
+  // Plan enforcement: members only see history within their plan's
+  // historyDays window. Admins see everything.
+  if (me.role !== 'admin') {
+    const usage = await getPlanUsage(me);
+    const limit = usage.plan.limits.historyDays;
+    if (limit !== 'unlimited') {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - Number(limit));
+      query = query.gte('created_at', cutoff.toISOString());
+    }
+  }
 
   const { data, error } = await query;
   if (error) {

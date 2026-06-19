@@ -295,10 +295,31 @@ export default function StreamingStage({
       pendingFlushTimerRef.current = null;
     }
     setLevel(0);
+    // Report how many seconds of voice were actually consumed so plan
+    // enforcement can sum per-month usage. Fire-and-forget, must not
+    // block the cleanup or surface errors to the user.
+    if (sessionStartedAt !== null) {
+      const seconds = Math.max(
+        0,
+        Math.round((Date.now() - sessionStartedAt) / 1000),
+      );
+      if (seconds > 0) {
+        try {
+          void fetch('/api/streaming/end', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ avatarId, seconds }),
+            keepalive: true,
+          });
+        } catch {
+          // ignore
+        }
+      }
+    }
     setSessionStartedAt(null);
     setElapsedSec(0);
     setStatus((s) => (s === 'error' ? s : 'ended'));
-  }, []);
+  }, [avatarId, sessionStartedAt]);
 
   useEffect(() => {
     return () => {

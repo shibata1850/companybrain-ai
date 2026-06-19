@@ -3,6 +3,12 @@ import { authorizeAvatar } from '@/lib/authServer';
 import { randomUUID } from 'node:crypto';
 import { storageBucket, supabaseAdmin } from '@/lib/supabase';
 import { processTrainingVideo } from '@/lib/processing';
+import {
+  canAddMaterial,
+  getMaterialBytesUsed,
+  getPlanUsage,
+  planLimitResponse,
+} from '@/lib/planEnforce';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -60,6 +66,18 @@ export async function POST(
   const ext = (file.name.split('.').pop() || 'mp4').toLowerCase();
   const storagePath = `${avatarId}/${randomUUID()}.${ext}`;
 
+  // Plan enforcement: material size. Admins are uncapped; the gifted
+  // request-brain itself is already blocked above (fromRequest).
+  if (auth.me.role !== 'admin') {
+    const usage = await getPlanUsage(auth.me);
+    const existing = await getMaterialBytesUsed(auth.me);
+    if (!canAddMaterial(usage.plan, existing, videoBytes.length)) {
+      return NextResponse.json(planLimitResponse('materials', usage), {
+        status: 403,
+      });
+    }
+  }
+
   const { error: upErr } = await db.storage
     .from(storageBucket())
     .upload(storagePath, videoBytes, { contentType: mimeType, upsert: false });
@@ -74,6 +92,7 @@ export async function POST(
       storage_path: storagePath,
       file_name: file.name,
       mime_type: mimeType,
+      size_bytes: videoBytes.length,
       folder,
       status: 'pending',
     })

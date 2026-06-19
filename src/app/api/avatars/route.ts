@@ -7,7 +7,9 @@ import { processTrainingVideo } from '@/lib/processing';
 import { chunkTranscript, embedTexts } from '@/lib/gemini';
 import { getAppUser } from '@/lib/authServer';
 import {
+  canAddMaterial,
   canCreateBrain,
+  getMaterialBytesUsed,
   getPlanUsage,
   planLimitResponse,
 } from '@/lib/planEnforce';
@@ -95,6 +97,17 @@ export async function POST(req: NextRequest) {
   const db = supabaseAdmin();
   const bucket = storageBucket();
 
+  // Plan enforcement: material size.
+  if (me.role !== 'admin') {
+    const usage = await getPlanUsage(me);
+    const existing = await getMaterialBytesUsed(me);
+    if (!canAddMaterial(usage.plan, existing, videoBytes.length)) {
+      return NextResponse.json(planLimitResponse('materials', usage), {
+        status: 403,
+      });
+    }
+  }
+
   // 1. Insert avatar row up-front so we have an id to attribute work to.
   const { data: avatar, error: avatarErr } = await db
     .from('avatars')
@@ -126,6 +139,7 @@ export async function POST(req: NextRequest) {
       storage_path: storagePath,
       file_name: file.name,
       mime_type: mimeType,
+      size_bytes: videoBytes.length,
       status: 'pending',
     })
     .select('id')

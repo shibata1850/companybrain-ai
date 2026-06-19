@@ -82,6 +82,64 @@ export function canAsk(usage: PlanUsage): boolean {
   return usage.questionsThisMonth < limit;
 }
 
+/* -------- Voice minute enforcement (queried on demand) ------------ */
+
+/** Bytes used by training material on the user's OWN (non-request)
+ *  brains, summed across training_videos.size_bytes. Cover photos and
+ *  text snippets are negligible and intentionally not counted. */
+export async function getMaterialBytesUsed(user: AppUser): Promise<number> {
+  const db = supabaseAdmin();
+  const { data: ownedBrains } = await db
+    .from('avatars')
+    .select('id')
+    .eq('owner_email', user.email)
+    .is('deleted_at', null)
+    .is('request_id', null);
+  const brainIds = (ownedBrains ?? []).map((b) => b.id as string);
+  if (brainIds.length === 0) return 0;
+  const { data } = await db
+    .from('training_videos')
+    .select('size_bytes')
+    .in('avatar_id', brainIds);
+  return (data ?? []).reduce(
+    (sum, r) => sum + Number(r.size_bytes ?? 0),
+    0,
+  );
+}
+
+/** Voice seconds consumed this month, summed from voice_sessions. */
+export async function getVoiceSecondsThisMonth(user: AppUser): Promise<number> {
+  const db = supabaseAdmin();
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const { data } = await db
+    .from('voice_sessions')
+    .select('seconds')
+    .eq('actor', user.email)
+    .gte('created_at', monthStart.toISOString());
+  return (data ?? []).reduce((sum, r) => sum + Number(r.seconds ?? 0), 0);
+}
+
+/** Plan allows voice (binary check before any session opens). */
+export function canStartVoice(plan: Plan, secondsUsed: number): boolean {
+  const limit = plan.limits.monthlyVoiceMinutes;
+  if (limit === 'unlimited') return true;
+  if (limit === 0) return false;
+  return secondsUsed < limit * 60;
+}
+
+/** True if (existing + new) bytes would stay within the plan's cap. */
+export function canAddMaterial(
+  plan: Plan,
+  existingBytes: number,
+  newBytes: number,
+): boolean {
+  const limit = plan.limits.materialMb;
+  if (limit === 'unlimited') return true;
+  return existingBytes + newBytes <= limit * 1024 * 1024;
+}
+
 /** Shape the upgrade nudge into a consistent response across routes. */
 export function planLimitResponse(
   reason: 'brains' | 'questions' | 'voice' | 'materials',

@@ -3,7 +3,13 @@ import { GoogleGenAI, Modality } from '@google/genai';
 import { env } from '@/lib/env';
 import { supabaseAdmin } from '@/lib/supabase';
 import { authorizeAvatar } from '@/lib/authServer';
-import { canAsk, getPlanUsage, planLimitResponse } from '@/lib/planEnforce';
+import {
+  canAsk,
+  canStartVoice,
+  getPlanUsage,
+  getVoiceSecondsThisMonth,
+  planLimitResponse,
+} from '@/lib/planEnforce';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -41,13 +47,19 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }
-  // Enforce the monthly question quota. Members are blocked once over
-  // limit; admins have no plan, and request-built (gifted) brains are
-  // exempt from limits entirely.
+  // Enforce monthly question quota AND voice minute quota. Members are
+  // blocked once over limit; admins have no plan, and request-built
+  // (gifted) brains are exempt from limits entirely.
   if (auth.me.role !== 'admin' && !auth.fromRequest) {
     const usage = await getPlanUsage(auth.me);
     if (!canAsk(usage)) {
       return NextResponse.json(planLimitResponse('questions', usage), {
+        status: 403,
+      });
+    }
+    const voiceSecondsUsed = await getVoiceSecondsThisMonth(auth.me);
+    if (!canStartVoice(usage.plan, voiceSecondsUsed)) {
+      return NextResponse.json(planLimitResponse('voice', usage), {
         status: 403,
       });
     }
