@@ -73,24 +73,36 @@ export default function RequestsClient() {
         一覧へ
       </Link>
 
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+      <header className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">
             ブレイン作成依頼
           </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-500">
-            {me?.role === 'admin'
-              ? 'ユーザーからの依頼一覧です。詳細を開いて対応してください。'
-              : '管理者にブレイン作成を依頼できます。「新規依頼」から内容を送ってください。'}
-          </p>
+          {/* Desktop: inline create button. Mobile: replaced by a FAB. */}
+          <Link
+            href="/requests/new"
+            className="hidden shrink-0 rounded-full bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-700 sm:inline-flex"
+          >
+            ＋ 新規依頼
+          </Link>
         </div>
-        <Link
-          href="/requests/new"
-          className="shrink-0 rounded-full bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-700"
-        >
-          ＋ 新規依頼
-        </Link>
+        <p className="max-w-2xl text-sm leading-relaxed text-neutral-500">
+          {me?.role === 'admin'
+            ? 'ユーザーからの依頼一覧です。詳細を開いて対応してください。'
+            : '管理者にブレイン作成を依頼できます。「新規依頼」から内容を送ってください。'}
+        </p>
       </header>
+
+      {/* Mobile FAB for thumb-reach. */}
+      <Link
+        href="/requests/new"
+        aria-label="新規依頼"
+        className="fixed right-4 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-40 grid h-14 w-14 place-items-center rounded-full bg-neutral-900 text-white shadow-lg shadow-neutral-900/25 transition active:scale-95 sm:hidden"
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden>
+          <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+        </svg>
+      </Link>
 
       <div className="flex flex-wrap gap-1.5 text-xs">
         <FilterButton

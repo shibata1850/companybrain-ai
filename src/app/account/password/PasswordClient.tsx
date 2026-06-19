@@ -91,7 +91,7 @@ export default function PasswordClient() {
               onChange={(e) => setCurrent(e.target.value)}
               autoComplete="current-password"
               required
-              className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+              className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-base focus:border-neutral-900 focus:outline-none"
             />
           </div>
           <div>
@@ -104,7 +104,7 @@ export default function PasswordClient() {
               onChange={(e) => setNext(e.target.value)}
               autoComplete="new-password"
               required
-              className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+              className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-base focus:border-neutral-900 focus:outline-none"
             />
           </div>
           <div>
@@ -117,7 +117,7 @@ export default function PasswordClient() {
               onChange={(e) => setConfirm(e.target.value)}
               autoComplete="new-password"
               required
-              className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+              className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-base focus:border-neutral-900 focus:outline-none"
             />
           </div>
           {error && (

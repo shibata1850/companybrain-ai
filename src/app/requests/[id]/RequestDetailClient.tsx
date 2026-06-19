@@ -226,18 +226,18 @@ export default function RequestDetailClient({ id }: { id: string }) {
               依頼の内容を見ながら、自分のアカウントでブレインを作成し、ここに紐付けてください。
               紐付けたあと「依頼者へ譲渡」で所有権を渡します。
             </p>
-            <div className="flex flex-wrap gap-2">
+            <div className="space-y-2">
               <Link
                 href="/avatars/new"
-                className="rounded-full bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700"
+                className="inline-flex w-full items-center justify-center rounded-full bg-neutral-900 px-3 py-2.5 text-sm font-bold text-white transition hover:bg-neutral-700 active:scale-[0.98] sm:w-auto"
               >
                 ＋ ブレインを作成
               </Link>
-              <div className="flex flex-1 items-center gap-2">
+              <div className="flex items-center gap-2">
                 <select
                   value={linkAvatar || req.result_avatar_id || ''}
                   onChange={(e) => setLinkAvatar(e.target.value)}
-                  className="flex-1 rounded-lg border border-neutral-300 px-2 py-1.5 text-xs"
+                  className="min-h-[40px] flex-1 rounded-lg border border-neutral-300 px-2 py-1.5 text-sm"
                 >
                   <option value="">紐付けるブレインを選択…</option>
                   {myAvatars.map((a) => (
@@ -255,7 +255,7 @@ export default function RequestDetailClient({ id }: { id: string }) {
                     })
                   }
                   disabled={busy || !linkAvatar}
-                  className="rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 hover:border-neutral-900 disabled:opacity-50"
+                  className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-xs font-bold text-neutral-700 transition hover:border-neutral-900 active:scale-95 disabled:opacity-50"
                 >
                   紐付け
                 </button>
@@ -280,7 +280,7 @@ export default function RequestDetailClient({ id }: { id: string }) {
 
           {/* Reject */}
           <details className="rounded-xl border border-neutral-200 bg-white p-3 text-sm">
-            <summary className="cursor-pointer text-xs text-neutral-500">
+            <summary className="cursor-pointer py-1 text-xs font-bold text-neutral-600">
               却下する
             </summary>
             <div className="mt-2 space-y-2">
@@ -288,8 +288,8 @@ export default function RequestDetailClient({ id }: { id: string }) {
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
                 placeholder="却下理由"
-                rows={2}
-                className="w-full rounded-lg border border-neutral-300 px-2 py-1.5 text-xs"
+                rows={3}
+                className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
               />
               <button
                 type="button"
@@ -297,7 +297,7 @@ export default function RequestDetailClient({ id }: { id: string }) {
                   patch({ status: '却下', reject_reason: rejectReason })
                 }
                 disabled={busy || !rejectReason.trim()}
-                className="rounded-full bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-500 disabled:opacity-50"
+                className="w-full rounded-full bg-red-600 px-3 py-2.5 text-sm font-bold text-white transition hover:bg-red-500 active:scale-[0.98] disabled:opacity-50 sm:w-auto"
               >
                 却下する
               </button>

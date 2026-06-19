@@ -345,27 +345,29 @@ function EntriesStep({ user, brain }: { user: string; brain: Brain }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="space-y-2 sm:flex sm:items-center sm:gap-2 sm:space-y-0">
         <SearchBar value={q} onChange={setQ} placeholder="内容で検索…" />
-        <button
-          type="button"
-          onClick={() => setOnlyEscalation((v) => !v)}
-          className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-            onlyEscalation
-              ? 'bg-amber-100 text-amber-800'
-              : 'border border-neutral-300 bg-white text-neutral-600 hover:border-neutral-900'
-          }`}
-        >
-          ⚠️ 上長確認のみ
-        </button>
-        <button
-          type="button"
-          onClick={exportCsv}
-          disabled={filtered.length === 0}
-          className="rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:border-neutral-900 disabled:opacity-40"
-        >
-          CSV書き出し
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setOnlyEscalation((v) => !v)}
+            className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
+              onlyEscalation
+                ? 'bg-amber-100 text-amber-800'
+                : 'border border-neutral-300 bg-white text-neutral-600 hover:border-neutral-900'
+            }`}
+          >
+            要確認のみ
+          </button>
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={filtered.length === 0}
+            className="rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-bold text-neutral-700 transition hover:border-neutral-900 disabled:opacity-40"
+          >
+            CSV書き出し
+          </button>
+        </div>
       </div>
 
       {error && <ErrorBox msg={error} />}
@@ -389,10 +391,10 @@ function EntriesStep({ user, brain }: { user: string; brain: Brain }) {
                   .slice()
                   .reverse()
                   .map((e) => (
-                    <li key={e.id} className="px-4 py-2.5">
-                      <div className="flex items-baseline gap-2">
+                    <li key={e.id} className="px-4 py-3">
+                      <div className="mb-1 flex items-center justify-between gap-2">
                         <span
-                          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${
                             e.role === 'user'
                               ? 'bg-neutral-900 text-white'
                               : 'bg-neutral-100 text-neutral-700'
@@ -400,19 +402,19 @@ function EntriesStep({ user, brain }: { user: string; brain: Brain }) {
                         >
                           {e.role === 'user' ? '質問' : '回答'}
                         </span>
-                        <span className="flex-1 whitespace-pre-wrap text-sm leading-relaxed text-neutral-800">
-                          {e.content}
-                        </span>
-                        <span className="shrink-0 text-[10px] text-neutral-400">
+                        <span className="shrink-0 text-[10px] text-neutral-400 tabular-nums">
                           {new Date(e.created_at).toLocaleTimeString('ja-JP', {
                             hour: '2-digit',
                             minute: '2-digit',
                           })}
                         </span>
                       </div>
+                      <p className="whitespace-pre-wrap text-sm leading-relaxed text-neutral-800">
+                        {e.content}
+                      </p>
                       {e.escalation && (
-                        <div className="mt-1 inline-block rounded bg-amber-50 px-2 py-0.5 text-[10px] text-amber-800">
-                          ⚠️ 上長確認推奨
+                        <div className="mt-1 inline-block rounded bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                          上長確認推奨
                           {e.escalation.categories &&
                             `（${e.escalation.categories.join(' / ')}）`}
                         </div>

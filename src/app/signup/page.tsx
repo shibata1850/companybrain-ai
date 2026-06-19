@@ -83,7 +83,7 @@ export default function SignupPage() {
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="username"
             required
-            className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+            className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-base focus:border-neutral-900 focus:outline-none"
           />
         </div>
         <div>
@@ -95,7 +95,7 @@ export default function SignupPage() {
             value={company}
             onChange={(e) => setCompany(e.target.value)}
             placeholder="例: 株式会社サンプル"
-            className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+            className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-base focus:border-neutral-900 focus:outline-none"
           />
         </div>
         <div>
@@ -109,7 +109,7 @@ export default function SignupPage() {
             autoComplete="new-password"
             required
             minLength={8}
-            className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+            className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-base focus:border-neutral-900 focus:outline-none"
           />
         </div>
         {error && (
