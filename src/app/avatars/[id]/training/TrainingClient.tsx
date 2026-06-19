@@ -677,7 +677,7 @@ function FolderRow({
           onClick={onClick}
           className="min-w-0 flex-1 truncate px-2 py-1.5 text-left"
         >
-          📁 {label}
+          {label}
         </button>
         <div className="flex shrink-0 items-center gap-1 pr-1">
           <span
@@ -1089,7 +1089,7 @@ function FolderQuickMenu({
         title="クリックでフォルダを変更"
         className="inline-flex items-center gap-1 rounded-full border border-neutral-300 bg-white px-2 py-0.5 text-[11px] font-medium text-neutral-700 transition hover:border-neutral-900 hover:bg-neutral-50"
       >
-        📁 {current?.trim() || '未分類'}
+        {current?.trim() || '未分類'}
         <svg width="8" height="8" viewBox="0 0 10 10" aria-hidden>
           <path
             d="M2 4l3 3 3-3"
@@ -1115,7 +1115,7 @@ function FolderQuickMenu({
           }}
           className="block w-full px-3 py-2 text-left text-xs text-neutral-700 hover:bg-neutral-50"
         >
-          📁 未分類へ
+          未分類へ
         </button>
         <div className="border-t border-neutral-100">
           {options.length === 0 && (
@@ -1135,7 +1135,7 @@ function FolderQuickMenu({
                 o === current ? 'font-medium text-neutral-900' : 'text-neutral-700'
               }`}
             >
-              📁 {o}
+              {o}
             </button>
           ))}
         </div>
@@ -1221,7 +1221,7 @@ function BulkFolderPicker({
               }}
               className="block w-full truncate px-3 py-2 text-left text-xs text-neutral-700 transition hover:bg-neutral-50"
             >
-              📁 {o}
+              {o}
             </button>
           ))}
         </div>
@@ -1303,7 +1303,7 @@ function CardMenu({
             }}
             className="block w-full px-3 py-2 text-left text-xs text-neutral-700 transition hover:bg-neutral-50"
           >
-            📁 フォルダを移動
+            フォルダを移動
           </button>
         )}
         <button

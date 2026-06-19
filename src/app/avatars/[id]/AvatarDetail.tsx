@@ -409,7 +409,7 @@ export default function AvatarDetail({ id }: { id: string }) {
         );
       }
       if (m.note) {
-        lines.push(`> 📝 メモ: ${m.note}`, '');
+        lines.push(`> メモ: ${m.note}`, '');
       }
       if (m.sources && m.sources.length > 0) {
         lines.push('<details><summary>参照した素材</summary>', '');
@@ -1108,7 +1108,7 @@ function TrainingPanel({
                 key={name}
                 className="flex items-center justify-between rounded-md px-2 py-1.5 text-[11px] text-neutral-700 hover:bg-neutral-50"
               >
-                <span className="truncate">📁 {name}</span>
+                <span className="truncate">{name}</span>
                 <span className="ml-2 shrink-0 rounded-full bg-neutral-100 px-1.5 text-[10px] text-neutral-500">
                   {count}
                 </span>
@@ -1181,7 +1181,7 @@ function FolderPickerInline({
               : 'border-neutral-300 bg-white text-neutral-600 hover:border-neutral-900'
           }`}
         >
-          📁 未分類
+          未分類
         </button>
         {options.map((name) => (
           <button
@@ -1195,7 +1195,7 @@ function FolderPickerInline({
             }`}
             title={name}
           >
-            📂 {name}
+            {name}
           </button>
         ))}
         {creating ? (
@@ -1831,12 +1831,12 @@ function MessageRow({
               setNoteDraft(m.note ?? '');
               setNoteOpen((v) => !v);
             }}
-            className={`rounded-full px-1 text-[12px] leading-none transition ${
-              m.note ? 'opacity-100' : 'opacity-40 hover:opacity-100'
+            className={`rounded-full px-1.5 text-[11px] font-bold leading-none transition ${
+              m.note ? 'text-neutral-900' : 'text-neutral-400 hover:text-neutral-900'
             }`}
             title="メモを追加"
           >
-            📝
+            メモ
           </button>
           {!isUser && (
             <>
@@ -1951,7 +1951,7 @@ function MessageRow({
               onClick={() => setSourcesOpen((v) => !v)}
               className="mt-2 inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[10px] text-neutral-600 ring-1 ring-neutral-200 transition hover:text-neutral-900"
             >
-              🔍 根拠 {sourceCount}件 {sourcesOpen ? '▲' : '▼'}
+              根拠 {sourceCount}件 {sourcesOpen ? '▲' : '▼'}
             </button>
           )}
           {!isUser && !hasSources && (
@@ -1966,7 +1966,7 @@ function MessageRow({
             <div className="mt-2 space-y-2 rounded-lg bg-white p-2.5 text-[11px] leading-relaxed ring-1 ring-neutral-200">
               {m.sources!.map((s, si) => (
                 <div key={si}>
-                  <p className="font-medium text-neutral-500">🔍 {s.query}</p>
+                  <p className="font-medium text-neutral-500">{s.query}</p>
                   <ul className="ml-3 mt-0.5 list-disc space-y-0.5 text-neutral-700">
                     {s.chunks.slice(0, 4).map((c, ci) => (
                       <li key={ci}>
@@ -1987,7 +1987,7 @@ function MessageRow({
                   : 'bg-amber-50 text-amber-900'
               }`}
             >
-              📝 {m.note}
+              {m.note}
             </div>
           )}
           {noteOpen && (
