@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import BrainSwitcher from '@/components/BrainSwitcher';
 import StreamingStage, {
   type TranscriptMessage,
   type TranscriptSource,
@@ -105,7 +104,6 @@ export default function AvatarDetail({ id }: { id: string }) {
   const router = useRouter();
   const [data, setData] = useState<DetailResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   // Training panel state.
   const [trainFile, setTrainFile] = useState<File | null>(null);
@@ -473,21 +471,6 @@ export default function AvatarDetail({ id }: { id: string }) {
     );
   }, [load]);
 
-  async function moveToTrash() {
-    setDeleting(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/avatars/${id}`, { method: 'DELETE' });
-      const json = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-      router.push('/dashboard');
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setDeleting(false);
-    }
-  }
-
   async function addTrainingVideo(e: React.FormEvent) {
     e.preventDefault();
     if (!trainFile) return;
@@ -648,35 +631,32 @@ export default function AvatarDetail({ id }: { id: string }) {
   avatarNameRef.current = avatar.name;
 
   return (
-    <div className="space-y-6">
-      {/* Top nav row */}
-      <div className="flex items-center justify-between gap-3">
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
-            <path
-              d="M7.5 2.5L4 6l3.5 3.5"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          一覧へ
-        </Link>
-        <div className="flex items-center gap-2">
-          <BrainSwitcher currentId={avatar.id} currentName={avatar.name} />
-          <AvatarMenu onDelete={moveToTrash} deleting={deleting} />
-        </div>
-      </div>
+    <div className="space-y-4">
+      {/* Top: back link only. Brain switcher / trash removed per UX
+          decision (trash is reachable from the dashboard kebab menu). */}
+      <Link
+        href="/dashboard"
+        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
+      >
+        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
+          <path
+            d="M7.5 2.5L4 6l3.5 3.5"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        一覧へ
+      </Link>
 
-      {/* Avatar identity card */}
-      <header className="flex items-center gap-4 rounded-2xl border border-neutral-200 bg-gradient-to-br from-white to-neutral-50 p-4 shadow-sm">
+      {/* Compact identity card (~half the previous height). The voice /
+          language / answer-rule controls live in their own slim row
+          below so this card stays focused on identity. */}
+      <header className="flex items-center gap-3 rounded-2xl border border-neutral-200 bg-gradient-to-br from-white to-neutral-50 p-3 shadow-sm">
         <div className="relative shrink-0">
-          <div className="h-16 w-16 overflow-hidden rounded-full bg-neutral-100 ring-2 ring-white shadow">
+          <div className="h-12 w-12 overflow-hidden rounded-full bg-neutral-100 ring-2 ring-white shadow">
             {avatar.cover_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -690,9 +670,9 @@ export default function AvatarDetail({ id }: { id: string }) {
             type="button"
             onClick={() => openFilePicker('cover')}
             aria-label="アバター写真を変更"
-            className="absolute -bottom-1 -right-1 grid h-7 w-7 place-items-center rounded-full bg-neutral-900 text-white shadow-md transition hover:bg-neutral-700 focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:ring-offset-2"
+            className="absolute -bottom-1 -right-1 grid h-5 w-5 place-items-center rounded-full bg-neutral-900 text-white shadow-md transition hover:bg-neutral-700 focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:ring-offset-2"
           >
-            <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden>
+            <svg width="9" height="9" viewBox="0 0 16 16" aria-hidden>
               <path
                 d="M11 1.5l3.5 3.5L5 14.5H1.5V11L11 1.5z"
                 stroke="currentColor"
@@ -720,7 +700,7 @@ export default function AvatarDetail({ id }: { id: string }) {
                 }
               }}
               disabled={savingMeta}
-              className="w-full rounded-md border border-neutral-300 bg-white px-2 py-1 text-xl font-semibold tracking-tight focus:border-neutral-900 focus:outline-none"
+              className="w-full rounded-md border border-neutral-300 bg-white px-2 py-1 text-base font-semibold tracking-tight focus:border-neutral-900 focus:outline-none"
             />
           ) : (
             <div className="flex items-center gap-2">
@@ -730,7 +710,7 @@ export default function AvatarDetail({ id }: { id: string }) {
                   setNameDraft(avatar.name);
                   setEditingName(true);
                 }}
-                className="block max-w-full truncate rounded-md text-left text-xl font-semibold tracking-tight transition hover:bg-neutral-100"
+                className="block max-w-full truncate rounded-md text-left text-base font-semibold tracking-tight transition hover:bg-neutral-100"
                 title="クリックで編集"
               >
                 {avatar.name}
@@ -759,7 +739,7 @@ export default function AvatarDetail({ id }: { id: string }) {
               }}
               disabled={savingMeta}
               placeholder="説明(任意)"
-              className="mt-1 w-full rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm focus:border-neutral-900 focus:outline-none"
+              className="mt-0.5 w-full rounded-md border border-neutral-300 bg-white px-2 py-0.5 text-xs focus:border-neutral-900 focus:outline-none"
             />
           ) : (
             <button
@@ -768,52 +748,12 @@ export default function AvatarDetail({ id }: { id: string }) {
                 setDescDraft(avatar.description ?? '');
                 setEditingDesc(true);
               }}
-              className="mt-0.5 block max-w-full truncate rounded-md text-left text-sm text-neutral-500 transition hover:bg-neutral-100"
+              className="block max-w-full truncate rounded-md text-left text-xs text-neutral-500 transition hover:bg-neutral-100"
               title="クリックで編集"
             >
               {avatar.description || '+ 説明を追加'}
             </button>
           )}
-
-          <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-neutral-500">
-            <button
-              type="button"
-              onClick={() => openFilePicker('cover')}
-              className="inline-flex items-center gap-1 transition hover:text-neutral-900"
-            >
-              <PencilGlyph />
-              アバター写真
-            </button>
-            <button
-              type="button"
-              onClick={() => openFilePicker('stage')}
-              className="inline-flex items-center gap-1 transition hover:text-neutral-900"
-            >
-              <PencilGlyph />
-              ステージ背景
-            </button>
-            <VoicePicker
-              current={avatar.voice}
-              onChange={async (v) => {
-                await saveMeta({ voice: v });
-              }}
-              disabled={savingMeta}
-            />
-            <LanguagePicker
-              current={avatar.language}
-              onChange={async (l) => {
-                await saveMeta({ language: l });
-              }}
-              disabled={savingMeta}
-            />
-            <PersonaPromptButton
-              current={avatar.persona_prompt}
-              onSave={async (next) => {
-                await saveMeta({ persona_prompt: next });
-              }}
-              disabled={savingMeta}
-            />
-          </div>
         </div>
         <input
           ref={coverFileInputRef}
@@ -830,6 +770,60 @@ export default function AvatarDetail({ id }: { id: string }) {
           className="hidden"
         />
       </header>
+
+      {/* Collapsible settings: 声 / 言語 / 回答ルール. Closed by default
+          to keep the top of the page compact; open to reveal the
+          3-column control row. */}
+      <details className="group overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-2.5 text-sm font-bold text-neutral-700 transition hover:bg-neutral-50">
+          <span>声・言語・回答ルール</span>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 16 16"
+            aria-hidden
+            className="text-neutral-400 transition-transform group-open:rotate-180"
+          >
+            <path
+              d="M4 6l4 4 4-4"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </summary>
+        <div className="grid grid-cols-3 gap-2 border-t border-neutral-100 p-2">
+          <SettingCell label="声">
+            <VoicePicker
+              current={avatar.voice}
+              onChange={async (v) => {
+                await saveMeta({ voice: v });
+              }}
+              disabled={savingMeta}
+            />
+          </SettingCell>
+          <SettingCell label="言語">
+            <LanguagePicker
+              current={avatar.language}
+              onChange={async (l) => {
+                await saveMeta({ language: l });
+              }}
+              disabled={savingMeta}
+            />
+          </SettingCell>
+          <SettingCell label="回答ルール">
+            <PersonaPromptButton
+              current={avatar.persona_prompt}
+              onSave={async (next) => {
+                await saveMeta({ persona_prompt: next });
+              }}
+              disabled={savingMeta}
+            />
+          </SettingCell>
+        </div>
+      </details>
 
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 anim-fade-in">
@@ -2278,58 +2272,6 @@ function MessageRow({
  * Top-right kebab menu (move to trash etc.)
  * =========================================================== */
 
-function AvatarMenu({
-  onDelete,
-  deleting,
-}: {
-  onDelete: () => void;
-  deleting: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (!rootRef.current) return;
-      if (!rootRef.current.contains(e.target as Node)) setOpen(false);
-    }
-    if (open) document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, [open]);
-
-  return (
-    <div ref={rootRef} className="relative">
-      <button
-        type="button"
-        aria-label="このブレインの操作メニュー"
-        onClick={() => setOpen((o) => !o)}
-        className="grid h-8 w-8 place-items-center rounded-full border border-neutral-300 bg-white text-neutral-600 transition hover:border-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
-      >
-        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
-          <circle cx="3" cy="7" r="1.2" fill="currentColor" />
-          <circle cx="7" cy="7" r="1.2" fill="currentColor" />
-          <circle cx="11" cy="7" r="1.2" fill="currentColor" />
-        </svg>
-      </button>
-      {open && (
-        <div className="absolute right-0 z-40 mt-1.5 w-48 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg anim-fade-in">
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              onDelete();
-            }}
-            disabled={deleting}
-            className="block w-full px-3 py-2 text-left text-xs text-red-700 transition hover:bg-red-50 disabled:opacity-50"
-          >
-            {deleting ? 'ゴミ箱に移動中…' : 'ゴミ箱に移動'}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function Highlight({ text, term }: { text: string; term: string }) {
   const q = term.trim();
   if (!q) return <>{text}</>;
@@ -2356,6 +2298,30 @@ function Highlight({ text, term }: { text: string; term: string }) {
     i = idx + needle.length;
   }
   return <>{parts}</>;
+}
+
+/**
+ * A single column in the slim settings row under the identity card.
+ * Label above, the live picker control below. Centered + same height
+ * so 声 / 言語 / 回答ルール line up cleanly.
+ */
+function SettingCell({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-center">
+      <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+        {label}
+      </span>
+      <div className="flex w-full min-w-0 items-center justify-center">
+        {children}
+      </div>
+    </div>
+  );
 }
 
 function PencilGlyph() {
