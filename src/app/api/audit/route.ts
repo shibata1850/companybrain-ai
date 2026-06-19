@@ -25,6 +25,12 @@ type AuditEntry = {
 };
 
 export async function POST(req: NextRequest) {
+  // Only logged-in users may append audit entries; without this anyone
+  // could spam audit_logs and forge avatar_id / content.
+  const me = await getAppUser();
+  if (!me) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
   const body = (await req.json().catch(() => null)) as
     | { entries?: AuditEntry[] }
     | AuditEntry
@@ -40,8 +46,7 @@ export async function POST(req: NextRequest) {
 
   // Actor is taken from the authenticated session, not the client
   // payload — that's the whole point of an audit trail.
-  const me = await getAppUser();
-  const actor = me?.email ?? null;
+  const actor = me.email;
 
   const rows = rawEntries
     .filter((e) => e && typeof e.content === 'string' && e.content.trim())

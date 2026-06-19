@@ -49,6 +49,9 @@ export default function HomePage() {
   useEffect(() => {
     load();
     function onFocus() {
+      // Avoid a server refetch wiping the in-progress drag draft if the
+      // OS quickly blurs/focuses the window during a long-press drag.
+      if (document.querySelector('[data-sort-id].opacity-80')) return;
       load();
     }
     window.addEventListener('focus', onFocus);
@@ -195,6 +198,9 @@ export default function HomePage() {
                 ids={avatars.map((a) => a.id)}
                 onReorder={(next) => {
                   // Optimistic: reorder locally, persist in background.
+                  // On failure, refetch from the server so the visible
+                  // order matches the truth instead of silently drifting.
+                  const prevOrder = avatars;
                   setAvatars((prev) => {
                     const byId = new Map(prev.map((a) => [a.id, a]));
                     return next
@@ -205,7 +211,17 @@ export default function HomePage() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ ids: next }),
-                  });
+                  })
+                    .then((r) => {
+                      if (!r.ok) {
+                        setAvatars(prevOrder);
+                        setError('並び替えの保存に失敗しました');
+                      }
+                    })
+                    .catch(() => {
+                      setAvatars(prevOrder);
+                      setError('並び替えの保存に失敗しました');
+                    });
                 }}
                 className="grid grid-cols-1 gap-4 anim-stagger sm:grid-cols-2 lg:grid-cols-3"
               >
@@ -312,6 +328,25 @@ function BrainCard({
           )}
         </div>
       </Link>
+
+      {/* Drag handle (only initiator of SortableGrid drags). Sits at
+          top-left so it's distinct from the actions menu and so its
+          large touch target is easy to grab. */}
+      <span
+        data-drag-handle
+        title="ドラッグで並び替え"
+        aria-label="ドラッグで並び替え"
+        className="absolute left-2 top-2 grid h-8 w-8 cursor-grab touch-none place-items-center rounded-full bg-white/90 text-neutral-500 opacity-0 shadow-sm ring-1 ring-neutral-200 backdrop-blur transition group-hover:opacity-100 group-focus-within:opacity-100 active:cursor-grabbing sm:opacity-100"
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+          <circle cx="4.5" cy="3.5" r="1" fill="currentColor" />
+          <circle cx="9.5" cy="3.5" r="1" fill="currentColor" />
+          <circle cx="4.5" cy="7" r="1" fill="currentColor" />
+          <circle cx="9.5" cy="7" r="1" fill="currentColor" />
+          <circle cx="4.5" cy="10.5" r="1" fill="currentColor" />
+          <circle cx="9.5" cy="10.5" r="1" fill="currentColor" />
+        </svg>
+      </span>
 
       <button
         type="button"

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { StatusPill } from '../RequestsClient';
+import SlideToConfirm from '@/components/SlideToConfirm';
 
 type Req = {
   id: string;
@@ -32,6 +33,7 @@ export default function RequestDetailClient({ id }: { id: string }) {
   const [myAvatars, setMyAvatars] = useState<Avatar[]>([]);
   const [linkAvatar, setLinkAvatar] = useState('');
   const [rejectReason, setRejectReason] = useState('');
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const [admins, setAdmins] = useState<string[]>([]);
 
   const load = useCallback(async () => {
@@ -306,18 +308,28 @@ export default function RequestDetailClient({ id }: { id: string }) {
 
       {/* Requester cancel — allowed only before 受理 (while 申請中) */}
       {!isAdmin && isOwner && req.status === '申請中' && (
-        <button
-          type="button"
-          onClick={() => {
-            if (confirm('この依頼を取り下げますか?')) {
-              patch({ status: '却下', reject_reason: '申請者がキャンセル' });
-            }
-          }}
-          disabled={busy}
-          className="rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:border-red-500 hover:text-red-600"
-        >
-          依頼を取り下げる
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={() => setConfirmCancel(true)}
+            disabled={busy}
+            className="rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:border-red-500 hover:text-red-600"
+          >
+            依頼を取り下げる
+          </button>
+          <SlideToConfirm
+            open={confirmCancel}
+            title="依頼を取り下げますか?"
+            description={`「${req.title}」を取り下げます。再度必要になった場合は新しく依頼してください。`}
+            actionLabel="→ スライドして取り下げ"
+            tone="red"
+            onConfirm={async () => {
+              await patch({ status: '却下', reject_reason: '申請者がキャンセル' });
+              setConfirmCancel(false);
+            }}
+            onClose={() => setConfirmCancel(false)}
+          />
+        </>
       )}
 
       {/* After 受理: self-cancel is disabled; guide the user to email an admin */}

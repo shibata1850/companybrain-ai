@@ -21,7 +21,11 @@ export async function POST(req: NextRequest) {
     avatarId?: string;
     seconds?: number;
   };
-  const s = Math.max(0, Math.round(Number(seconds) || 0));
+  // Cap a single session at 8h to bound the trust we place in client
+  // self-reported numbers. (Long-term: replace with token-side session
+  // open + server-confirmed elapsed at close.)
+  const raw = Math.max(0, Math.round(Number(seconds) || 0));
+  const s = Math.min(raw, 8 * 60 * 60);
   if (s === 0) return NextResponse.json({ ok: true, recorded: 0 });
 
   const db = supabaseAdmin();

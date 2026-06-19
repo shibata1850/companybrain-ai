@@ -23,6 +23,7 @@ export default function MyPageClient() {
   const [requestCount, setRequestCount] = useState(0);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/auth/me', { cache: 'no-store' })
@@ -43,7 +44,7 @@ export default function MyPageClient() {
 
   async function saveName() {
     const value = nameDraft.trim();
-    setEditingName(false);
+    setSaveError(null);
     const res = await fetch('/api/auth/profile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -52,6 +53,10 @@ export default function MyPageClient() {
     if (res.ok) {
       const j = (await res.json()) as { display_name: string | null };
       setMe((m) => (m ? { ...m, display_name: j.display_name } : m));
+      setEditingName(false);
+    } else {
+      // Keep the input open so the user can retry. Surface the failure.
+      setSaveError('表示名の保存に失敗しました');
     }
   }
 
@@ -103,6 +108,11 @@ export default function MyPageClient() {
               </button>
             )}
             <p className="truncate text-xs text-neutral-500">{me?.email}</p>
+            {saveError && (
+              <p className="mt-1 text-[11px] font-bold text-red-600">
+                {saveError}
+              </p>
+            )}
           </div>
           {isAdmin && (
             <span className="rounded-full bg-neutral-900 px-2 py-0.5 text-[10px] font-medium text-white">

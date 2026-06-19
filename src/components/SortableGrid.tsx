@@ -130,22 +130,26 @@ export default function SortableGrid({
   }
 
   function onPointerDown(e: React.PointerEvent, id: string) {
-    // Skip non-primary buttons and anything that targeted a link/button
-    // inside the tile — those need their click to work normally.
+    // Drag only starts from an explicit handle (an element with
+    // [data-drag-handle]). Tile content (links / buttons) stays
+    // tappable as normal — without this gate every card wrapped in
+    // <Link> would block drag entirely because closest('a') matches.
     if (e.button !== 0 && e.pointerType !== 'touch') return;
     const target = e.target as HTMLElement;
-    if (target.closest('a, button, [role="button"], input, select, textarea')) {
-      return;
-    }
+    if (!target.closest('[data-drag-handle]')) return;
+    // Capture coordinates before React pools the event.
     const clientX = e.clientX;
     const clientY = e.clientY;
+    // Stop the surrounding <Link> from navigating when the handle is
+    // pressed; we only want the drag.
+    e.preventDefault();
+    e.stopPropagation();
     if (e.pointerType === 'touch') {
       cancelLongPress();
       longPressTimerRef.current = window.setTimeout(() => {
         startDrag(id, clientX, clientY);
-      }, 250);
+      }, 180);
     } else {
-      // Desktop: start drag immediately so the user gets feedback.
       startDrag(id, clientX, clientY);
     }
   }

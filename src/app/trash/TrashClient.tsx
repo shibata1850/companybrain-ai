@@ -152,6 +152,7 @@ export default function TrashClient() {
         </div>
       )}
 
+      {!loading && avatars.length > 0 && (
       <ul className="grid grid-cols-1 gap-3 anim-stagger sm:grid-cols-2 lg:grid-cols-3">
         {avatars.map((a) => (
           <li
@@ -196,6 +197,7 @@ export default function TrashClient() {
           </li>
         ))}
       </ul>
+      )}
 
       <SlideToConfirm
         open={confirmDeleteId !== null}

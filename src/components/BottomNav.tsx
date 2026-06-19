@@ -33,7 +33,16 @@ export default function BottomNav({ show }: { show: boolean }) {
     if (!show) return;
     loadBadges();
     const t = setInterval(loadBadges, 60_000);
-    return () => clearInterval(t);
+    // Refresh immediately when other surfaces (the お知らせ page) change
+    // notification state, so the badge doesn't stay stale for up to 60s.
+    const onChange = () => {
+      loadBadges();
+    };
+    window.addEventListener('cb-notifications-changed', onChange);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener('cb-notifications-changed', onChange);
+    };
   }, [show, loadBadges, pathname]);
 
   if (!show) return null;

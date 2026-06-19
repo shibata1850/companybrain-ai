@@ -46,8 +46,16 @@ export default function NotificationsClient() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(id ? { action: 'read', id } : { action: 'read_all' }),
+      keepalive: true,
     });
     await load();
+    // Let other surfaces (BottomNav badge) refresh immediately
+    // without waiting for their 60s poll.
+    try {
+      window.dispatchEvent(new CustomEvent('cb-notifications-changed'));
+    } catch {
+      // ignore
+    }
   }
 
   return (
@@ -108,7 +116,20 @@ export default function NotificationsClient() {
                   <Link
                     href={n.link}
                     onClick={() => {
-                      if (!n.read_at) void markRead(n.id);
+                      // Optimistically flip read state locally so navigation
+                      // doesn't race with the PATCH; the await in markRead
+                      // updates the badge afterwards.
+                      if (!n.read_at) {
+                        setItems((prev) =>
+                          prev.map((x) =>
+                            x.id === n.id
+                              ? { ...x, read_at: new Date().toISOString() }
+                              : x,
+                          ),
+                        );
+                        setUnread((u) => Math.max(0, u - 1));
+                        void markRead(n.id);
+                      }
                     }}
                     className="block"
                   >

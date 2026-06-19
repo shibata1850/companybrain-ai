@@ -17,11 +17,17 @@ export type PlanUsage = {
 export async function getPlanUsage(user: AppUser): Promise<PlanUsage> {
   const db = supabaseAdmin();
 
-  const { data: row } = await db
+  // Fail closed: if the plan row can't be read, refuse to silently
+  // downgrade a paying user to 'free'. The caller surfaces this as
+  // a 500 so the next attempt re-checks.
+  const { data: row, error: planErr } = await db
     .from('app_users')
     .select('plan')
     .eq('email', user.email.toLowerCase())
     .single();
+  if (planErr) {
+    throw new Error(`plan lookup failed: ${planErr.message}`);
+  }
   const planId = (row?.plan ?? 'free') as PlanId;
   const plan = PLANS.find((p) => p.id === planId) ?? PLANS[0];
 
@@ -129,7 +135,9 @@ export function canStartVoice(plan: Plan, secondsUsed: number): boolean {
   return secondsUsed < limit * 60;
 }
 
-/** True if (existing + new) bytes would stay within the plan's cap. */
+/** True if (existing + new) bytes would stay within the plan's cap.
+ *  Uses strict less-than to mirror canCreateBrain / canAsk semantics
+ *  (i.e. "must remain strictly under the limit after this addition"). */
 export function canAddMaterial(
   plan: Plan,
   existingBytes: number,
@@ -137,7 +145,7 @@ export function canAddMaterial(
 ): boolean {
   const limit = plan.limits.materialMb;
   if (limit === 'unlimited') return true;
-  return existingBytes + newBytes <= limit * 1024 * 1024;
+  return existingBytes + newBytes < limit * 1024 * 1024;
 }
 
 /** Shape the upgrade nudge into a consistent response across routes. */
