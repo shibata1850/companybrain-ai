@@ -74,13 +74,14 @@ export default function BottomNav({ show }: { show: boolean }) {
   ];
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-200 bg-white/95 backdrop-blur">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-1px_12px_rgba(0,0,0,0.04)] backdrop-blur">
       <div className="mx-auto flex max-w-md items-stretch">
         {items.map((it) => (
           <Link
             key={it.href}
             href={it.href}
-            className={`relative flex flex-1 items-center justify-center py-4 text-sm font-bold transition ${
+            aria-current={it.active ? 'page' : undefined}
+            className={`relative flex min-h-[60px] flex-1 flex-col items-center justify-center gap-0.5 py-3 text-[13px] font-bold transition active:scale-95 ${
               it.active
                 ? 'text-neutral-900'
                 : 'text-neutral-400 hover:text-neutral-700'

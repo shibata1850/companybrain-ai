@@ -118,7 +118,7 @@ export default function NewAvatarPage() {
               : 'text-neutral-500 hover:text-neutral-900'
           }`}
         >
-          📝 テキスト＋写真
+          テキスト＋写真
         </button>
         <button
           type="button"
@@ -129,7 +129,7 @@ export default function NewAvatarPage() {
               : 'text-neutral-500 hover:text-neutral-900'
           }`}
         >
-          🎬 動画から
+          動画から
         </button>
       </div>
 

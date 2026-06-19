@@ -93,13 +93,32 @@ export default function HomePage() {
             自動生成されます。
           </p>
         </div>
+        {/* Desktop: inline create button (top-right is fine with a mouse).
+            Mobile: hidden here, replaced by a thumb-reachable FAB below. */}
         <Link
           href="/avatars/new"
-          className="mt-1 inline-flex shrink-0 items-center gap-1.5 rounded-full bg-neutral-900 px-4 py-2 text-xs font-medium text-white transition hover:bg-neutral-700 active:scale-[0.98]"
+          className="mt-1 hidden shrink-0 items-center gap-1.5 rounded-full bg-neutral-900 px-4 py-2 text-xs font-medium text-white transition hover:bg-neutral-700 active:scale-[0.98] sm:inline-flex"
         >
           ＋ 新しいブレイン
         </Link>
       </section>
+
+      {/* Mobile floating action button: primary "create" action sits in
+          the bottom-right thumb zone, clear of the bottom nav + home bar. */}
+      <Link
+        href="/avatars/new"
+        aria-label="新しいブレインを作成"
+        className="fixed right-4 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-40 grid h-14 w-14 place-items-center rounded-full bg-neutral-900 text-white shadow-lg shadow-neutral-900/25 transition active:scale-95 sm:hidden"
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden>
+          <path
+            d="M12 5v14M5 12h14"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+          />
+        </svg>
+      </Link>
 
       <PlanBanner />
 

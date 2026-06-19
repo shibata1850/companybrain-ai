@@ -181,7 +181,10 @@ export default function AdminUsersClient() {
         ) : (
           <ul className="divide-y divide-neutral-100">
             {users.map((u) => (
-              <li key={u.email} className="flex items-center justify-between gap-3 px-4 py-3">
+              <li
+                key={u.email}
+                className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+              >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span
@@ -217,7 +220,7 @@ export default function AdminUsersClient() {
                     onSaved={load}
                   />
                 </div>
-                <div className="flex shrink-0 items-center gap-3">
+                <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-t border-neutral-100 pt-2.5 sm:border-t-0 sm:pt-0">
                   {u.role !== 'admin' && (
                     <PlanSelect
                       email={u.email}
@@ -234,7 +237,7 @@ export default function AdminUsersClient() {
                   <button
                     type="button"
                     onClick={() => removeUser(u.email)}
-                    className="text-xs text-neutral-400 transition hover:text-red-600"
+                    className="text-xs font-medium text-neutral-400 transition hover:text-red-600"
                   >
                     利用停止
                   </button>

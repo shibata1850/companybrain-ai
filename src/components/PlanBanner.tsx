@@ -40,19 +40,25 @@ export default function PlanBanner() {
   const brainsLimit = u.plan.limits.brains;
   const qLimit = u.plan.limits.monthlyQuestions;
   return (
-    <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-neutral-200 bg-gradient-to-br from-white to-neutral-50 px-4 py-3 text-xs">
-      <span className="rounded-full bg-neutral-900 px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide text-white">
-        {u.plan.name}
-      </span>
-      <Meter label="ブレイン" used={u.brainsUsed} limit={brainsLimit} />
-      <Meter label="今月の質問" used={u.questionsThisMonth} limit={qLimit} />
-      <button
-        type="button"
-        onClick={() => setShowUpgrade(true)}
-        className="ml-auto rounded-full bg-neutral-900 px-3 py-1 text-[11px] font-medium text-white transition hover:bg-neutral-700"
-      >
-        プラン変更
-      </button>
+    <section className="rounded-2xl border border-neutral-200 bg-gradient-to-br from-white to-neutral-50 px-4 py-3 text-xs">
+      {/* Top row: plan name + change button always on one line. */}
+      <div className="flex items-center justify-between gap-2">
+        <span className="rounded-full bg-neutral-900 px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide text-white">
+          {u.plan.name}
+        </span>
+        <button
+          type="button"
+          onClick={() => setShowUpgrade(true)}
+          className="rounded-full bg-neutral-900 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-neutral-700 active:scale-95"
+        >
+          プラン変更
+        </button>
+      </div>
+      {/* Meters stack on mobile, sit inline on wider screens. */}
+      <div className="mt-2.5 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:gap-4">
+        <Meter label="ブレイン" used={u.brainsUsed} limit={brainsLimit} />
+        <Meter label="今月の質問" used={u.questionsThisMonth} limit={qLimit} />
+      </div>
       {showUpgrade && (
         <UpgradeModal
           current={u.plan}
