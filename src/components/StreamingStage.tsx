@@ -943,13 +943,6 @@ export default function StreamingStage({
         },
       });
       micStreamRef.current = stream;
-      // Start with the mic track DISABLED so nothing is captured until
-      // the user explicitly starts a turn (push-to-talk / tap-to-talk).
-      // This keeps the OS mic indicator off and the level meter flat
-      // while idle, so ambient sound is never picked up.
-      stream.getAudioTracks().forEach((t) => {
-        t.enabled = false;
-      });
       const InputCtx = (
         (window as unknown as { webkitAudioContext?: typeof AudioContext })
           .webkitAudioContext || window.AudioContext
@@ -1015,7 +1008,10 @@ export default function StreamingStage({
         }
         const rms = Math.sqrt(sum / buf.length);
         const scaled = Math.min(1, rms * 4);
-        setLevel(scaled);
+        // Only reflect mic level while the user is actually talking, so
+        // the meter stays flat (and clearly "not listening") between
+        // turns even though the track stays open for instant response.
+        setLevel(isTalkingRef.current ? scaled : 0);
 
         // VAD-ish bookkeeping: notice when the user starts and stops
         // talking so we can transition into "thinking" once they go
@@ -1078,10 +1074,6 @@ export default function StreamingStage({
     isTalkingRef.current = true;
     setIsTalking(true);
     setStatus('listening');
-    // Open the mic only now — capture starts here, not before.
-    micStreamRef.current?.getAudioTracks().forEach((t) => {
-      t.enabled = true;
-    });
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (sessionRef.current as any).sendRealtimeInput?.({ activityStart: {} });
@@ -1094,11 +1086,10 @@ export default function StreamingStage({
     if (!isTalkingRef.current) return;
     isTalkingRef.current = false;
     setIsTalking(false);
-    // Close the mic immediately so nothing is captured between turns.
-    micStreamRef.current?.getAudioTracks().forEach((t) => {
-      t.enabled = false;
-    });
+    // Flatten the level meter so it doesn't keep reacting to ambient
+    // sound between turns (the send-gate already stops upstream audio).
     setLevel(0);
+    userTalkingRef.current = false;
     if (!sessionRef.current || !sessionOpenRef.current) return;
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1106,8 +1097,14 @@ export default function StreamingStage({
     } catch (e) {
       console.warn('[live] activityEnd failed:', e);
     }
-    // The agent will start replying shortly; mark intent.
+    // The agent will start replying shortly; mark intent — and always
+    // arm a safety-net timeout so we can never get stuck on "thinking"
+    // if the model doesn't respond (e.g. it heard only silence).
     setStatus((s) => (s === 'listening' ? 'thinking' : s));
+    if (thinkingTimerRef.current) clearTimeout(thinkingTimerRef.current);
+    thinkingTimerRef.current = setTimeout(() => {
+      setStatus((s) => (s === 'thinking' ? 'listening' : s));
+    }, THINKING_FALLBACK_MS);
   }
 
   function sendTextMessage(text: string) {
