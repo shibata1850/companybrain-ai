@@ -674,7 +674,7 @@ export default function AvatarDetail({ id }: { id: string }) {
       </div>
 
       {/* Avatar identity card */}
-      <header className="flex items-center gap-4 rounded-2xl border border-neutral-200 bg-gradient-to-br from-white to-neutral-50 p-4 shadow-sm">
+      <header className="flex items-start gap-3 rounded-2xl border border-neutral-200 bg-gradient-to-br from-white to-neutral-50 p-4 shadow-sm sm:gap-4">
         <div className="relative shrink-0">
           <div className="h-16 w-16 overflow-hidden rounded-full bg-neutral-100 ring-2 ring-white shadow">
             {avatar.cover_url ? (

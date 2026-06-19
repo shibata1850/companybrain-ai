@@ -1248,7 +1248,7 @@ export default function StreamingStage({
 
   return (
     <div className="w-full space-y-3">
-      <div className="relative aspect-video w-full overflow-hidden rounded-3xl border border-neutral-200 bg-neutral-900">
+      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-3xl border border-neutral-200 bg-neutral-900 sm:aspect-video">
         {/* Minimise toggle — collapses the stage into a thin status bar. */}
         {onToggleMinimized && (
           <button
@@ -1400,24 +1400,26 @@ export default function StreamingStage({
           </div>
         )}
 
-        {/* Idle / ended overlay */}
+        {/* Idle / ended overlay. pt-14 keeps the content clear of the
+            top-corner buttons (隠す / 背景を変更) on narrow screens. */}
         {(status === 'idle' || status === 'ended') && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-neutral-900/60 text-center text-white backdrop-blur-sm">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-neutral-900/60 px-5 pb-5 pt-14 text-center text-white backdrop-blur-sm">
             <div>
-              <p className="text-base font-medium">
-                {avatarName} とリアルタイムで会話する
+              <p className="text-sm font-semibold sm:text-base">
+                {avatarName} と会話する
               </p>
               <p className="mt-1 text-xs text-white/70">
-                マイクへのアクセスを許可してください。
+                「始める」を押してマイクを許可してください。
               </p>
-              <p className="mt-2 text-[10px] text-white/40">
+              {/* Keyboard shortcuts are desktop-only; hide on touch. */}
+              <p className="mt-2 hidden text-[10px] text-white/40 sm:block">
                 ショートカット: S で開始 / Space を長押しして話す / Esc で終了 / / で検索
               </p>
             </div>
             <button
               type="button"
               onClick={start}
-              className="rounded-full bg-white px-5 py-2 text-sm font-medium text-neutral-900 transition hover:bg-white/90"
+              className="rounded-full bg-white px-8 py-3 text-base font-bold text-neutral-900 shadow-lg transition active:scale-95 hover:bg-white/90"
             >
               始める
             </button>
