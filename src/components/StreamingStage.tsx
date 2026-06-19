@@ -1472,11 +1472,17 @@ export default function StreamingStage({
                   ? 'animate-pulse bg-red-500 text-white ring-4 ring-red-300/60'
                   : 'bg-white/95 text-neutral-900 hover:bg-white'
               }`}
-              title="長押し(またはSpace長押し)で話す。離すと送信"
+              title="押している間だけ話す。離すと送信"
             >
-              {isTalking
-                ? '録音中… 離すと送信'
-                : '押している間だけ話す (またはSpace長押し)'}
+              {isTalking ? (
+                '録音中… 離すと送信'
+              ) : (
+                <>
+                  押している間だけ話す
+                  {/* Space-key hint is desktop-only. */}
+                  <span className="hidden sm:inline"> (またはSpace長押し)</span>
+                </>
+              )}
             </button>
             <button
               type="button"

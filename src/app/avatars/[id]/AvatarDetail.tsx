@@ -8,6 +8,7 @@ import StreamingStage, {
   type TranscriptSource,
 } from '@/components/StreamingStage';
 import { detectEscalation, escalationLabel, type EscalationCategory } from '@/lib/escalation';
+import useIsMobile from '@/lib/useIsMobile';
 import PhotoCropper from '@/components/PhotoCropper';
 import PortalMenu from '@/components/PortalMenu';
 
@@ -1516,6 +1517,7 @@ function TranscriptPanel({
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [showPinnedOnly, setShowPinnedOnly] = useState(false);
+  const isMobile = useIsMobile();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
@@ -1723,7 +1725,7 @@ function TranscriptPanel({
                     setSearchOpen(false);
                   }
                 }}
-                placeholder="会話を検索…(Esc で閉じる)"
+                placeholder={isMobile ? '会話を検索…' : '会話を検索…(Esc で閉じる)'}
                 className="flex-1 bg-transparent text-xs outline-none placeholder:text-neutral-400"
               />
               {search && (
@@ -1911,7 +1913,8 @@ function ThreadRow({
           placeholder="会話の名前"
         />
         <p className="mt-1 text-[10px] text-neutral-400">
-          Enter で確定 / Esc で取消
+          <span className="hidden sm:inline">Enter で確定 / Esc で取消</span>
+          <span className="sm:hidden">入力後、外側をタップで確定</span>
         </p>
       </div>
     );
