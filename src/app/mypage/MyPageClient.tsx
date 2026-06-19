@@ -1,13 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Plan } from '@/lib/plans';
 
 type Me = {
   email: string;
   role: 'admin' | 'member';
   display_name: string | null;
+  avatar_url?: string | null;
 };
 
 type Usage = {
@@ -74,9 +75,7 @@ export default function MyPageClient() {
       {/* Profile */}
       <section className="rounded-2xl border border-neutral-200 bg-white p-5">
         <div className="flex items-center gap-3">
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-neutral-900 text-lg text-white">
-            {(me?.display_name || me?.email || '?').charAt(0).toUpperCase()}
-          </span>
+          <AvatarPicker me={me} setMe={setMe} />
           <div className="min-w-0 flex-1">
             {editingName ? (
               <input
@@ -170,6 +169,135 @@ export default function MyPageClient() {
       >
         ログアウト
       </button>
+    </div>
+  );
+}
+
+/**
+ * Clickable avatar that opens a hidden file input. Uploads the picked
+ * image to /api/auth/avatar and refreshes the in-page `me` so the new
+ * picture renders immediately. Long-press / right-click to remove.
+ */
+function AvatarPicker({
+  me,
+  setMe,
+}: {
+  me: Me | null;
+  setMe: React.Dispatch<React.SetStateAction<Me | null>>;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = ''; // allow re-uploading the same file
+    if (!f) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.append('photo', f);
+      const res = await fetch('/api/auth/avatar', {
+        method: 'POST',
+        body: fd,
+      });
+      const j = (await res.json()) as {
+        ok?: boolean;
+        avatar_url?: string | null;
+        error?: string;
+      };
+      if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setMe((m) => (m ? { ...m, avatar_url: j.avatar_url ?? null } : m));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    if (!me?.avatar_url) return;
+    if (!confirm('プロフィール画像を削除しますか?')) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/auth/avatar', { method: 'DELETE' });
+      const j = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setMe((m) => (m ? { ...m, avatar_url: null } : m));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const url = me?.avatar_url ?? null;
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={busy}
+        title={url ? 'クリックで画像を変更' : 'クリックで画像をアップロード'}
+        className="relative grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full bg-neutral-900 text-lg text-white shadow ring-1 ring-neutral-200 transition hover:opacity-90 disabled:opacity-50"
+      >
+        {url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={url}
+            alt=""
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <span>
+            {(me?.display_name || me?.email || '?').charAt(0).toUpperCase()}
+          </span>
+        )}
+      </button>
+      {/* Small camera indicator anchored to the corner so users see
+          the avatar is interactive without needing hover. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -bottom-0.5 -right-0.5 grid h-5 w-5 place-items-center rounded-full bg-neutral-900 text-white ring-2 ring-white"
+      >
+        <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden>
+          <path
+            d="M3.5 5.5h2L7 4h2l1.5 1.5h2A1.5 1.5 0 0 1 14 7v5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12V7a1.5 1.5 0 0 1 1.5-1.5z"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            fill="none"
+            strokeLinejoin="round"
+          />
+          <circle cx="8" cy="9.5" r="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
+        </svg>
+      </span>
+      {url && (
+        <button
+          type="button"
+          onClick={remove}
+          disabled={busy}
+          title="プロフィール画像を削除"
+          className="absolute -top-1 -right-1 grid h-5 w-5 place-items-center rounded-full bg-white text-neutral-500 shadow ring-1 ring-neutral-200 transition hover:text-red-600"
+        >
+          <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden>
+            <path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          </svg>
+        </button>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        onChange={onPick}
+        className="sr-only"
+      />
+      {error && (
+        <p className="mt-1 max-w-[180px] text-[10px] font-bold text-red-600">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

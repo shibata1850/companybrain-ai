@@ -36,6 +36,8 @@ export type AppUser = {
   role: 'admin' | 'member';
   /** The user's own chosen name (only they see/edit it). */
   display_name: string | null;
+  /** Storage path of the user's profile picture, or null. */
+  avatar_path: string | null;
 };
 
 /**
@@ -54,7 +56,7 @@ export async function getAppUser(): Promise<AppUser | null> {
   const db = supabaseAdmin();
   const { data } = await db
     .from('app_users')
-    .select('email, role, display_name, suspended_at')
+    .select('email, role, display_name, suspended_at, avatar_path')
     .eq('email', email)
     .single();
   if (!data) return null;
@@ -65,6 +67,7 @@ export async function getAppUser(): Promise<AppUser | null> {
     email: data.email,
     role: data.role === 'admin' ? 'admin' : 'member',
     display_name: data.display_name ?? null,
+    avatar_path: data.avatar_path ?? null,
   };
 }
 
