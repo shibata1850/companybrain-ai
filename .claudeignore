@@ -1,0 +1,8 @@
+# AI(Claude)がアクセスしてはいけない機密ファイル。
+# 記事の「防護壁」に相当。CLAUDE.md の Deny ルールと合わせて二重で保護する。
+.env
+.env.*
+!.env.example
+**/secrets/**
+*.pem
+*.key
