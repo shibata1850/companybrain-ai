@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { answerAsPersona, embedTexts, type AnswerLength } from '@/lib/gemini';
 import { authorizeAvatar } from '@/lib/authServer';
 import {
+  adminAnswerModel,
   answerModelForPlan,
   canAsk,
   getPlanUsage,
@@ -97,8 +98,8 @@ export async function POST(
       knowledge,
       length,
       // Higher plans route to higher-tier Gemini models automatically.
-      // Admins (no plan) fall through to the default model in gemini.ts.
-      model: usage ? answerModelForPlan(usage.plan) : undefined,
+      // Admins always get the highest-quality model.
+      model: usage ? answerModelForPlan(usage.plan) : adminAnswerModel(),
     });
 
     await db

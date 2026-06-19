@@ -215,3 +215,26 @@ function modelForPlanId(id: PlanId): string {
 export function answerModelForPlan(plan: Plan): string {
   return modelForPlanId(plan.id);
 }
+
+/**
+ * Highest-quality answer model — used for admins, who always get the
+ * best available regardless of plan. Defaults to the same id as the Pro
+ * tier (gemini-2.5-pro) and is overridable via GEMINI_MODEL_ADMIN, then
+ * GEMINI_MODEL_PRO.
+ */
+export function adminAnswerModel(): string {
+  return (
+    process.env.GEMINI_MODEL_ADMIN ||
+    process.env.GEMINI_MODEL_PRO ||
+    'gemini-2.5-pro'
+  );
+}
+
+/**
+ * Live (voice) model for admins — the best available. Falls back to the
+ * supplied default live model so behaviour is unchanged unless a
+ * premium live model id is set via GEMINI_LIVE_MODEL_ADMIN.
+ */
+export function adminLiveModel(fallback: string): string {
+  return process.env.GEMINI_LIVE_MODEL_ADMIN || fallback;
+}
