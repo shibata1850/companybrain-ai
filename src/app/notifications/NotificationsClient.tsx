@@ -18,16 +18,18 @@ export default function NotificationsClient() {
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    setError(null);
     try {
       const r = await fetch('/api/notifications', { cache: 'no-store' });
-      if (!r.ok) return;
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const j = (await r.json()) as { notifications: N[]; unread_count: number };
       setItems(j.notifications ?? []);
       setUnread(j.unread_count ?? 0);
-    } catch {
-      // ignore
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -74,6 +76,22 @@ export default function NotificationsClient() {
       </header>
 
       {isAdmin && <Compose onSent={load} />}
+
+      {error && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <span>エラー: {error}</span>
+          <button
+            type="button"
+            onClick={() => {
+              setLoading(true);
+              void load();
+            }}
+            className="shrink-0 rounded-full border border-red-300 bg-white px-3 py-1.5 text-xs font-bold text-red-700 transition hover:bg-red-100"
+          >
+            再読み込み
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <p className="py-12 text-center text-sm text-neutral-400">読み込み中…</p>

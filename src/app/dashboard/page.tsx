@@ -33,14 +33,20 @@ export default function HomePage() {
     });
   }, [avatars, search]);
 
-  const load = useCallback(async () => {
+  const lastLoadRef = useRef(0);
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setError(null);
     try {
       const res = await fetch('/api/avatars', { cache: 'no-store' });
       const json = (await res.json()) as { avatars?: Avatar[]; error?: string };
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
       setAvatars(json.avatars ?? []);
+      setError(null);
+      lastLoadRef.current = Date.now();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      // A background (silent) refresh shouldn't blow away the list with
+      // a full-screen error; only surface errors on explicit loads.
+      if (!opts?.silent) setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -52,7 +58,11 @@ export default function HomePage() {
       // Avoid a server refetch wiping the in-progress drag draft if the
       // OS quickly blurs/focuses the window during a long-press drag.
       if (document.querySelector('[data-sort-id].opacity-80')) return;
-      load();
+      // Throttle: skip background refetches that fire within 30s of the
+      // last load (re-signing every cover URL on each tab focus was
+      // wasteful). Errors stay silent so a flaky network doesn't flash.
+      if (Date.now() - lastLoadRef.current < 30_000) return;
+      load({ silent: true });
     }
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
@@ -123,19 +133,55 @@ export default function HomePage() {
       <PlanBanner />
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 anim-fade-in">
-          <strong>エラー:</strong> {error}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 anim-fade-in">
+          <span>
+            <strong>エラー:</strong> {error}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setLoading(true);
+              void load();
+            }}
+            className="shrink-0 rounded-full border border-red-300 bg-white px-3 py-1.5 text-xs font-bold text-red-700 transition hover:bg-red-100"
+          >
+            再読み込み
+          </button>
         </div>
       )}
 
       {loading && <SkeletonGrid />}
 
       {!loading && !error && avatars.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 p-16 text-center anim-fade-in">
-          <p className="text-neutral-500">まだブレインがありません。</p>
+        <div className="rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 p-8 text-center anim-fade-in sm:p-12">
+          <h2 className="text-lg font-bold tracking-tight text-neutral-900">
+            ようこそ。最初のブレインを作りましょう
+          </h2>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-neutral-500">
+            ブレインは、社内資料や人物の知識を覚えさせた「あなた専用の AI」です。
+          </p>
+          {/* 3-step onboarding so first-timers know the whole flow. */}
+          <ol className="mx-auto mt-6 grid max-w-xl gap-3 text-left sm:grid-cols-3">
+            {[
+              { n: 1, t: 'ブレインを作る', d: '名前を決めて、資料や動画を登録' },
+              { n: 2, t: '質問する', d: '音声やテキストでいつでも質問' },
+              { n: 3, t: '頼る', d: '担当者の代わりに答えてくれる' },
+            ].map((s) => (
+              <li
+                key={s.n}
+                className="rounded-xl border border-neutral-200 bg-white p-3"
+              >
+                <span className="grid h-7 w-7 place-items-center rounded-full bg-neutral-900 text-xs font-bold text-white">
+                  {s.n}
+                </span>
+                <p className="mt-2 text-sm font-bold text-neutral-900">{s.t}</p>
+                <p className="mt-0.5 text-xs text-neutral-500">{s.d}</p>
+              </li>
+            ))}
+          </ol>
           <Link
             href="/avatars/new"
-            className="mt-5 inline-block rounded-full bg-neutral-900 px-5 py-2 text-sm font-medium text-white transition hover:bg-neutral-700 active:scale-[0.98]"
+            className="mt-6 inline-block rounded-full bg-neutral-900 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-neutral-700 active:scale-[0.98]"
           >
             最初のブレインを作る
           </Link>
