@@ -104,9 +104,6 @@ function Hero() {
               料金を見る
             </a>
           </div>
-          <p className="mt-3 text-[11px] text-neutral-400">
-            クレジットカード不要・1 分で開始
-          </p>
         </div>
 
         <HeroDemoCard />
@@ -142,8 +139,8 @@ function HeroDemoCard() {
             </div>
           </div>
           <div className="flex items-start gap-2">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-neutral-900 text-sm text-white">
-              🧠
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-neutral-900 text-[10px] font-bold tracking-tight text-white">
+              CB
             </span>
             <div className="max-w-[85%] rounded-2xl rounded-tl-md bg-neutral-100 px-3.5 py-2 text-sm leading-relaxed text-neutral-800">
               新幹線は普通車指定席まで、宿泊費は 1 泊 12,000 円(東京・大阪は 15,000 円)が上限です。
@@ -166,7 +163,8 @@ function HeroDemoCard() {
 type DemoPersona = {
   id: string;
   name: string;
-  emoji: string;
+  /** 2-character short tag shown on the persona avatar tile. */
+  tag: string;
   bio: string;
   qa: { q: string; a: string }[];
 };
@@ -175,7 +173,7 @@ const DEMO_PERSONAS: DemoPersona[] = [
   {
     id: 'accounting',
     name: '経理ヘルプデスク',
-    emoji: '💼',
+    tag: '経理',
     bio: '経理部の規程に詳しい仮想アシスタント',
     qa: [
       {
@@ -195,7 +193,7 @@ const DEMO_PERSONAS: DemoPersona[] = [
   {
     id: 'sales',
     name: '営業 トップセールス',
-    emoji: '🚀',
+    tag: '営業',
     bio: '営業部長の口調と知識を学んだブレイン',
     qa: [
       {
@@ -215,7 +213,7 @@ const DEMO_PERSONAS: DemoPersona[] = [
   {
     id: 'engineer',
     name: 'シニアエンジニア',
-    emoji: '⚡',
+    tag: '技術',
     bio: '社内コード規約・設計判断のレビュアー',
     qa: [
       {
@@ -299,8 +297,8 @@ function PlaygroundDemo() {
                       : 'border-neutral-200 bg-white hover:border-neutral-400'
                   }`}
                 >
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-neutral-900 text-lg text-white">
-                    {p.emoji}
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-neutral-900 text-[11px] font-bold tracking-tight text-white">
+                    {p.tag}
                   </span>
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium text-neutral-900">
@@ -328,8 +326,8 @@ function PlaygroundDemo() {
             <div className="flex h-[420px] flex-col">
               <div className="flex-1 space-y-4 overflow-y-auto p-5">
                 <div className="flex items-start gap-2">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-neutral-900 text-sm text-white">
-                    {persona.emoji}
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-neutral-900 text-[10px] font-bold tracking-tight text-white">
+                    {persona.tag}
                   </span>
                   <div className="max-w-[80%] rounded-2xl rounded-tl-md bg-neutral-100 px-3.5 py-2 text-sm text-neutral-800">
                     こんにちは。{persona.bio}です。下から質問を選んでみてください。
@@ -343,8 +341,8 @@ function PlaygroundDemo() {
                       </div>
                     </div>
                     <div className="flex items-start gap-2">
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-neutral-900 text-sm text-white">
-                        {persona.emoji}
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-neutral-900 text-[10px] font-bold tracking-tight text-white">
+                        {persona.tag}
                       </span>
                       <div className="max-w-[80%] rounded-2xl rounded-tl-md bg-neutral-100 px-3.5 py-2 text-sm leading-relaxed text-neutral-800">
                         {thinking ? (
@@ -624,8 +622,8 @@ function VideoLearnMock() {
           </div>
         </div>
         <div className="mt-4 flex items-center gap-2">
-          <span className="grid h-8 w-8 place-items-center rounded-full bg-neutral-900 text-white">
-            🧠
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-neutral-900 text-[10px] font-bold tracking-tight text-white">
+            CB
           </span>
           <div>
             <p className="text-sm font-medium text-neutral-900">
@@ -671,8 +669,8 @@ function VoiceChatMock() {
       <div className="grid gap-6 p-6 md:grid-cols-[1fr_1.1fr]">
         <div className="flex flex-col items-center justify-center rounded-2xl bg-neutral-50 p-6 text-center">
           <div className="relative">
-            <span className="grid h-24 w-24 place-items-center rounded-full bg-neutral-900 text-4xl text-white">
-              🧠
+            <span className="grid h-24 w-24 place-items-center rounded-full bg-neutral-900 text-lg font-bold tracking-tight text-white">
+              CB
             </span>
             <span className="absolute -inset-2 rounded-full border-2 border-emerald-500/40" />
           </div>
@@ -704,8 +702,8 @@ function VoiceChatMock() {
             </div>
           </div>
           <div className="flex items-start gap-2">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-neutral-900 text-sm text-white">
-              🧠
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-neutral-900 text-[10px] font-bold tracking-tight text-white">
+              CB
             </span>
             <div className="max-w-[85%] rounded-2xl rounded-tl-md bg-neutral-100 px-3.5 py-2 leading-relaxed text-neutral-800">
               ゼロ条件で値引きしちゃダメだ。「年契約なら 10% 引きます」とか、必ず条件交換にしよう。相場を崩すと後で全部刺さるよ。
@@ -1108,8 +1106,8 @@ function FinalCta() {
   return (
     <section className="lp-sect-light py-24 sm:py-32">
       <div className="mx-auto max-w-md px-6 text-center">
-        <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-neutral-900 text-xl text-white">
-          🧠
+        <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-neutral-900 text-sm font-bold tracking-tight text-white">
+          CB
         </div>
         <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
           あなたの会社にも、
