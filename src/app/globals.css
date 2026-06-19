@@ -85,13 +85,26 @@ section[id] {
 .lp-bg {
   position: relative;
   background-color: #f5f2ff;
+  /* Establish our own stacking context so the fixed orbs below sit
+     above .lp-bg's own background color but below the content sections,
+     which are explicitly z-index: 1. (Without isolation, z-index: -1
+     on .lp-orbs would slip behind the parent background and disappear,
+     which was the original bug.) */
+  isolation: isolate;
 }
 .lp-orbs {
   position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: 0;
   overflow: hidden;
   pointer-events: none;
+}
+/* Lift every direct child section/footer above the orb layer so text
+   and cards always render on top of the moving colour. */
+.lp-bg > section,
+.lp-bg > footer {
+  position: relative;
+  z-index: 1;
 }
 .lp-orb {
   position: absolute;
