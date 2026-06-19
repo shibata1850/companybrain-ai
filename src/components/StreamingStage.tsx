@@ -7,6 +7,7 @@ import {
   type LiveServerMessage,
   type Session,
 } from '@google/genai';
+import useIsMobile from '@/lib/useIsMobile';
 
 type Status =
   | 'idle'
@@ -124,6 +125,7 @@ export default function StreamingStage({
   /** Fires when the user toggles the minimise button on the stage. */
   onToggleMinimized?: () => void;
 }) {
+  const isMobile = useIsMobile();
   const [status, setStatus] = useState<Status>('idle');
   // Mirror status in a ref so event handlers (which capture stale state)
   // can read the current value without being recreated on every change.
@@ -1450,40 +1452,48 @@ export default function StreamingStage({
         {/* Bottom control bar: large push-to-talk button + session end. */}
         {isLive && (
           <div className="absolute inset-x-3 bottom-3 flex items-center justify-between gap-2">
-            <button
-              type="button"
-              onMouseDown={startTalking}
-              onMouseUp={stopTalking}
-              onMouseLeave={() => {
-                if (isTalkingRef.current) stopTalking();
-              }}
-              onTouchStart={(e) => {
-                e.preventDefault();
-                startTalking();
-              }}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                stopTalking();
-              }}
-              onContextMenu={(e) => e.preventDefault()}
-              disabled={muted}
-              className={`flex-1 select-none rounded-full px-4 py-2 text-sm font-bold shadow-md backdrop-blur transition active:scale-[0.98] disabled:opacity-50 ${
-                isTalking
-                  ? 'animate-pulse bg-red-500 text-white ring-4 ring-red-300/60'
-                  : 'bg-white/95 text-neutral-900 hover:bg-white'
-              }`}
-              title="押している間だけ話す。離すと送信"
-            >
-              {isTalking ? (
-                '録音中… 離すと送信'
-              ) : (
-                <>
-                  押している間だけ話す
-                  {/* Space-key hint is desktop-only. */}
-                  <span className="hidden sm:inline"> (またはSpace長押し)</span>
-                </>
-              )}
-            </button>
+            {isMobile ? (
+              // Mobile: tap to start, tap again to stop (toggle).
+              <button
+                type="button"
+                onClick={() => {
+                  if (isTalkingRef.current) stopTalking();
+                  else startTalking();
+                }}
+                onContextMenu={(e) => e.preventDefault()}
+                disabled={muted}
+                className={`flex-1 select-none rounded-full px-4 py-3 text-sm font-bold shadow-md backdrop-blur transition active:scale-[0.98] disabled:opacity-50 ${
+                  isTalking
+                    ? 'animate-pulse bg-red-500 text-white ring-4 ring-red-300/60'
+                    : 'bg-white/95 text-neutral-900 hover:bg-white'
+                }`}
+                title="タップで話す。もう一度タップで停止"
+              >
+                {isTalking ? '停止' : '話す'}
+              </button>
+            ) : (
+              // Desktop: hold to talk (mouse / Space).
+              <button
+                type="button"
+                onMouseDown={startTalking}
+                onMouseUp={stopTalking}
+                onMouseLeave={() => {
+                  if (isTalkingRef.current) stopTalking();
+                }}
+                onContextMenu={(e) => e.preventDefault()}
+                disabled={muted}
+                className={`flex-1 select-none rounded-full px-4 py-2 text-sm font-bold shadow-md backdrop-blur transition active:scale-[0.98] disabled:opacity-50 ${
+                  isTalking
+                    ? 'animate-pulse bg-red-500 text-white ring-4 ring-red-300/60'
+                    : 'bg-white/95 text-neutral-900 hover:bg-white'
+                }`}
+                title="押している間だけ話す。離すと送信"
+              >
+                {isTalking
+                  ? '録音中… 離すと送信'
+                  : '押している間だけ話す (またはSpace長押し)'}
+              </button>
+            )}
             <button
               type="button"
               onClick={stop}
