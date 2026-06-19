@@ -163,8 +163,10 @@ function HeroDemoCard() {
 type DemoPersona = {
   id: string;
   name: string;
-  /** 2-character short tag shown on the persona avatar tile. */
-  tag: string;
+  /** Icon used on the persona avatar tile. */
+  icon: keyof typeof ICONS;
+  /** Gradient accent for the avatar tile. */
+  accent: string;
   bio: string;
   qa: { q: string; a: string }[];
 };
@@ -173,7 +175,8 @@ const DEMO_PERSONAS: DemoPersona[] = [
   {
     id: 'accounting',
     name: '経理ヘルプデスク',
-    tag: '経理',
+    icon: 'briefcase',
+    accent: 'from-indigo-500 to-violet-600',
     bio: '経理部の規程に詳しい仮想アシスタント',
     qa: [
       {
@@ -193,7 +196,8 @@ const DEMO_PERSONAS: DemoPersona[] = [
   {
     id: 'sales',
     name: '営業 トップセールス',
-    tag: '営業',
+    icon: 'chart',
+    accent: 'from-rose-500 to-orange-500',
     bio: '営業部長の口調と知識を学んだブレイン',
     qa: [
       {
@@ -213,7 +217,8 @@ const DEMO_PERSONAS: DemoPersona[] = [
   {
     id: 'engineer',
     name: 'シニアエンジニア',
-    tag: '技術',
+    icon: 'code',
+    accent: 'from-emerald-500 to-teal-600',
     bio: '社内コード規約・設計判断のレビュアー',
     qa: [
       {
@@ -297,8 +302,13 @@ function PlaygroundDemo() {
                       : 'border-neutral-200 bg-white hover:border-neutral-400'
                   }`}
                 >
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-neutral-900 text-[11px] font-bold tracking-tight text-white">
-                    {p.tag}
+                  <span
+                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br ${p.accent} text-white shadow-md`}
+                  >
+                    {(() => {
+                      const Icon = ICONS[p.icon];
+                      return <Icon />;
+                    })()}
                   </span>
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium text-neutral-900">
@@ -326,8 +336,13 @@ function PlaygroundDemo() {
             <div className="flex h-[420px] flex-col">
               <div className="flex-1 space-y-4 overflow-y-auto p-5">
                 <div className="flex items-start gap-2">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-neutral-900 text-[10px] font-bold tracking-tight text-white">
-                    {persona.tag}
+                  <span
+                    className={`grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br ${persona.accent} text-white shadow`}
+                  >
+                    {(() => {
+                      const Icon = ICONS[persona.icon];
+                      return <Icon />;
+                    })()}
                   </span>
                   <div className="max-w-[80%] rounded-2xl rounded-tl-md bg-neutral-100 px-3.5 py-2 text-sm text-neutral-800">
                     こんにちは。{persona.bio}です。下から質問を選んでみてください。
@@ -341,8 +356,13 @@ function PlaygroundDemo() {
                       </div>
                     </div>
                     <div className="flex items-start gap-2">
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-neutral-900 text-[10px] font-bold tracking-tight text-white">
-                        {persona.tag}
+                      <span
+                        className={`grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br ${persona.accent} text-white shadow`}
+                      >
+                        {(() => {
+                          const Icon = ICONS[persona.icon];
+                          return <Icon />;
+                        })()}
                       </span>
                       <div className="max-w-[80%] rounded-2xl rounded-tl-md bg-neutral-100 px-3.5 py-2 text-sm leading-relaxed text-neutral-800">
                         {thinking ? (
@@ -582,6 +602,23 @@ const ICONS = {
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M4.5 8h15l-1.2 12a2 2 0 0 1-2 1.8H7.7a2 2 0 0 1-2-1.8z" />
       <path d="M8.5 8V5.5a3.5 3.5 0 0 1 7 0V8" />
+    </svg>
+  ),
+  /* Persona icons for the demo personas. */
+  briefcase: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="3" y="7" width="18" height="13" rx="2.5" />
+      <path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 12h18" />
+    </svg>
+  ),
+  chart: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 20h18M5 20V12M10 20V8M15 20v-6M20 20V4" />
+    </svg>
+  ),
+  code: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M9 8l-5 4 5 4M15 8l5 4-5 4M13 6l-2 12" />
     </svg>
   ),
 };
