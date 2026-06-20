@@ -59,13 +59,15 @@ export default function RequestDetailClient({ id }: { id: string }) {
   }, []);
 
   // Admin: pull own avatars so they can attach one to the request.
+  // Depend on me?.role only so we don't refetch every time the parent
+  // hands us a new `me` reference with the same role.
   useEffect(() => {
     if (me?.role !== 'admin') return;
     fetch('/api/avatars', { cache: 'no-store' })
       .then((r) => r.json())
       .then((j) => setMyAvatars(j.avatars ?? []))
       .catch(() => {});
-  }, [me]);
+  }, [me?.role]);
 
   async function patch(updates: Record<string, unknown>) {
     setBusy(true);

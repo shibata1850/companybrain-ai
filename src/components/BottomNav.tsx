@@ -43,7 +43,7 @@ export default function BottomNav({ show }: { show: boolean }) {
       clearInterval(t);
       window.removeEventListener('cb-notifications-changed', onChange);
     };
-  }, [show, loadBadges, pathname]);
+  }, [show, loadBadges]);
 
   if (!show) return null;
 

@@ -194,7 +194,11 @@ export async function GET(req: NextRequest) {
     .eq('actor', targetUser)
     .order('created_at', { ascending: false })
     .limit(1000);
-  if (q) query = query.ilike('content', `%${q}%`);
+  if (q) {
+    // Escape LIKE wildcards so user input is matched literally.
+    const safe = q.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+    query = query.ilike('content', `%${safe}%`);
+  }
   // Plan enforcement: members only see history within their plan's
   // historyDays window. Admins see everything.
   if (me.role !== 'admin') {

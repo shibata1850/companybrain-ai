@@ -593,26 +593,40 @@ export default function AvatarDetail({ id }: { id: string }) {
     }
   }
 
+  // Prevents double-save when both onBlur and Enter fire for the same
+  // edit (or when one fires while the previous save is still in flight).
+  const commitInFlightRef = useRef(false);
+
   async function commitNameEdit() {
-    if (!editingName) return;
+    if (!editingName || commitInFlightRef.current) return;
     const next = nameDraft.trim();
     if (!next || next === data?.avatar.name) {
       setEditingName(false);
       return;
     }
-    const ok = await saveMeta({ name: next });
-    if (ok) setEditingName(false);
+    commitInFlightRef.current = true;
+    try {
+      const ok = await saveMeta({ name: next });
+      if (ok) setEditingName(false);
+    } finally {
+      commitInFlightRef.current = false;
+    }
   }
 
   async function commitDescEdit() {
-    if (!editingDesc) return;
+    if (!editingDesc || commitInFlightRef.current) return;
     const next = descDraft.trim();
     if (next === (data?.avatar.description ?? '')) {
       setEditingDesc(false);
       return;
     }
-    const ok = await saveMeta({ description: next || null });
-    if (ok) setEditingDesc(false);
+    commitInFlightRef.current = true;
+    try {
+      const ok = await saveMeta({ description: next || null });
+      if (ok) setEditingDesc(false);
+    } finally {
+      commitInFlightRef.current = false;
+    }
   }
 
   if (error && !data) {

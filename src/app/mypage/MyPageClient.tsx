@@ -43,21 +43,29 @@ export default function MyPageClient() {
       .catch(() => {});
   }, []);
 
+  // Prevents double-POST when both onBlur and Enter fire for the same edit.
+  const saveNameInFlightRef = useRef(false);
   async function saveName() {
-    const value = nameDraft.trim();
-    setSaveError(null);
-    const res = await fetch('/api/auth/profile', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ display_name: value }),
-    });
-    if (res.ok) {
-      const j = (await res.json()) as { display_name: string | null };
-      setMe((m) => (m ? { ...m, display_name: j.display_name } : m));
-      setEditingName(false);
-    } else {
-      // Keep the input open so the user can retry. Surface the failure.
-      setSaveError('表示名の保存に失敗しました');
+    if (saveNameInFlightRef.current) return;
+    saveNameInFlightRef.current = true;
+    try {
+      const value = nameDraft.trim();
+      setSaveError(null);
+      const res = await fetch('/api/auth/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ display_name: value }),
+      });
+      if (res.ok) {
+        const j = (await res.json()) as { display_name: string | null };
+        setMe((m) => (m ? { ...m, display_name: j.display_name } : m));
+        setEditingName(false);
+      } else {
+        // Keep the input open so the user can retry. Surface the failure.
+        setSaveError('表示名の保存に失敗しました');
+      }
+    } finally {
+      saveNameInFlightRef.current = false;
     }
   }
 
