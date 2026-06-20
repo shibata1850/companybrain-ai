@@ -6,6 +6,7 @@ import { extractFrameAndAudio } from '@/lib/media';
 import { processTrainingVideo } from '@/lib/processing';
 import { chunkTranscript, embedTexts } from '@/lib/gemini';
 import { getAppUser } from '@/lib/authServer';
+import { enforceRateLimit } from '@/lib/rateLimit';
 import {
   canAddMaterial,
   canCreateBrain,
@@ -66,6 +67,10 @@ export async function POST(req: NextRequest) {
   if (!me) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
+  // Burst guard: brain creation runs ffmpeg + Gemini transcription, so
+  // cap how fast one account can fire it.
+  const limited = enforceRateLimit(`avatar-create:${me.email}`, 8, 60_000);
+  if (limited) return limited;
   // Plan enforcement: members only. Admins have no plan / no caps.
   if (me.role !== 'admin') {
     const usage = await getPlanUsage(me);

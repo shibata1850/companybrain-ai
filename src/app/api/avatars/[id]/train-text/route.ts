@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizeAvatar } from '@/lib/authServer';
+import { enforceRateLimit } from '@/lib/rateLimit';
 import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase';
 import { chunkTranscript, embedTexts } from '@/lib/gemini';
@@ -21,6 +22,8 @@ export async function POST(
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }
+  const limited = enforceRateLimit(`train-text:${auth.me.email}`, 20, 60_000);
+  if (limited) return limited;
   if (auth.fromRequest) {
     return NextResponse.json(
       {

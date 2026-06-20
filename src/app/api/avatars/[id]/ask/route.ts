@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase';
 import { answerAsPersona, embedTexts, type AnswerLength } from '@/lib/gemini';
 import { authorizeAvatar } from '@/lib/authServer';
+import { enforceRateLimit } from '@/lib/rateLimit';
 import {
   adminAnswerModel,
   answerModelForPlan,
@@ -33,6 +34,8 @@ export async function POST(
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }
+  const limited = enforceRateLimit(`ask:${auth.me.email}`, 30, 60_000);
+  if (limited) return limited;
   // Plan enforcement: members only. Admins have no plan / no caps.
   const usage =
     auth.me.role === 'admin' ? null : await getPlanUsage(auth.me);

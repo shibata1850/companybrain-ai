@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseRoute } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabase';
+import { clientIp, enforceRateLimit } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,6 +21,10 @@ export async function POST(req: NextRequest) {
     password?: string;
     company?: string;
   };
+  // Abuse guard: cap new-account creation per source IP.
+  const limited = enforceRateLimit(`signup:ip:${clientIp(req)}`, 5, 60_000);
+  if (limited) return limited;
+
   const cleanEmail = email?.trim().toLowerCase();
   if (!cleanEmail || !/.+@.+\..+/.test(cleanEmail)) {
     return NextResponse.json(

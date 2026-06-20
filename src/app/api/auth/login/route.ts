@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseRoute } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabase';
+import { clientIp, enforceRateLimit } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,6 +23,13 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
+
+  // Brute-force guard: cap attempts per source IP and per target email.
+  const ip = clientIp(req);
+  const limited =
+    enforceRateLimit(`login:ip:${ip}`, 20, 60_000) ||
+    enforceRateLimit(`login:email:${email.trim().toLowerCase()}`, 8, 60_000);
+  if (limited) return limited;
 
   const supa = supabaseRoute();
   const { error } = await supa.auth.signInWithPassword({

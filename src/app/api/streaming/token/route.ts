@@ -11,6 +11,7 @@ import {
   getVoiceSecondsThisMonth,
   planLimitResponse,
 } from '@/lib/planEnforce';
+import { enforceRateLimit } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -48,6 +49,13 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }
+  // Burst guard on token minting (each live session costs real money).
+  const limited = enforceRateLimit(
+    `live-token:${auth.me.email}`,
+    10,
+    60_000,
+  );
+  if (limited) return limited;
   // Enforce monthly question quota AND voice minute quota. Members are
   // blocked once over limit; admins have no plan, and request-built
   // (gifted) brains are exempt from limits entirely.
