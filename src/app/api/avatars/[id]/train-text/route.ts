@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizeAvatar } from '@/lib/authServer';
 import { enforceRateLimit } from '@/lib/rateLimit';
+import { reportError } from '@/lib/errorReport';
 import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase';
 import { chunkTranscript, embedTexts } from '@/lib/gemini';
@@ -100,6 +101,7 @@ export async function POST(
       })
       .eq('id', videoId);
   } catch (e) {
+    reportError(e, { route: 'POST /api/avatars/[id]/train-text', actor: auth.me.email });
     const message = e instanceof Error ? e.message : String(e);
     await db
       .from('training_videos')

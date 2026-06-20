@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { storageBucket, supabaseAdmin } from '@/lib/supabase';
 import { chunkTranscript, embedTexts } from '@/lib/gemini';
 import { authorizeAvatar } from '@/lib/authServer';
+import { reportError } from '@/lib/errorReport';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -90,6 +91,10 @@ export async function PATCH(
         .update({ status: 'ready' })
         .eq('id', params.id);
     } catch (e) {
+      reportError(e, {
+        route: 'PATCH /api/training-videos/[id]',
+        actor: auth.me.email,
+      });
       const message = e instanceof Error ? e.message : String(e);
       await db
         .from('training_videos')

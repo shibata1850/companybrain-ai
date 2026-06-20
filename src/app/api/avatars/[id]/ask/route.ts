@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { answerAsPersona, embedTexts, type AnswerLength } from '@/lib/gemini';
 import { authorizeAvatar } from '@/lib/authServer';
 import { enforceRateLimit } from '@/lib/rateLimit';
+import { reportError } from '@/lib/errorReport';
 import {
   adminAnswerModel,
   answerModelForPlan,
@@ -117,6 +118,7 @@ export async function POST(
     revalidatePath(`/avatars/${avatarId}`);
     return NextResponse.json({ id: generationId, answer, length });
   } catch (e) {
+    reportError(e, { route: 'POST /api/avatars/[id]/ask', actor: auth.me.email });
     const message = e instanceof Error ? e.message : String(e);
     await db
       .from('generations')

@@ -7,6 +7,7 @@ import { processTrainingVideo } from '@/lib/processing';
 import { chunkTranscript, embedTexts } from '@/lib/gemini';
 import { getAppUser } from '@/lib/authServer';
 import { enforceRateLimit } from '@/lib/rateLimit';
+import { reportError } from '@/lib/errorReport';
 import {
   canAddMaterial,
   canCreateBrain,
@@ -174,6 +175,7 @@ export async function POST(req: NextRequest) {
     const out = await extractFrameAndAudio(videoBytes, ext);
     frame = out.frame;
   } catch (e) {
+    reportError(e, { route: 'POST /api/avatars (ffmpeg)', actor: me.email });
     const message = e instanceof Error ? e.message : String(e);
     return rollback(`ffmpeg extraction failed: ${message}`);
   }
@@ -206,8 +208,10 @@ export async function POST(req: NextRequest) {
       videoBytes,
       mimeType,
     });
-  } catch {
-    // status is already 'error' on the training_videos row; avatar still exists.
+  } catch (e) {
+    // status is already 'error' on the training_videos row; avatar still
+    // exists. Surface it for monitoring so silent embed failures are seen.
+    reportError(e, { route: 'POST /api/avatars (processTrainingVideo)', actor: me.email });
   }
 
   // Invalidate the home page's router cache so the just-created brain
@@ -336,6 +340,7 @@ async function seedTextKnowledge(
       })
       .eq('id', videoId);
   } catch (e) {
+    reportError(e, { route: 'POST /api/avatars (text seed)', avatarId });
     const message = e instanceof Error ? e.message : String(e);
     await db
       .from('training_videos')

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizeAvatar } from '@/lib/authServer';
 import { enforceRateLimit } from '@/lib/rateLimit';
+import { reportError } from '@/lib/errorReport';
 import { randomUUID } from 'node:crypto';
 import { storageBucket, supabaseAdmin } from '@/lib/supabase';
 import { processTrainingVideo } from '@/lib/processing';
@@ -112,6 +113,7 @@ export async function POST(
   try {
     await processTrainingVideo({ avatarId, videoId, videoBytes, mimeType });
   } catch (e) {
+    reportError(e, { route: 'POST /api/avatars/[id]/train', actor: auth.me.email });
     const message = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ error: message, video_id: videoId }, { status: 500 });
   }
