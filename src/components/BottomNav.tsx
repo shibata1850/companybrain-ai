@@ -2,79 +2,26 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useNavBadges, navItems } from './useNavBadges';
 
 /**
- * Mobile-first bottom navigation. Three destinations:
+ * Mobile bottom navigation (phones only — hidden on sm+, where the same
+ * destinations live in the header via HeaderNav). Three destinations:
  *   質問する  → /dashboard (brain list)
- *   お知らせ  → /notifications (with unread badge)
+ *   お知らせ  → /notifications (unread badge)
  *   マイページ → /mypage (profile, plan, links, logout)
  * Text-only, bold labels (no icons). Shown only for logged-in users.
  */
 export default function BottomNav({ show }: { show: boolean }) {
   const pathname = usePathname() || '';
-  const [unread, setUnread] = useState(0);
-  const [requestCount, setRequestCount] = useState(0);
-
-  const loadBadges = useCallback(async () => {
-    try {
-      const [n, r] = await Promise.all([
-        fetch('/api/notifications', { cache: 'no-store' }).then((x) => x.json()),
-        fetch('/api/requests/count', { cache: 'no-store' }).then((x) => x.json()),
-      ]);
-      setUnread(n?.unread_count ?? 0);
-      setRequestCount(r?.count ?? 0);
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!show) return;
-    loadBadges();
-    const t = setInterval(loadBadges, 60_000);
-    // Refresh immediately when other surfaces (the お知らせ page) change
-    // notification state, so the badge doesn't stay stale for up to 60s.
-    const onChange = () => {
-      loadBadges();
-    };
-    window.addEventListener('cb-notifications-changed', onChange);
-    return () => {
-      clearInterval(t);
-      window.removeEventListener('cb-notifications-changed', onChange);
-    };
-  }, [show, loadBadges]);
+  const { unread, requestCount } = useNavBadges(show);
 
   if (!show) return null;
 
-  const items = [
-    {
-      href: '/dashboard',
-      label: '質問する',
-      active: pathname === '/dashboard' || pathname.startsWith('/avatars'),
-    },
-    {
-      href: '/notifications',
-      label: 'お知らせ',
-      active: pathname.startsWith('/notifications'),
-      badge: unread,
-    },
-    {
-      href: '/mypage',
-      label: 'マイページ',
-      active:
-        pathname.startsWith('/mypage') ||
-        pathname.startsWith('/account') ||
-        pathname.startsWith('/admin') ||
-        pathname.startsWith('/requests') ||
-        pathname.startsWith('/audit') ||
-        pathname.startsWith('/trash'),
-      badge: requestCount,
-    },
-  ];
+  const items = navItems(pathname, unread, requestCount);
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-1px_12px_rgba(0,0,0,0.04)] backdrop-blur">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-1px_12px_rgba(0,0,0,0.04)] backdrop-blur sm:hidden">
       <div className="mx-auto flex max-w-md items-stretch">
         {items.map((it) => (
           <Link

@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 import NavProgress from '@/components/NavProgress';
 import PageTransition from '@/components/PageTransition';
 import BottomNav from '@/components/BottomNav';
+import HeaderNav from '@/components/HeaderNav';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -63,6 +64,7 @@ export default async function RootLayout({
               </span>
             </Link>
             <nav className="flex items-center gap-2">
+              <HeaderNav show={loggedIn} />
               {!loggedIn && (
                 <Link
                   href="/login"
@@ -77,7 +79,7 @@ export default async function RootLayout({
         <main
           className={`mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 ${
             loggedIn
-              ? 'pb-[calc(6rem+env(safe-area-inset-bottom))]'
+              ? 'pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-8'
               : ''
           }`}
         >
