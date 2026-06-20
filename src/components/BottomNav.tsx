@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { motion } from 'framer-motion';
 import { useNavBadges, navItems } from './useNavBadges';
 
 /**
@@ -37,13 +38,22 @@ export default function BottomNav({ show }: { show: boolean }) {
             <span className="relative">
               {it.label}
               {!!it.badge && it.badge > 0 && (
-                <span className="absolute -right-5 -top-2 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                <motion.span
+                  initial={{ scale: 0.6, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+                  className="absolute -right-5 -top-2 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"
+                >
                   {it.badge > 99 ? '99+' : it.badge}
-                </span>
+                </motion.span>
               )}
             </span>
             {it.active && (
-              <span className="absolute inset-x-6 top-0 h-0.5 rounded-full bg-neutral-900" />
+              <motion.span
+                layoutId="bottomnav-indicator"
+                transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                className="absolute inset-x-6 top-0 h-0.5 rounded-full bg-neutral-900"
+              />
             )}
           </Link>
         ))}

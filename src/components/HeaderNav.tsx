@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { motion } from 'framer-motion';
 import { useNavBadges, navItems } from './useNavBadges';
 
 /**
@@ -27,15 +28,27 @@ export default function HeaderNav({ show }: { show: boolean }) {
           aria-current={it.active ? 'page' : undefined}
           className={`relative rounded-full px-3 py-1.5 text-sm font-bold transition ${
             it.active
-              ? 'bg-neutral-900 text-white'
+              ? 'text-white'
               : 'text-neutral-500 hover:text-neutral-900'
           }`}
         >
+          {it.active && (
+            <motion.span
+              layoutId="headernav-active-pill"
+              transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+              className="absolute inset-0 -z-10 rounded-full bg-neutral-900"
+            />
+          )}
           {it.label}
           {!!it.badge && it.badge > 0 && (
-            <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+            <motion.span
+              initial={{ scale: 0.6, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+              className="absolute -right-1 -top-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"
+            >
               {it.badge > 99 ? '99+' : it.badge}
-            </span>
+            </motion.span>
           )}
         </Link>
       ))}

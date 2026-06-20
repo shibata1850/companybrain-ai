@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { dropdown } from './motion/tokens';
 
 type BrainOption = {
   id: string;
@@ -70,9 +72,18 @@ export default function BrainSwitcher({
         </svg>
       </button>
 
-      {open && (
-        <div className="absolute left-0 z-40 mt-1.5 w-64 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg anim-fade-in-up">
-          <div className="max-h-72 overflow-y-auto py-1">
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            key="brain-switcher-menu"
+            variants={dropdown}
+            initial="hidden"
+            animate="show"
+            exit="exit"
+            style={{ transformOrigin: 'top left' }}
+            className="absolute left-0 z-40 mt-1.5 w-64 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg"
+          >
+            <div className="max-h-72 overflow-y-auto py-1">
             {loading && (
               <div className="px-3 py-2 text-xs text-neutral-400">
                 読み込み中…
@@ -111,9 +122,10 @@ export default function BrainSwitcher({
             >
               + 新しいブレインを作る
             </Link>
-          </div>
-        </div>
-      )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

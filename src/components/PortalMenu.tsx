@@ -2,6 +2,8 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { AnimatePresence, motion } from 'framer-motion';
+import { dropdown } from './motion/tokens';
 
 type Coords = {
   left: number;
@@ -110,24 +112,33 @@ export default function PortalMenu({
     };
   }, [open, anchorRef, onClose]);
 
-  if (!mounted || !open || !coords) return null;
+  if (!mounted) return null;
 
   return createPortal(
-    <div
-      ref={menuRef}
-      style={{
-        position: 'fixed',
-        left: coords.left,
-        top: coords.top,
-        bottom: coords.bottom,
-        minWidth: coords.minWidth,
-        maxHeight: coords.maxHeight,
-        zIndex: 9999,
-      }}
-      className="flex flex-col overflow-y-auto overscroll-contain rounded-xl border border-neutral-200 bg-white shadow-lg anim-fade-in"
-    >
-      {children}
-    </div>,
+    <AnimatePresence>
+      {open && coords && (
+        <motion.div
+          ref={menuRef}
+          variants={dropdown}
+          initial="hidden"
+          animate="show"
+          exit="exit"
+          style={{
+            position: 'fixed',
+            left: coords.left,
+            top: coords.top,
+            bottom: coords.bottom,
+            minWidth: coords.minWidth,
+            maxHeight: coords.maxHeight,
+            zIndex: 9999,
+            transformOrigin: coords.bottom ? 'bottom left' : 'top left',
+          }}
+          className="flex flex-col overflow-y-auto overscroll-contain rounded-xl border border-neutral-200 bg-white shadow-lg"
+        >
+          {children}
+        </motion.div>
+      )}
+    </AnimatePresence>,
     document.body,
   );
 }

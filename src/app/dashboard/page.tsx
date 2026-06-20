@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
 import PlanBanner from '@/components/PlanBanner';
 import SortableGrid from '@/components/SortableGrid';
 
@@ -352,9 +353,12 @@ function BrainCard({
   }, [menuOpen]);
 
   return (
-    <div
+    <motion.div
       ref={rootRef}
-      className={`group relative overflow-hidden rounded-2xl border border-neutral-200 bg-white transition duration-200 hover:-translate-y-0.5 hover:border-neutral-900 hover:shadow-lg ${
+      whileHover={{ y: -3, boxShadow: '0 12px 28px -10px rgba(0,0,0,0.18)' }}
+      whileTap={{ scale: 0.985 }}
+      transition={{ type: 'spring', stiffness: 360, damping: 28 }}
+      className={`group relative overflow-hidden rounded-2xl border border-neutral-200 bg-white hover:border-neutral-900 ${
         removing ? 'anim-fade-out' : ''
       }`}
     >
@@ -453,6 +457,6 @@ function BrainCard({
       {busy && (
         <div className="pointer-events-none absolute inset-0 bg-white/60" />
       )}
-    </div>
+    </motion.div>
   );
 }

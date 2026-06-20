@@ -2,7 +2,10 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import { PLANS, type Plan } from '@/lib/plans';
+import Modal from './motion/Modal';
+import MotionButton from './motion/MotionButton';
 
 type Usage = {
   plan: Plan;
@@ -46,26 +49,24 @@ export default function PlanBanner() {
         <span className="rounded-full bg-neutral-900 px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide text-white">
           {u.plan.name}
         </span>
-        <button
-          type="button"
+        <MotionButton
           onClick={() => setShowUpgrade(true)}
-          className="rounded-full bg-neutral-900 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-neutral-700 active:scale-95"
+          className="rounded-full bg-neutral-900 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-neutral-700"
         >
           プラン変更
-        </button>
+        </MotionButton>
       </div>
       {/* Meters stack on mobile, sit inline on wider screens. */}
       <div className="mt-2.5 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:gap-4">
         <Meter label="ブレイン" used={u.brainsUsed} limit={brainsLimit} />
         <Meter label="今月の質問" used={u.questionsThisMonth} limit={qLimit} />
       </div>
-      {showUpgrade && (
-        <UpgradeModal
-          current={u.plan}
-          email={email}
-          onClose={() => setShowUpgrade(false)}
-        />
-      )}
+      <UpgradeModal
+        open={showUpgrade}
+        current={u.plan}
+        email={email}
+        onClose={() => setShowUpgrade(false)}
+      />
     </section>
   );
 }
@@ -87,11 +88,13 @@ function Meter({
       <span className="text-neutral-500">{label}</span>
       <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-neutral-100">
         {!isUnlimited && (
-          <div
-            className={`absolute inset-y-0 left-0 transition-all ${
+          <motion.div
+            className={`absolute inset-y-0 left-0 origin-left rounded-full ${
               warn ? 'bg-amber-500' : 'bg-emerald-500'
             }`}
-            style={{ width: `${pct}%` }}
+            initial={{ width: 0 }}
+            animate={{ width: `${pct}%` }}
+            transition={{ type: 'spring', stiffness: 120, damping: 20 }}
           />
         )}
       </div>
@@ -112,10 +115,12 @@ function Meter({
  * so the admin handles the rest and flips the plan manually.
  */
 function UpgradeModal({
+  open,
   current,
   email,
   onClose,
 }: {
+  open: boolean;
   current: Plan;
   email: string;
   onClose: () => void;
@@ -153,14 +158,8 @@ function UpgradeModal({
   })();
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal open={open} onClose={onClose} ariaLabel="プランを変更する">
+      <div>
         <div className="border-b border-neutral-100 px-5 py-4">
           <h3 className="text-base font-semibold text-neutral-900">
             プランを変更する
@@ -231,6 +230,6 @@ function UpgradeModal({
           </a>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
