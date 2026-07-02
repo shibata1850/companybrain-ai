@@ -1,5 +1,6 @@
 import { PLANS, type Plan, type PlanId } from './plans';
 import { supabaseAdmin } from './supabase';
+import { quotaMonthStart } from './quota';
 import type { AppUser } from './authServer';
 
 export type PlanUsage = {
@@ -41,10 +42,9 @@ export async function getPlanUsage(user: AppUser): Promise<PlanUsage> {
     .is('request_id', null);
 
   // Questions asked this month — only across the user's OWN (non-request)
-  // brains; questions to gifted request-brains don't count.
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  monthStart.setHours(0, 0, 0, 0);
+  // brains; questions to gifted request-brains don't count. The month
+  // boundary is JST (quotaMonthStart), not server-local UTC.
+  const monthStart = quotaMonthStart();
 
   // Own (non-request) brains — questions to gifted request-brains are
   // exempt, so we only count activity on these.
@@ -113,12 +113,11 @@ export async function getMaterialBytesUsed(user: AppUser): Promise<number> {
   );
 }
 
-/** Voice seconds consumed this month, summed from voice_sessions. */
+/** Voice seconds consumed this month, summed from voice_sessions.
+ *  The month boundary is JST (quotaMonthStart). */
 export async function getVoiceSecondsThisMonth(user: AppUser): Promise<number> {
   const db = supabaseAdmin();
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  monthStart.setHours(0, 0, 0, 0);
+  const monthStart = quotaMonthStart();
   const { data } = await db
     .from('voice_sessions')
     .select('seconds')

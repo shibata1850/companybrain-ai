@@ -174,6 +174,15 @@ export default function StreamingStage({
   // triedModelsRef tracks what already got rejected this session.
   const modelOverrideRef = useRef<string | null>(null);
   const triedModelsRef = useRef<Set<string>>(new Set());
+  // Text-only session: the plan has no voice quota (free) or this
+  // month's minutes are used up, so the server issued a TEXT-modality
+  // token. No mic capture, no audio playback — answers arrive as
+  // modelTurn text parts instead of outputTranscription.
+  const textOnlyRef = useRef(false);
+  const [textOnly, setTextOnly] = useState(false);
+  const [voiceDisabledReason, setVoiceDisabledReason] = useState<
+    'plan' | 'quota' | null
+  >(null);
   // Active output buffer sources so we can stop them when the user
   // barges in (server sends interrupted=true).
   const activeSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
@@ -570,15 +579,27 @@ export default function StreamingStage({
         }
       | undefined;
 
-    // Audio from the model. We deliberately ignore `parts[].text`
-    // here: on the native-audio models that field can carry the
-    // model's internal "thinking" / planning text, which leaks into
-    // the transcript as messages like "Crafting a Professional
+    // Audio from the model. On AUDIO sessions we deliberately ignore
+    // `parts[].text`: on the native-audio models that field can carry
+    // the model's internal "thinking" / planning text, which leaks
+    // into the transcript as messages like "Crafting a Professional
     // Response". The only authoritative record of what the user
     // actually heard is `outputTranscription` below.
+    // On TEXT-only sessions (plan without voice) there is no audio and
+    // no outputTranscription — `parts[].text` IS the answer, so we
+    // consume it here (skipping thought-flagged parts).
     for (const p of sc?.modelTurn?.parts ?? []) {
       if (p.inlineData?.data && p.inlineData.mimeType?.startsWith('audio/')) {
         playAudioChunk(p.inlineData.data);
+      } else if (
+        textOnlyRef.current &&
+        typeof p.text === 'string' &&
+        p.text &&
+        !(p as { thought?: boolean }).thought
+      ) {
+        agentBufRef.current += p.text;
+        lastTranscriptAtRef.current = Date.now();
+        onPartialRef.current?.('agent', cleanTranscript(agentBufRef.current));
       }
     }
 
@@ -794,6 +815,8 @@ export default function StreamingStage({
         token?: string;
         model?: string;
         voice?: string;
+        voiceEnabled?: boolean;
+        voiceDisabledReason?: 'plan' | 'quota' | null;
         error?: string;
       };
       if (!tokenRes.ok || !tokenJson.token) {
@@ -801,6 +824,15 @@ export default function StreamingStage({
       }
       const usedModel =
         tokenJson.model || 'gemini-2.5-flash-native-audio-latest';
+      // Text-only session (plan without voice / monthly minutes used
+      // up): the token is TEXT-modality-constrained, so the connect
+      // config must match and the mic pipeline is skipped entirely.
+      const isTextOnly = tokenJson.voiceEnabled === false;
+      textOnlyRef.current = isTextOnly;
+      setTextOnly(isTextOnly);
+      setVoiceDisabledReason(
+        isTextOnly ? tokenJson.voiceDisabledReason ?? 'plan' : null,
+      );
 
       const ai = new GoogleGenAI({
         apiKey: tokenJson.token,
@@ -814,7 +846,7 @@ export default function StreamingStage({
       const session = await ai.live.connect({
         model: usedModel,
         config: {
-          responseModalities: [Modality.AUDIO],
+          responseModalities: [isTextOnly ? Modality.TEXT : Modality.AUDIO],
         },
         callbacks: {
           onopen: () => {
@@ -937,6 +969,9 @@ export default function StreamingStage({
       playheadRef.current = outputCtxRef.current.currentTime;
 
       // ---- input (mic → Gemini) ----
+      // Text-only sessions never send audio, so skip the mic pipeline
+      // entirely — no permission prompt, no capture, no level meter.
+      if (isTextOnly) return;
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
@@ -1063,6 +1098,7 @@ export default function StreamingStage({
    */
   function startTalking() {
     if (!sessionRef.current || !sessionOpenRef.current) return;
+    if (textOnlyRef.current) return; // 音声なしプラン: マイク入力は無効
     if (isTalkingRef.current) return;
     if (mutedRef.current) return;
     // Cut off any in-flight agent audio — the user is starting a new
@@ -1237,6 +1273,7 @@ export default function StreamingStage({
           muted={muted}
           isLive={isLive}
           elapsedSec={elapsedSec}
+          textOnly={textOnly}
           onToggleMute={() => setMuted((m) => !m)}
           onStop={stop}
           onStart={start}
@@ -1436,7 +1473,7 @@ export default function StreamingStage({
                 {avatarName} と会話する
               </p>
               <p className="mt-1 text-xs text-white/70">
-                「始める」を押してマイクを許可してください。
+                「始める」を押して会話を開始してください。
               </p>
               {/* Keyboard shortcuts are desktop-only; hide on touch. */}
               <p className="mt-2 hidden text-[10px] text-white/40 sm:block">
@@ -1470,7 +1507,15 @@ export default function StreamingStage({
         {/* Bottom control bar: large push-to-talk button + session end. */}
         {isLive && (
           <div className="absolute inset-x-3 bottom-3 flex items-center justify-between gap-2">
-            {isMobile ? (
+            {textOnly ? (
+              // 音声なしセッション: マイクの代わりに理由を示す。
+              // テキスト入力欄(下)はそのまま使える。
+              <div className="flex-1 select-none rounded-full bg-white/15 px-4 py-3 text-center text-[11px] font-medium leading-tight text-white backdrop-blur">
+                {voiceDisabledReason === 'quota'
+                  ? '今月の音声会話上限に達しました(毎月1日リセット)。テキストで質問できます。'
+                  : '音声会話はスターター以上のプランで利用できます。テキストで質問できます。'}
+              </div>
+            ) : isMobile ? (
               // Mobile: tap to start, tap again to stop (toggle).
               <button
                 type="button"
@@ -1561,6 +1606,7 @@ function CompactBar({
   muted,
   isLive,
   elapsedSec,
+  textOnly,
   onToggleMute,
   onStop,
   onStart,
@@ -1573,6 +1619,8 @@ function CompactBar({
   muted: boolean;
   isLive: boolean;
   elapsedSec: number;
+  /** 音声なしセッション(テキスト回答のみ)ではマイク操作を隠す。 */
+  textOnly?: boolean;
   onToggleMute: () => void;
   onStop: () => void;
   onStart: () => void;
@@ -1650,17 +1698,19 @@ function CompactBar({
       <div className="flex shrink-0 items-center gap-1.5">
         {isLive ? (
           <>
-            <button
-              type="button"
-              onClick={onToggleMute}
-              className={`rounded-full px-2.5 py-1 text-[10px] font-medium transition ${
-                muted
-                  ? 'bg-red-500 text-white hover:bg-red-400'
-                  : 'bg-white/15 text-white hover:bg-white/25'
-              }`}
-            >
-              {muted ? 'マイクOFF' : 'マイクON'}
-            </button>
+            {!textOnly && (
+              <button
+                type="button"
+                onClick={onToggleMute}
+                className={`rounded-full px-2.5 py-1 text-[10px] font-medium transition ${
+                  muted
+                    ? 'bg-red-500 text-white hover:bg-red-400'
+                    : 'bg-white/15 text-white hover:bg-white/25'
+                }`}
+              >
+                {muted ? 'マイクOFF' : 'マイクON'}
+              </button>
+            )}
             <button
               type="button"
               onClick={onStop}
