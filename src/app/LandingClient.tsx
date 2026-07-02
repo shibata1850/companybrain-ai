@@ -851,17 +851,20 @@ function VideoLearnMock() {
               strokeLinejoin="round"
               aria-hidden
             >
-              {/* whiteboard */}
-              <rect x="176" y="26" width="120" height="80" rx="4" fill="white" />
-              <path d="M190 42h60M190 56h92M190 70h80M190 84h48" strokeWidth="1.8" opacity="0.45" />
-              {/* presenter */}
-              <circle cx="96" cy="74" r="22" fill="white" />
-              <path d="M84 66c3-6 8-9 12-9s9 3 12 9" strokeWidth="1.8" />
-              <path d="M46 180c6-42 28-60 50-60s44 18 50 60" fill="white" />
-              {/* pointing arm toward the board */}
-              <path d="M136 130c14-10 26-20 36-30" />
-              {/* floor line */}
-              <path d="M16 164h288" strokeWidth="1.5" opacity="0.25" />
+              {/* whiteboard behind the presenter */}
+              <rect x="168" y="28" width="128" height="86" rx="4" fill="white" />
+              <path d="M184 46h64M184 60h96M184 74h84M184 88h52" strokeWidth="1.8" opacity="0.4" />
+              {/* presenter bust, waist-up and cut by the frame bottom —
+                  same head + shoulder-curve language as the LP avatars.
+                  The shoulder apex (y=120) meets the head bottom (y=119)
+                  so the figure reads as one connected silhouette. */}
+              <path
+                d="M50 180C58 136 78 120 100 120S142 136 150 180"
+                fill="white"
+              />
+              <circle cx="100" cy="94" r="25" fill="white" />
+              {/* suit lapels */}
+              <path d="M100 124l-9 16M100 124l9 16" strokeWidth="1.7" />
             </svg>
             {/* play button */}
             <span className="absolute left-1/2 top-1/2 grid h-16 w-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white shadow-lg ring-1 ring-black/5">
