@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PortalMenu from '@/components/PortalMenu';
+import { uploadVideoDirect } from '@/lib/clientUpload';
+import { MAX_VIDEO_BYTES, MAX_VIDEO_LABEL } from '@/lib/uploadLimits';
 
 type Avatar = {
   id: string;
@@ -205,33 +207,30 @@ export default function TrainingClient({ avatarId }: { avatarId: string }) {
   async function addVideo(e: React.FormEvent) {
     e.preventDefault();
     if (!trainFile) return;
-    // Vercel のリクエスト本文上限(約 4.5 MB)を超えるとサーバー側の
-    // コードに届く前に失敗し原因不明のエラーになるため、先に弾く。
-    if (trainFile.size > 4 * 1024 * 1024) {
+    if (trainFile.size > MAX_VIDEO_BYTES) {
       setError(
-        '動画は 1 ファイル 4 MB までです。長い動画は要点部分を切り出してアップロードしてください。',
+        `動画は 1 ファイル ${MAX_VIDEO_LABEL} までです。長い動画は要点部分を切り出してアップロードしてください。`,
       );
       return;
     }
-    const form = new FormData();
-    form.append('video', trainFile);
     setTraining(true);
     setError(null);
     try {
+      // Storage へ直接アップロードし、API にはパスだけ渡す
+      // (Vercel の本文サイズ上限を回避して大きい動画に対応)。
+      const up = await uploadVideoDirect(trainFile, avatarId);
       const res = await fetch(`/api/avatars/${avatarId}/train`, {
         method: 'POST',
-        body: form,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          video_path: up.path,
+          video_name: trainFile.name,
+          video_mime: trainFile.type || 'video/mp4',
+          folder: trainFileFolder.trim() || undefined,
+        }),
       });
       const json = (await res.json()) as { video_id?: string; error?: string };
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-      const folder = trainFileFolder.trim();
-      if (folder && json.video_id) {
-        await fetch(`/api/training-videos/${json.video_id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ folder }),
-        });
-      }
       setTrainFile(null);
       setTrainFileFolder('');
       await load();

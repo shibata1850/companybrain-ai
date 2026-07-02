@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
+import { uploadVideoDirect } from '@/lib/clientUpload';
+import { MAX_VIDEO_BYTES, MAX_VIDEO_LABEL } from '@/lib/uploadLimits';
 
 type Mode = 'video' | 'text';
 
@@ -44,15 +46,12 @@ export default function NewAvatarPage() {
         setError('動画ファイルを選択してください');
         return;
       }
-      // Vercel のリクエスト本文上限(約 4.5 MB)を超えるとサーバー側の
-      // コードに届く前に失敗し原因不明のエラーになるため、先に弾く。
-      if (file.size > 4 * 1024 * 1024) {
+      if (file.size > MAX_VIDEO_BYTES) {
         setError(
-          '動画は 1 ファイル 4 MB までです。長い動画は要点部分を切り出してアップロードしてください。',
+          `動画は 1 ファイル ${MAX_VIDEO_LABEL} までです。長い動画は要点部分を切り出してアップロードしてください。`,
         );
         return;
       }
-      form.append('video', file);
       setProgressLabel(
         '動画をアップロード中… 顔写真とボイスの学習、文字起こしが終わるまで数分かかります。',
       );
@@ -72,6 +71,14 @@ export default function NewAvatarPage() {
     setError(null);
 
     try {
+      if (mode === 'video' && file) {
+        // Storage へ直接アップロードし、API にはパスだけ渡す
+        // (Vercel の本文サイズ上限を回避して大きい動画に対応)。
+        const up = await uploadVideoDirect(file);
+        form.append('video_path', up.path);
+        form.append('video_name', file.name);
+        form.append('video_mime', file.type || 'video/mp4');
+      }
       const res = await fetch('/api/avatars', { method: 'POST', body: form });
       const data = (await res.json()) as { id?: string; error?: string };
       if (!res.ok || !data.id) {

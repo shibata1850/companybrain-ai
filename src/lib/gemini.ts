@@ -66,16 +66,58 @@ async function generateWithFallback(opts: {
  * Transcribe a video file and produce a short summary in one call.
  * Returns plain transcript text plus a 1-2 sentence summary.
  */
+/**
+ * inline base64 はリクエスト全体で約20MBまでしか受け付けられないため、
+ * それを超えそうな動画は Gemini Files API に一度アップロードして
+ * fileUri で参照する。閾値は base64 膨張(4/3倍)を見込んで 15MB。
+ */
+const INLINE_VIDEO_LIMIT = 15 * 1024 * 1024;
+
+async function videoPartFor(
+  videoBytes: Buffer,
+  mimeType: string,
+): Promise<{ part: Part; cleanup: () => Promise<void> }> {
+  if (videoBytes.length <= INLINE_VIDEO_LIMIT) {
+    return {
+      part: { inlineData: { data: videoBytes.toString('base64'), mimeType } },
+      cleanup: async () => {},
+    };
+  }
+  const ai = gemini();
+  const blob = new Blob([new Uint8Array(videoBytes)], { type: mimeType });
+  let file = await ai.files.upload({ file: blob, config: { mimeType } });
+  // 動画はサーバー側の前処理が終わる(ACTIVE)まで参照できない。
+  const deadline = Date.now() + 180_000;
+  while (file.state === 'PROCESSING') {
+    if (Date.now() > deadline) {
+      throw new Error('Gemini Files API の動画処理がタイムアウトしました');
+    }
+    await new Promise((r) => setTimeout(r, 2_000));
+    file = await ai.files.get({ name: file.name! });
+  }
+  if (file.state !== 'ACTIVE' || !file.uri) {
+    throw new Error(
+      `Gemini Files API で動画を処理できませんでした (state=${file.state})`,
+    );
+  }
+  const name = file.name!;
+  return {
+    part: { fileData: { fileUri: file.uri, mimeType } },
+    cleanup: async () => {
+      try {
+        await ai.files.delete({ name });
+      } catch {
+        // 期限切れで自動削除されるので失敗しても実害なし
+      }
+    },
+  };
+}
+
 export async function transcribeVideo(
   videoBytes: Buffer,
   mimeType: string,
 ): Promise<{ transcript: string; summary: string }> {
-  const videoPart: Part = {
-    inlineData: {
-      data: videoBytes.toString('base64'),
-      mimeType,
-    },
-  };
+  const { part: videoPart, cleanup } = await videoPartFor(videoBytes, mimeType);
 
   const prompt = `この動画に映っている人物の発言を、日本語で忠実に文字起こししてください。
 出力は次のJSON形式のみ。前後に説明文を書かないでください。
@@ -85,14 +127,18 @@ export async function transcribeVideo(
   "summary": "<この動画で語られている内容を1〜2文で要約>"
 }`;
 
-  const text = await generateWithFallback({
-    preferred: env.geminiTranscribeModel(),
-    fallbacks: TRANSCRIBE_MODEL_FALLBACKS,
-    contents: [{ role: 'user', parts: [videoPart, { text: prompt }] }],
-    config: { responseMimeType: 'application/json' },
-  });
-  const parsed = JSON.parse(text) as { transcript: string; summary: string };
-  return parsed;
+  try {
+    const text = await generateWithFallback({
+      preferred: env.geminiTranscribeModel(),
+      fallbacks: TRANSCRIBE_MODEL_FALLBACKS,
+      contents: [{ role: 'user', parts: [videoPart, { text: prompt }] }],
+      config: { responseMimeType: 'application/json' },
+    });
+    const parsed = JSON.parse(text) as { transcript: string; summary: string };
+    return parsed;
+  } finally {
+    await cleanup();
+  }
 }
 
 /**

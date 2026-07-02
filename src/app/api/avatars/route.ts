@@ -83,12 +83,15 @@ export async function POST(req: NextRequest) {
   }
   const form = await req.formData();
   const file = form.get('video');
+  const stagedPathRaw = form.get('video_path');
+  const stagedPath =
+    typeof stagedPathRaw === 'string' && stagedPathRaw ? stagedPathRaw : null;
   const name = (form.get('name') as string | null)?.trim() || '名称未設定';
   const description = (form.get('description') as string | null) || null;
 
   // Lightweight path: no video. The brain is seeded from an optional
   // icon photo + optional pasted text instead of a talking-head clip.
-  if (!(file instanceof File)) {
+  if (!(file instanceof File) && !stagedPath) {
     return createBrainFromTextAndPhoto({
       form,
       name,
@@ -97,17 +100,54 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const videoBytes = Buffer.from(await file.arrayBuffer());
-  const mimeType = file.type || 'video/mp4';
-  const ext = (file.name.split('.').pop() || 'mp4').toLowerCase();
   const db = supabaseAdmin();
   const bucket = storageBucket();
 
-  // Plan enforcement: material size.
+  // 動画の実体は2経路: ブラウザが Storage へ直接アップロード済みの
+  // staged パス(大きいファイル。Vercel 本文上限を回避)か、FormData で
+  // 受け取るファイル本体(従来経路)。
+  let videoBytes: Buffer;
+  let mimeType: string;
+  let videoFileName: string;
+  let ext: string;
+  if (stagedPath) {
+    // 署名発行 API は staged/ 配下しか発行しない。それ以外(他ブレイン
+    // の資産など)を指されても受け付けない。
+    if (!stagedPath.startsWith('staged/') || stagedPath.includes('..')) {
+      return NextResponse.json({ error: 'invalid video_path' }, { status: 400 });
+    }
+    const dl = await db.storage.from(bucket).download(stagedPath);
+    if (dl.error || !dl.data) {
+      return NextResponse.json(
+        { error: 'アップロード済みの動画が見つかりません。もう一度アップロードしてください。' },
+        { status: 400 },
+      );
+    }
+    videoBytes = Buffer.from(await dl.data.arrayBuffer());
+    mimeType = (form.get('video_mime') as string | null) || 'video/mp4';
+    videoFileName =
+      (form.get('video_name') as string | null) ||
+      stagedPath.split('/').pop() ||
+      'video.mp4';
+    ext = (stagedPath.split('.').pop() || 'mp4').toLowerCase();
+  } else {
+    const f = file as File;
+    videoBytes = Buffer.from(await f.arrayBuffer());
+    mimeType = f.type || 'video/mp4';
+    videoFileName = f.name;
+    ext = (f.name.split('.').pop() || 'mp4').toLowerCase();
+  }
+
+  // Plan enforcement: material size(実サイズで検証。直接アップロード
+  // 経路は署名時に自己申告値でしか見ていないため、ここが本検証)。
   if (me.role !== 'admin') {
     const usage = await getPlanUsage(me);
     const existing = await getMaterialBytesUsed(me);
     if (!canAddMaterial(usage.plan, existing, videoBytes.length)) {
+      if (stagedPath) {
+        // 実体が Storage の staged 領域に残るので消しておく。
+        await db.storage.from(bucket).remove([stagedPath]);
+      }
       return NextResponse.json(planLimitResponse('materials', usage), {
         status: 403,
       });
@@ -140,13 +180,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: message }, { status });
   };
 
-  // 2. Upload source video to Supabase Storage.
+  // 2. Put the source video under the avatar's folder in Storage —
+  //    staged uploads are moved into place, form uploads are written.
   const storagePath = `${avatarId}/${randomUUID()}.${ext}`;
-  const { error: upErr } = await db.storage
-    .from(bucket)
-    .upload(storagePath, videoBytes, { contentType: mimeType, upsert: false });
-  if (upErr) {
-    return rollback(upErr.message);
+  if (stagedPath) {
+    const { error: mvErr } = await db.storage
+      .from(bucket)
+      .move(stagedPath, storagePath);
+    if (mvErr) {
+      return rollback(mvErr.message);
+    }
+  } else {
+    const { error: upErr } = await db.storage
+      .from(bucket)
+      .upload(storagePath, videoBytes, { contentType: mimeType, upsert: false });
+    if (upErr) {
+      return rollback(upErr.message);
+    }
   }
 
   // 3. Record training video row (status=pending).
@@ -155,7 +205,7 @@ export async function POST(req: NextRequest) {
     .insert({
       avatar_id: avatarId,
       storage_path: storagePath,
-      file_name: file.name,
+      file_name: videoFileName,
       mime_type: mimeType,
       size_bytes: videoBytes.length,
       status: 'pending',
