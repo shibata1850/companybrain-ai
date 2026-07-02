@@ -37,14 +37,19 @@ const MAX_AUTO_RECONNECTS = 3;
 // 1008 ("Operation is not implemented, or supported, or enabled") is a
 // permanent rejection of the requested model for this API key — retrying
 // the same config can never succeed. Instead we walk this list of known
-// Live-capable models and reconnect with the next candidate. Whichever
-// one opens successfully is cached in localStorage so future sessions
-// start with it directly.
+// Live-capable models and reconnect with the next candidate.
+// 2026-07 時点の現行ラインナップに更新済み:
+//   - gemini-3.1-flash-live-preview: 2026-03 リリースの最新 Live モデル
+//     (公式の移行先。全プランのフォールバック先としても最有力)
+//   - gemini-2.5-flash-native-audio-latest: 12-2025 プレビューを指す
+//     エイリアス(非推奨化済みだが提供中)
+//   - gemini-2.5-flash-native-audio-preview-12-2025: 同・明示 ID
+// 旧 half-cascade 系(gemini-live-2.5-flash-preview /
+// gemini-2.0-flash-live-001)は 2025-12-09 に提供終了したため削除。
 const LIVE_MODEL_FALLBACKS = [
+  'gemini-3.1-flash-live-preview',
   'gemini-2.5-flash-native-audio-latest',
-  'gemini-2.5-flash-preview-native-audio-dialog',
-  'gemini-live-2.5-flash-preview',
-  'gemini-2.0-flash-live-001',
+  'gemini-2.5-flash-native-audio-preview-12-2025',
 ];
 
 const INPUT_SAMPLE_RATE = 16000;
