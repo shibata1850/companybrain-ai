@@ -829,7 +829,7 @@ function SamplePreviews() {
 function VideoLearnMock() {
   const steps = [
     { done: true, label: '動画アップロード', detail: '田中部長_社内研修.mp4 (42 MB)' },
-    { done: true, label: '音声を文字起こし', detail: '24 分 13 秒 / 4,872 文字' },
+    { done: true, label: '音声を文字起こし', detail: '発言をすべてテキスト化' },
     { done: true, label: '発言を意味で分割', detail: '152 チャンク生成' },
     { done: true, label: 'ベクトル化して保存', detail: 'pgvector に 152 件登録' },
     { done: true, label: '人格プロファイル完成', detail: '口調・価値観・話し方を抽出済み' },
