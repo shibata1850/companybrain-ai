@@ -870,14 +870,11 @@ function VideoLearnMock() {
                 <path d="M8 5.5l11 6.5-11 6.5z" fill="#171717" />
               </svg>
             </span>
-            {/* filename / duration bar */}
-            <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/55 to-transparent px-3.5 pb-2.5 pt-6 text-white">
+            {/* filename bar */}
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/55 to-transparent px-3.5 pb-2.5 pt-6 text-white">
               <p className="truncate text-xs font-medium">
                 田中部長_社内研修.mp4
               </p>
-              <span className="ml-2 shrink-0 rounded bg-black/50 px-1.5 py-0.5 text-[10px] tabular-nums">
-                24:13
-              </span>
             </div>
           </div>
         </div>
