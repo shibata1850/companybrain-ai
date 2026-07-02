@@ -9,8 +9,10 @@ import {
   canStartVoice,
   getPlanUsage,
   getVoiceSecondsThisMonth,
+  liveModelForPlan,
   planLimitResponse,
 } from '@/lib/planEnforce';
+import type { PlanId } from '@/lib/plans';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { reportError } from '@/lib/errorReport';
 
@@ -60,8 +62,11 @@ export async function POST(req: NextRequest) {
   // Enforce monthly question quota AND voice minute quota. Members are
   // blocked once over limit; admins have no plan, and request-built
   // (gifted) brains are exempt from limits entirely.
+  // The plan id is also remembered for the live-model tier below.
+  let memberPlanId: PlanId | null = null;
   if (auth.me.role !== 'admin' && !auth.fromRequest) {
     const usage = await getPlanUsage(auth.me);
+    memberPlanId = usage.plan.id;
     if (!canAsk(usage)) {
       return NextResponse.json(planLimitResponse('questions', usage), {
         status: 403,
@@ -251,11 +256,16 @@ ${styleSamples || '（参考発言なし。一般的な人柄として自然に�
         'ephemeral tokens are not supported by this SDK build — upgrade @google/genai',
       );
     }
-    // Admins get the best available live model; everyone else the
-    // default. A client model override (1008-fallback loop) always wins.
+    // Admins get the best available live model; members get their plan
+    // tier's model (env-overridable per tier, default = the global
+    // model). Gifted request-brain sessions skip the plan lookup and
+    // use the default. A client model override (1008-fallback loop)
+    // always wins.
     const baseLiveModel =
       auth.me.role === 'admin'
         ? adminLiveModel(env.geminiLiveModel())
+        : memberPlanId
+        ? liveModelForPlan(memberPlanId, env.geminiLiveModel())
         : env.geminiLiveModel();
     const liveModel = modelOverride || baseLiveModel;
     const token = await create({

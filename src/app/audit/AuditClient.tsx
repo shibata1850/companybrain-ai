@@ -278,6 +278,15 @@ function EntriesStep({ user, brain }: { user: string; brain: Brain }) {
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [onlyEscalation, setOnlyEscalation] = useState(false);
+  // CSV export is a Pro-plan feature (admins always have it).
+  const [canCsv, setCanCsv] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/plan', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => setCanCsv(j.role === 'admin' || j.plan?.id === 'pro'))
+      .catch(() => {});
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -359,14 +368,16 @@ function EntriesStep({ user, brain }: { user: string; brain: Brain }) {
           >
             要確認のみ
           </button>
-          <button
-            type="button"
-            onClick={exportCsv}
-            disabled={filtered.length === 0}
-            className="rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-bold text-neutral-700 transition hover:border-neutral-900 disabled:opacity-40"
-          >
-            CSV書き出し
-          </button>
+          {canCsv && (
+            <button
+              type="button"
+              onClick={exportCsv}
+              disabled={filtered.length === 0}
+              className="rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-bold text-neutral-700 transition hover:border-neutral-900 disabled:opacity-40"
+            >
+              CSV書き出し
+            </button>
+          )}
         </div>
       </div>
 

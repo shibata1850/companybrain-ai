@@ -44,6 +44,14 @@ export default function NewAvatarPage() {
         setError('動画ファイルを選択してください');
         return;
       }
+      // Vercel のリクエスト本文上限(約 4.5 MB)を超えるとサーバー側の
+      // コードに届く前に失敗し原因不明のエラーになるため、先に弾く。
+      if (file.size > 4 * 1024 * 1024) {
+        setError(
+          '動画は 1 ファイル 4 MB までです。長い動画は要点部分を切り出してアップロードしてください。',
+        );
+        return;
+      }
       form.append('video', file);
       setProgressLabel(
         '動画をアップロード中… 顔写真とボイスの学習、文字起こしが終わるまで数分かかります。',

@@ -205,6 +205,14 @@ export default function TrainingClient({ avatarId }: { avatarId: string }) {
   async function addVideo(e: React.FormEvent) {
     e.preventDefault();
     if (!trainFile) return;
+    // Vercel のリクエスト本文上限(約 4.5 MB)を超えるとサーバー側の
+    // コードに届く前に失敗し原因不明のエラーになるため、先に弾く。
+    if (trainFile.size > 4 * 1024 * 1024) {
+      setError(
+        '動画は 1 ファイル 4 MB までです。長い動画は要点部分を切り出してアップロードしてください。',
+      );
+      return;
+    }
     const form = new FormData();
     form.append('video', trainFile);
     setTraining(true);

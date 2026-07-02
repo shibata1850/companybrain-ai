@@ -238,3 +238,25 @@ export function adminAnswerModel(): string {
 export function adminLiveModel(fallback: string): string {
   return process.env.GEMINI_LIVE_MODEL_ADMIN || fallback;
 }
+
+/**
+ * Live (voice/text) model per plan tier. All real conversations run
+ * over Gemini Live (/api/streaming/token), so THIS — not
+ * answerModelForPlan — is what actually differentiates model quality
+ * between plans. Each tier is env-overridable:
+ *
+ *   GEMINI_LIVE_MODEL_FREE / _STARTER / _STANDARD / _PRO
+ *
+ * Until those are set in Vercel, every tier falls back to the global
+ * default (GEMINI_LIVE_MODEL), i.e. behaviour is unchanged. Only set
+ * model ids confirmed to exist on the v1alpha Live API.
+ */
+export function liveModelForPlan(planId: PlanId, fallback: string): string {
+  const byTier: Record<PlanId, string | undefined> = {
+    free: process.env.GEMINI_LIVE_MODEL_FREE,
+    starter: process.env.GEMINI_LIVE_MODEL_STARTER,
+    standard: process.env.GEMINI_LIVE_MODEL_STANDARD,
+    pro: process.env.GEMINI_LIVE_MODEL_PRO,
+  };
+  return byTier[planId] || fallback;
+}
