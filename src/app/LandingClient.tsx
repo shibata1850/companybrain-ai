@@ -837,12 +837,46 @@ function VideoLearnMock() {
   return (
     <div className="grid gap-5 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm md:grid-cols-[1.1fr_1fr]">
       <div>
-        <div className="overflow-hidden rounded-xl bg-neutral-900">
-          <div className="grid aspect-video place-items-center text-neutral-500">
-            <div className="text-center">
-              <div className="text-4xl">▶</div>
-              <p className="mt-2 text-xs">田中部長_社内研修.mp4</p>
-              <p className="text-[10px] text-neutral-600">24:13</p>
+        {/* 疑似サムネイル: 実動画は無いので、研修動画の静止画風の
+            ラインアート + 再生ボタンで「動画プレイヤー」を表現する。 */}
+        <div className="relative overflow-hidden rounded-xl border border-neutral-200 bg-gradient-to-br from-neutral-50 to-neutral-200">
+          <div className="relative aspect-video">
+            <svg
+              viewBox="0 0 320 180"
+              className="absolute inset-0 h-full w-full text-neutral-700"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              {/* whiteboard */}
+              <rect x="176" y="26" width="120" height="80" rx="4" fill="white" />
+              <path d="M190 42h60M190 56h92M190 70h80M190 84h48" strokeWidth="1.8" opacity="0.45" />
+              {/* presenter */}
+              <circle cx="96" cy="74" r="22" fill="white" />
+              <path d="M84 66c3-6 8-9 12-9s9 3 12 9" strokeWidth="1.8" />
+              <path d="M46 180c6-42 28-60 50-60s44 18 50 60" fill="white" />
+              {/* pointing arm toward the board */}
+              <path d="M136 130c14-10 26-20 36-30" />
+              {/* floor line */}
+              <path d="M16 164h288" strokeWidth="1.5" opacity="0.25" />
+            </svg>
+            {/* play button */}
+            <span className="absolute left-1/2 top-1/2 grid h-16 w-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white shadow-lg ring-1 ring-black/5">
+              <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden>
+                <path d="M8 5.5l11 6.5-11 6.5z" fill="#171717" />
+              </svg>
+            </span>
+            {/* filename / duration bar */}
+            <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/55 to-transparent px-3.5 pb-2.5 pt-6 text-white">
+              <p className="truncate text-xs font-medium">
+                田中部長_社内研修.mp4
+              </p>
+              <span className="ml-2 shrink-0 rounded bg-black/50 px-1.5 py-0.5 text-[10px] tabular-nums">
+                24:13
+              </span>
             </div>
           </div>
         </div>
