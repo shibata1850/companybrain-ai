@@ -863,8 +863,6 @@ function VideoLearnMock() {
                 fill="white"
               />
               <circle cx="100" cy="94" r="25" fill="white" />
-              {/* suit lapels */}
-              <path d="M100 124l-9 16M100 124l9 16" strokeWidth="1.7" />
             </svg>
             {/* play button */}
             <span className="absolute left-1/2 top-1/2 grid h-16 w-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white shadow-lg ring-1 ring-black/5">
