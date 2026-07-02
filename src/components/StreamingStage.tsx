@@ -317,9 +317,10 @@ export default function StreamingStage({
     setLevel(0);
     // Report how many seconds of voice were actually consumed so plan
     // enforcement can sum per-month usage. Fire-and-forget, must not
-    // block the cleanup or surface errors to the user.
+    // block the cleanup or surface errors to the user. Text-only mode
+    // (/ask 経由) は音声を一切使っていないので記録しない。
     const startedAt = sessionStartedAtRef.current;
-    if (startedAt !== null) {
+    if (startedAt !== null && !textOnlyRef.current) {
       const seconds = Math.max(0, Math.round((Date.now() - startedAt) / 1000));
       if (seconds > 0) {
         try {
@@ -579,27 +580,15 @@ export default function StreamingStage({
         }
       | undefined;
 
-    // Audio from the model. On AUDIO sessions we deliberately ignore
-    // `parts[].text`: on the native-audio models that field can carry
-    // the model's internal "thinking" / planning text, which leaks
-    // into the transcript as messages like "Crafting a Professional
+    // Audio from the model. We deliberately ignore `parts[].text`
+    // here: on the native-audio models that field can carry the
+    // model's internal "thinking" / planning text, which leaks into
+    // the transcript as messages like "Crafting a Professional
     // Response". The only authoritative record of what the user
     // actually heard is `outputTranscription` below.
-    // On TEXT-only sessions (plan without voice) there is no audio and
-    // no outputTranscription — `parts[].text` IS the answer, so we
-    // consume it here (skipping thought-flagged parts).
     for (const p of sc?.modelTurn?.parts ?? []) {
       if (p.inlineData?.data && p.inlineData.mimeType?.startsWith('audio/')) {
         playAudioChunk(p.inlineData.data);
-      } else if (
-        textOnlyRef.current &&
-        typeof p.text === 'string' &&
-        p.text &&
-        !(p as { thought?: boolean }).thought
-      ) {
-        agentBufRef.current += p.text;
-        lastTranscriptAtRef.current = Date.now();
-        onPartialRef.current?.('agent', cleanTranscript(agentBufRef.current));
       }
     }
 
@@ -815,24 +804,35 @@ export default function StreamingStage({
         token?: string;
         model?: string;
         voice?: string;
+        textOnly?: boolean;
         voiceEnabled?: boolean;
         voiceDisabledReason?: 'plan' | 'quota' | null;
         error?: string;
       };
+      // 音声なしプラン(または今月の音声上限到達): Live 接続は行わず、
+      // テキスト質問を /ask(通常のHTTP API)に流すモードで開始する。
+      // ネイティブ音声モデルは TEXT モダリティを受け付けないため、
+      // Live 側でのテキスト専用セッションは成立しない(code 1007)。
+      if (tokenRes.ok && tokenJson.textOnly) {
+        textOnlyRef.current = true;
+        setTextOnly(true);
+        setVoiceDisabledReason(tokenJson.voiceDisabledReason ?? 'plan');
+        setSessionStartedAt((prev) => {
+          const next = prev ?? Date.now();
+          sessionStartedAtRef.current = next;
+          return next;
+        });
+        setStatus('listening');
+        return;
+      }
+      textOnlyRef.current = false;
+      setTextOnly(false);
+      setVoiceDisabledReason(null);
       if (!tokenRes.ok || !tokenJson.token) {
         throw new Error(tokenJson.error || `HTTP ${tokenRes.status}`);
       }
       const usedModel =
         tokenJson.model || 'gemini-2.5-flash-native-audio-latest';
-      // Text-only session (plan without voice / monthly minutes used
-      // up): the token is TEXT-modality-constrained, so the connect
-      // config must match and the mic pipeline is skipped entirely.
-      const isTextOnly = tokenJson.voiceEnabled === false;
-      textOnlyRef.current = isTextOnly;
-      setTextOnly(isTextOnly);
-      setVoiceDisabledReason(
-        isTextOnly ? tokenJson.voiceDisabledReason ?? 'plan' : null,
-      );
 
       const ai = new GoogleGenAI({
         apiKey: tokenJson.token,
@@ -846,7 +846,7 @@ export default function StreamingStage({
       const session = await ai.live.connect({
         model: usedModel,
         config: {
-          responseModalities: [isTextOnly ? Modality.TEXT : Modality.AUDIO],
+          responseModalities: [Modality.AUDIO],
         },
         callbacks: {
           onopen: () => {
@@ -969,9 +969,6 @@ export default function StreamingStage({
       playheadRef.current = outputCtxRef.current.currentTime;
 
       // ---- input (mic → Gemini) ----
-      // Text-only sessions never send audio, so skip the mic pipeline
-      // entirely — no permission prompt, no capture, no level meter.
-      if (isTextOnly) return;
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
@@ -1149,10 +1146,52 @@ export default function StreamingStage({
   }
 
   function sendTextMessage(text: string) {
-    const sess = sessionRef.current;
-    if (!sess || !sessionOpenRef.current) return;
     const trimmed = text.trim();
     if (!trimmed) return;
+
+    // テキスト専用モード(音声なしプラン/音声上限到達): Live セッション
+    // は無いので、通常のテキストAPI(/ask)で回答を取得する。RAG・
+    // プラン別モデル・質問数カウントはサーバー側で従来どおり効く。
+    if (textOnlyRef.current) {
+      onMessageRef.current?.({
+        id: newMessageId(),
+        role: 'user',
+        text: trimmed,
+        at: Date.now(),
+      });
+      setStatus('thinking');
+      void (async () => {
+        try {
+          const res = await fetch(`/api/avatars/${avatarId}/ask`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question: trimmed }),
+          });
+          const json = (await res.json()) as {
+            answer?: string;
+            error?: string;
+          };
+          if (!res.ok || !json.answer) {
+            throw new Error(json.error || `HTTP ${res.status}`);
+          }
+          onMessageRef.current?.({
+            id: newMessageId(),
+            role: 'agent',
+            text: json.answer,
+            at: Date.now(),
+          });
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          setError(`回答の生成に失敗しました: ${msg}`);
+        } finally {
+          setStatus((s) => (s === 'thinking' ? 'listening' : s));
+        }
+      })();
+      return;
+    }
+
+    const sess = sessionRef.current;
+    if (!sess || !sessionOpenRef.current) return;
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (sess as any).sendClientContent?.({
