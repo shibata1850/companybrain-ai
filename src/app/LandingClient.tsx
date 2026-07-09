@@ -1116,7 +1116,10 @@ function HowItWorks() {
                     </svg>
                   </div>
                 )}
-                <div className="flex flex-1 flex-col rounded-2xl border border-neutral-200 bg-white p-6">
+                {/* min-w-0: カードの自動最小幅を無効化。無いと中の
+                    イラストSVG幅がフロアになり、3枚横並びになる
+                    md(768px)〜1000px 付近でページ全体が横に溢れる。 */}
+                <div className="flex min-w-0 flex-1 flex-col rounded-2xl border border-neutral-200 bg-white p-6">
                   <div className="flex items-center gap-2.5">
                     <span className="grid h-8 w-8 place-items-center rounded-full bg-neutral-900 text-xs font-semibold text-white">
                       {s.n}
@@ -1162,7 +1165,7 @@ function HowItWorks() {
 
 function StepArtCreate() {
   return (
-    <svg width="190" height="130" viewBox="0 0 190 130" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <svg viewBox="0 0 190 130" className="h-auto w-full max-w-[190px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       {/* laptop */}
       <rect x="18" y="26" width="92" height="62" rx="5" />
       {/* person thumbnail on screen */}
@@ -1190,7 +1193,7 @@ function StepArtCreate() {
 
 function StepArtAsk() {
   return (
-    <svg width="190" height="130" viewBox="0 0 190 130" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <svg viewBox="0 0 190 130" className="h-auto w-full max-w-[190px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       {/* person */}
       <circle cx="38" cy="62" r="13" />
       <path d="M16 116c3-18 13-26 22-26s19 8 22 26" />
@@ -1217,7 +1220,7 @@ function StepArtAsk() {
 
 function StepArtShare() {
   return (
-    <svg width="190" height="130" viewBox="0 0 190 130" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <svg viewBox="0 0 190 130" className="h-auto w-full max-w-[190px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       {/* connection lines */}
       <path d="M74 46L38 26M116 46l36-20M74 84l-36 20M116 84l36 20" strokeWidth="1.6" strokeDasharray="3 4" />
       {/* central brain card */}
