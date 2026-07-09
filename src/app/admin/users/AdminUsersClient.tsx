@@ -232,6 +232,9 @@ export default function AdminUsersClient() {
                       onSaved={load}
                     />
                   )}
+                  {u.role !== 'admin' && (
+                    <ResetQuestionsButton email={u.email} />
+                  )}
                   <ResetPasswordButton email={u.email} />
                   <SuspendButton
                     email={u.email}
@@ -389,6 +392,56 @@ function SuspendButton({
  * The plaintext is shown ONCE in a copyable inline panel; closing the
  * panel discards it. The admin should pass it to the user out-of-band.
  */
+/**
+ * 対象ユーザーの「今月の質問回数」を手動でリセットする管理者ボタン。
+ * 監査ログは消えず、集計の起点だけが現在時刻に進む。
+ */
+function ResetQuestionsButton({ email }: { email: string }) {
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function reset() {
+    if (
+      !confirm(
+        `${email} の今月の質問回数をリセットしますか?\n以後、質問数の上限は今からの分だけで数えられます。`,
+      )
+    )
+      return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/users/reset-questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      setDone(true);
+      setTimeout(() => setDone(false), 3000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <button
+        type="button"
+        onClick={reset}
+        disabled={busy}
+        className="text-xs font-medium text-neutral-500 transition hover:text-neutral-900 disabled:opacity-50"
+      >
+        {busy ? 'リセット中…' : done ? 'リセット済み' : '質問回数リセット'}
+      </button>
+      {error && <span className="text-[10px] text-red-600">{error}</span>}
+    </span>
+  );
+}
+
 function ResetPasswordButton({ email }: { email: string }) {
   const [busy, setBusy] = useState(false);
   const [temp, setTemp] = useState<string | null>(null);

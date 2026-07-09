@@ -21,11 +21,28 @@ export async function getPlanUsage(user: AppUser): Promise<PlanUsage> {
   // Fail closed: if the plan row can't be read, refuse to silently
   // downgrade a paying user to 'free'. The caller surfaces this as
   // a 500 so the next attempt re-checks.
-  const { data: row, error: planErr } = await db
-    .from('app_users')
-    .select('plan')
-    .eq('email', user.email.toLowerCase())
-    .single();
+  // questions_reset_at(0025)が未適用の環境では plan だけで取り直す。
+  type PlanRow = { plan?: string; questions_reset_at?: string | null };
+  let row: PlanRow | null = null;
+  let planErr: { message: string } | null = null;
+  {
+    const full = await db
+      .from('app_users')
+      .select('plan, questions_reset_at')
+      .eq('email', user.email.toLowerCase())
+      .single();
+    if (full.error) {
+      const legacy = await db
+        .from('app_users')
+        .select('plan')
+        .eq('email', user.email.toLowerCase())
+        .single();
+      row = (legacy.data as unknown as PlanRow | null) ?? null;
+      planErr = legacy.error;
+    } else {
+      row = (full.data as unknown as PlanRow | null) ?? null;
+    }
+  }
   if (planErr) {
     throw new Error(`plan lookup failed: ${planErr.message}`);
   }
@@ -44,7 +61,14 @@ export async function getPlanUsage(user: AppUser): Promise<PlanUsage> {
   // Questions asked this month — only across the user's OWN (non-request)
   // brains; questions to gifted request-brains don't count. The month
   // boundary is JST (quotaMonthStart), not server-local UTC.
+  // 管理者が手動リセットした場合は、そのリセット時刻(月初より後なら)を
+  // 起点にして、それ以降の質問だけを数える。
   const monthStart = quotaMonthStart();
+  const resetAt = row?.questions_reset_at
+    ? new Date(row.questions_reset_at)
+    : null;
+  const since =
+    resetAt && resetAt.getTime() > monthStart.getTime() ? resetAt : monthStart;
 
   // Own (non-request) brains — questions to gifted request-brains are
   // exempt, so we only count activity on these.
@@ -65,7 +89,7 @@ export async function getPlanUsage(user: AppUser): Promise<PlanUsage> {
       .select('id', { count: 'exact', head: true })
       .eq('role', 'user')
       .in('avatar_id', brainIds)
-      .gte('created_at', monthStart.toISOString());
+      .gte('created_at', since.toISOString());
     questionsThisMonth = count ?? 0;
   }
 
