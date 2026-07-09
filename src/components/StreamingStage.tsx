@@ -209,6 +209,7 @@ export default function StreamingStage({
   const outputCtxRef = useRef<AudioContext | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const playheadRef = useRef<number>(0);
   const rafRef = useRef<number | null>(null);
@@ -286,6 +287,12 @@ export default function StreamingStage({
       // ignore
     }
     processorRef.current = null;
+    try {
+      workletNodeRef.current?.disconnect();
+    } catch {
+      // ignore
+    }
+    workletNodeRef.current = null;
     analyserRef.current = null;
     micStreamRef.current?.getTracks().forEach((t) => t.stop());
     micStreamRef.current = null;
@@ -999,46 +1006,86 @@ export default function StreamingStage({
       const analyser = inputCtx.createAnalyser();
       analyser.fftSize = 512;
       analyserRef.current = analyser;
-      const processor = inputCtx.createScriptProcessor(2048, 1, 1);
-      processorRef.current = processor;
-      processor.onaudioprocess = (e) => {
+      source.connect(analyser);
+
+      // マイクの Float32 フレームを受け取り、押して話す中だけ 16kHz PCM に
+      // 変換して送る共通処理。
+      const sendFrame = (input: Float32Array, inRate: number) => {
         if (mutedRef.current) return;
-        // Once the WebSocket has closed there's no point converting
-        // and base64-encoding more audio — and the SDK throws on each
-        // attempt, which we saw as a CLOSED-state spam loop.
         if (!sessionOpenRef.current || !sessionRef.current) return;
-        // Push-to-talk gate: mic frames only flow upstream while the
-        // user is explicitly holding the talk button (or Space). Any
-        // other time — listening, thinking, agent speaking — we send
-        // nothing, so echo and ambient noise can never reach the
-        // server and can never trigger a spurious turn boundary.
         if (!isTalkingRef.current) return;
-        const input = e.inputBuffer.getChannelData(0);
-        // 実際のコンテキストのサンプルレートで受け取り、16kHz に変換する。
-        // iOS は sampleRate 指定を無視して 48kHz になるため必須。
-        const pcm = floatTo16kPcm(input, e.inputBuffer.sampleRate);
+        const pcm = floatTo16kPcm(input, inRate);
         const b64 = int16ToBase64(pcm);
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (sessionRef.current as any)?.sendRealtimeInput?.({
-            audio: {
-              data: b64,
-              mimeType: `audio/pcm;rate=${TARGET_INPUT_RATE}`,
-            },
+            audio: { data: b64, mimeType: `audio/pcm;rate=${TARGET_INPUT_RATE}` },
           });
         } catch {
-          // session probably closed; latch the flag so we stop trying.
           sessionOpenRef.current = false;
         }
       };
-      source.connect(analyser);
-      analyser.connect(processor);
-      // ScriptProcessor needs to be in the graph to fire onaudioprocess
-      // but we don't want the mic monitoring on the speakers.
-      const sink = inputCtx.createGain();
-      sink.gain.value = 0;
-      processor.connect(sink);
-      sink.connect(inputCtx.destination);
+
+      // マイク取り込みは AudioWorklet を優先する。ScriptProcessorNode は
+      // 廃止予定で、特にモバイル(iOS Safari 等)では onaudioprocess が
+      // 発火しないことがあり「話しても無反応」の原因になりやすい。
+      // AudioWorklet が使えない環境では従来の ScriptProcessor に落ちる。
+      let capturing = false;
+      try {
+        if (inputCtx.audioWorklet) {
+          const workletSrc = `
+            class CBCapture extends AudioWorkletProcessor {
+              process(inputs) {
+                const ch = inputs[0] && inputs[0][0];
+                if (ch && ch.length) this.port.postMessage(ch.slice(0));
+                return true;
+              }
+            }
+            registerProcessor('cb-capture', CBCapture);
+          `;
+          const blob = new Blob([workletSrc], {
+            type: 'application/javascript',
+          });
+          const url = URL.createObjectURL(blob);
+          await inputCtx.audioWorklet.addModule(url);
+          URL.revokeObjectURL(url);
+          const node = new AudioWorkletNode(inputCtx, 'cb-capture');
+          workletNodeRef.current = node;
+          node.port.onmessage = (ev) => {
+            sendFrame(ev.data as Float32Array, inputCtx.sampleRate);
+          };
+          source.connect(node);
+          // 出力はしない(スピーカーに回さない)。worklet は接続だけで動く。
+          const sink = inputCtx.createGain();
+          sink.gain.value = 0;
+          node.connect(sink);
+          sink.connect(inputCtx.destination);
+          capturing = true;
+        }
+      } catch (werr) {
+        console.warn(
+          '[live] AudioWorklet 使用不可、ScriptProcessor にフォールバック:',
+          werr,
+        );
+      }
+
+      if (!capturing) {
+        const processor = inputCtx.createScriptProcessor(2048, 1, 1);
+        processorRef.current = processor;
+        processor.onaudioprocess = (e) => {
+          sendFrame(
+            e.inputBuffer.getChannelData(0),
+            e.inputBuffer.sampleRate,
+          );
+        };
+        analyser.connect(processor);
+        // ScriptProcessor needs to be in the graph to fire onaudioprocess
+        // but we don't want the mic monitoring on the speakers.
+        const sink = inputCtx.createGain();
+        sink.gain.value = 0;
+        processor.connect(sink);
+        sink.connect(inputCtx.destination);
+      }
 
       // Mic-level visualizer.
       const buf = new Uint8Array(analyser.fftSize);
@@ -1087,7 +1134,23 @@ export default function StreamingStage({
       };
       tick();
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
+      // マイク取得の失敗は分かりやすい日本語で案内する。アプリ内ブラウザ
+      // (Google アプリ・LINE 等)ではマイクが使えないことが多く、
+      // Safari / Chrome で開き直すと直る。
+      const name = e instanceof DOMException ? e.name : '';
+      let message = e instanceof Error ? e.message : String(e);
+      if (name === 'NotAllowedError' || name === 'SecurityError') {
+        message =
+          'マイクの使用が許可されていません。ブラウザのマイク権限を許可してください。アプリ内ブラウザで開いている場合は、Safari か Chrome で開き直してください。';
+      } else if (name === 'NotFoundError') {
+        message = 'マイクが見つかりません。マイクのある端末でお試しください。';
+      } else if (
+        typeof navigator !== 'undefined' &&
+        !navigator.mediaDevices?.getUserMedia
+      ) {
+        message =
+          'このブラウザではマイクを使えません。Safari か Chrome で開き直してください(アプリ内ブラウザは非対応のことがあります)。';
+      }
       setError(message);
       setStatus('error');
       await stop();
