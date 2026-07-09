@@ -125,6 +125,22 @@ export default function AvatarDetail({ id }: { id: string }) {
   const [transcriptOpen, setTranscriptOpen] = useState(true);
   const [partialUser, setPartialUser] = useState<string | null>(null);
   const [partialAgent, setPartialAgent] = useState<string | null>(null);
+  // フリープラン(音声0分)はテキスト回答のみなので、声の変更
+  // オプション自体を出さない。管理者と、依頼で作成されたブレイン
+  // (プラン制限外で音声可)は表示を維持する。
+  const [planVoiceAllowed, setPlanVoiceAllowed] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/plan', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.role === 'admin') return;
+        if (j.plan?.limits?.monthlyVoiceMinutes === 0) {
+          setPlanVoiceAllowed(false);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const currentThread = useMemo(
     () =>
@@ -642,6 +658,9 @@ export default function AvatarDetail({ id }: { id: string }) {
   const { avatar, training_videos } = data;
   // Keep the audit logger's name copy current (read by a []-deps cb).
   avatarNameRef.current = avatar.name;
+  // 声の変更を出すか: プランで音声が使えるユーザー、または依頼で
+  // 作成されたブレイン(プラン制限外で音声可)のときだけ。
+  const showVoiceOption = planVoiceAllowed || avatar.request_id != null;
 
   return (
     <div className="space-y-4">
@@ -789,7 +808,7 @@ export default function AvatarDetail({ id }: { id: string }) {
           3-column control row. */}
       <details className="group overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
         <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-2.5 text-sm font-bold text-neutral-700 transition hover:bg-neutral-50">
-          <span>声・言語・回答ルール</span>
+          <span>{showVoiceOption ? '声・言語・回答ルール' : '言語・回答ルール'}</span>
           <svg
             width="14"
             height="14"
@@ -807,16 +826,22 @@ export default function AvatarDetail({ id }: { id: string }) {
             />
           </svg>
         </summary>
-        <div className="grid grid-cols-3 gap-2 border-t border-neutral-100 p-2">
-          <SettingCell label="声">
-            <VoicePicker
-              current={avatar.voice}
-              onChange={async (v) => {
-                await saveMeta({ voice: v });
-              }}
-              disabled={savingMeta}
-            />
-          </SettingCell>
+        <div
+          className={`grid gap-2 border-t border-neutral-100 p-2 ${
+            showVoiceOption ? 'grid-cols-3' : 'grid-cols-2'
+          }`}
+        >
+          {showVoiceOption && (
+            <SettingCell label="声">
+              <VoicePicker
+                current={avatar.voice}
+                onChange={async (v) => {
+                  await saveMeta({ voice: v });
+                }}
+                disabled={savingMeta}
+              />
+            </SettingCell>
+          )}
           <SettingCell label="言語">
             <LanguagePicker
               current={avatar.language}
