@@ -67,6 +67,22 @@ export default function NotificationsClient() {
     }
   }
 
+  async function deleteOne(id: string) {
+    // 楽観的に画面から消す。失敗しても再取得で整合を取る。
+    setItems((prev) => prev.filter((x) => x.id !== id));
+    try {
+      await fetch('/api/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', id }),
+        keepalive: true,
+      });
+      window.dispatchEvent(new CustomEvent('cb-notifications-changed'));
+    } catch {
+      void load();
+    }
+  }
+
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <header className="flex items-center justify-between">
@@ -142,9 +158,23 @@ export default function NotificationsClient() {
                     className="mt-3 max-h-80 w-full rounded-xl bg-black"
                   />
                 )}
-                <p className="mt-2 text-[11px] text-neutral-400">
-                  {new Date(n.created_at).toLocaleString('ja-JP')}
-                </p>
+                <div className="mt-2 flex items-center justify-between">
+                  <p className="text-[11px] text-neutral-400">
+                    {new Date(n.created_at).toLocaleString('ja-JP')}
+                  </p>
+                  <button
+                    type="button"
+                    aria-label="このお知らせを削除"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void deleteOne(n.id);
+                    }}
+                    className="rounded-full px-2 py-1 text-[11px] font-medium text-neutral-400 transition hover:bg-neutral-100 hover:text-red-600"
+                  >
+                    削除
+                  </button>
+                </div>
               </div>
             );
             return (

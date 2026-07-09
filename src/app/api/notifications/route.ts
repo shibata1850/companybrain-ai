@@ -76,9 +76,10 @@ export async function POST(req: NextRequest) {
   if (!me) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
-  const { action, id } = (await req.json().catch(() => ({}))) as {
+  const { action, id, ids } = (await req.json().catch(() => ({}))) as {
     action?: string;
     id?: string;
+    ids?: string[];
   };
   const db = supabaseAdmin();
   if (action === 'read' && id) {
@@ -93,6 +94,20 @@ export async function POST(req: NextRequest) {
       .update({ read_at: new Date().toISOString() })
       .eq('recipient_email', me.email)
       .is('read_at', null);
+  } else if (action === 'read_ids' && Array.isArray(ids) && ids.length > 0) {
+    // ログイン時ポップアップで見せた未読を一括既読にする用途。
+    await db
+      .from('notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('recipient_email', me.email)
+      .in('id', ids.slice(0, 100));
+  } else if (action === 'delete' && id) {
+    // 自分宛ての1件を削除(受信者ごとに独立した行なので他人に影響しない)。
+    await db
+      .from('notifications')
+      .delete()
+      .eq('id', id)
+      .eq('recipient_email', me.email);
   } else {
     return NextResponse.json({ error: 'invalid action' }, { status: 400 });
   }

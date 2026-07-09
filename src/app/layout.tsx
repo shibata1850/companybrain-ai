@@ -6,6 +6,7 @@ import NavProgress from '@/components/NavProgress';
 import PageTransition from '@/components/PageTransition';
 import BottomNav from '@/components/BottomNav';
 import HeaderNav from '@/components/HeaderNav';
+import LoginAnnouncements from '@/components/LoginAnnouncements';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -86,6 +87,7 @@ export default async function RootLayout({
           <PageTransition>{children}</PageTransition>
         </main>
         <BottomNav show={loggedIn} />
+        {loggedIn && <LoginAnnouncements />}
       </body>
     </html>
   );
