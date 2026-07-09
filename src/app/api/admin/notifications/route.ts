@@ -16,11 +16,15 @@ export async function POST(req: NextRequest) {
   if (!me || me.role !== 'admin') {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
-  const { title, body, link, target } = (await req.json().catch(() => ({}))) as {
+  const { title, body, link, target, mediaPath, mediaType } = (await req
+    .json()
+    .catch(() => ({}))) as {
     title?: string;
     body?: string;
     link?: string;
     target?: string;
+    mediaPath?: string;
+    mediaType?: string;
   };
   const cleanTitle = title?.trim();
   if (!cleanTitle) {
@@ -28,6 +32,20 @@ export async function POST(req: NextRequest) {
   }
   if (!target) {
     return NextResponse.json({ error: '宛先を選択してください' }, { status: 400 });
+  }
+  // 添付は notification-media 署名APIが発行した notifications/ 配下の
+  // パスのみ受け付ける(任意パスの参照を防ぐ)。type は image/video のみ。
+  let cleanMediaPath: string | null = null;
+  let cleanMediaType: string | null = null;
+  if (typeof mediaPath === 'string' && mediaPath) {
+    if (!mediaPath.startsWith('notifications/') || mediaPath.includes('..')) {
+      return NextResponse.json({ error: 'invalid media path' }, { status: 400 });
+    }
+    if (mediaType !== 'image' && mediaType !== 'video') {
+      return NextResponse.json({ error: 'invalid media type' }, { status: 400 });
+    }
+    cleanMediaPath = mediaPath;
+    cleanMediaType = mediaType;
   }
 
   const db = supabaseAdmin();
@@ -55,12 +73,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, sent: 0 });
   }
 
+  // media 列(0024)は未適用の環境がありうるので、添付があるときだけ
+  // 含める。添付なしの通常のお知らせは従来どおりの列で挿入され、
+  // マイグレーション未適用でも壊れない。
+  const media =
+    cleanMediaPath && cleanMediaType
+      ? { media_path: cleanMediaPath, media_type: cleanMediaType }
+      : {};
   const rows = recipients.map((email) => ({
     recipient_email: email,
     kind: 'admin_message',
     title: cleanTitle.slice(0, 120),
     body: body?.trim()?.slice(0, 2000) || null,
     link: link?.trim()?.slice(0, 300) || null,
+    ...media,
   }));
   const { error } = await db.from('notifications').insert(rows);
   if (error) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAppUser } from '@/lib/authServer';
-import { supabaseAdmin } from '@/lib/supabase';
+import { storageBucket, supabaseAdmin } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,14 +19,42 @@ export async function GET(req: NextRequest) {
   const unreadOnly = url.searchParams.get('unread') === '1';
 
   const db = supabaseAdmin();
-  let query = db
-    .from('notifications')
-    .select('id, kind, title, body, link, read_at, created_at')
-    .eq('recipient_email', me.email)
-    .order('created_at', { ascending: false })
-    .limit(100);
-  if (unreadOnly) query = query.is('read_at', null);
-  const { data } = await query;
+  const cols =
+    'id, kind, title, body, link, read_at, created_at, media_path, media_type';
+  const legacyCols = 'id, kind, title, body, link, read_at, created_at';
+  const run = (select: string) => {
+    let q = db
+      .from('notifications')
+      .select(select)
+      .eq('recipient_email', me.email)
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (unreadOnly) q = q.is('read_at', null);
+    return q;
+  };
+  // media 列(0024)が未適用の環境では従来列で取り直す。
+  const first = await run(cols);
+  const result = first.error ? await run(legacyCols) : first;
+  const rows = (result.data ?? []) as unknown as Array<
+    Record<string, unknown>
+  >;
+
+  // 添付は非公開バケットにあるので、表示用に短命の署名URLを都度発行。
+  const bucket = storageBucket();
+  const notifications = await Promise.all(
+    rows.map(async (n) => {
+      let media_url: string | null = null;
+      const path = n.media_path as string | null | undefined;
+      if (path) {
+        const { data: s } = await db.storage
+          .from(bucket)
+          .createSignedUrl(path, 60 * 60);
+        media_url = s?.signedUrl ?? null;
+      }
+      const { media_path, ...rest } = n;
+      return { ...rest, media_url };
+    }),
+  );
 
   const { count } = await db
     .from('notifications')
@@ -35,7 +63,7 @@ export async function GET(req: NextRequest) {
     .is('read_at', null);
 
   return NextResponse.json({
-    notifications: data ?? [],
+    notifications,
     unread_count: count ?? 0,
   });
 }

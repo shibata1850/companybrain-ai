@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { uploadNotificationMedia } from '@/lib/clientUpload';
 
 type N = {
   id: string;
@@ -11,6 +12,8 @@ type N = {
   link: string | null;
   read_at: string | null;
   created_at: string;
+  media_url?: string | null;
+  media_type?: string | null;
 };
 
 export default function NotificationsClient() {
@@ -123,6 +126,22 @@ export default function NotificationsClient() {
                     {n.body}
                   </p>
                 )}
+                {n.media_url && n.media_type === 'image' && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={n.media_url}
+                    alt=""
+                    className="mt-3 max-h-80 w-full rounded-xl object-contain"
+                  />
+                )}
+                {n.media_url && n.media_type === 'video' && (
+                  <video
+                    src={n.media_url}
+                    controls
+                    playsInline
+                    className="mt-3 max-h-80 w-full rounded-xl bg-black"
+                  />
+                )}
                 <p className="mt-2 text-[11px] text-neutral-400">
                   {new Date(n.created_at).toLocaleString('ja-JP')}
                 </p>
@@ -187,6 +206,33 @@ function Compose({ onSent }: { onSent: () => void }) {
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  // 添付(画像/動画)1点。file は選択中のファイル、previewUrl はローカル
+  // プレビュー、uploading は選択直後のアップロード進行中フラグ。
+  const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [mediaKind, setMediaKind] = useState<'image' | 'video' | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] ?? null;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setFile(f);
+    if (f) {
+      setPreviewUrl(URL.createObjectURL(f));
+      setMediaKind(f.type.startsWith('video') ? 'video' : 'image');
+    } else {
+      setPreviewUrl(null);
+      setMediaKind(null);
+    }
+  }
+
+  function clearFile() {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setFile(null);
+    setPreviewUrl(null);
+    setMediaKind(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
 
   useEffect(() => {
     if (!open || users.length > 0) return;
@@ -200,16 +246,26 @@ function Compose({ onSent }: { onSent: () => void }) {
     setSending(true);
     setMsg(null);
     try {
+      // 添付があれば先に Storage へ直接アップロードし、パスを受け取る。
+      let mediaPath: string | undefined;
+      let mediaType: 'image' | 'video' | undefined;
+      if (file) {
+        setMsg('添付をアップロード中…');
+        const up = await uploadNotificationMedia(file);
+        mediaPath = up.path;
+        mediaType = up.mediaType;
+      }
       const res = await fetch('/api/admin/notifications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, body, target }),
+        body: JSON.stringify({ title, body, target, mediaPath, mediaType }),
       });
       const j = (await res.json()) as { ok?: boolean; sent?: number; error?: string };
       if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
       setMsg(`${j.sent} 件に送信しました`);
       setTitle('');
       setBody('');
+      clearFile();
       onSent();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
@@ -274,6 +330,62 @@ function Compose({ onSent }: { onSent: () => void }) {
         rows={3}
         className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
       />
+
+      {/* 画像・動画の添付(任意・1点) */}
+      <div>
+        <label className="block text-xs font-bold text-neutral-600">
+          画像・動画(任意)
+        </label>
+        {!file ? (
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="mt-1 w-full rounded-lg border border-dashed border-neutral-300 bg-white px-3 py-3 text-sm text-neutral-600 transition hover:border-neutral-900"
+          >
+            画像 / 動画を選ぶ
+          </button>
+        ) : (
+          <div className="mt-1 rounded-lg border border-neutral-200 bg-neutral-50 p-2">
+            {mediaKind === 'video' ? (
+              <video
+                src={previewUrl ?? undefined}
+                controls
+                playsInline
+                className="max-h-56 w-full rounded-md bg-black"
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={previewUrl ?? undefined}
+                alt=""
+                className="max-h-56 w-full rounded-md object-contain"
+              />
+            )}
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <span className="truncate text-[11px] text-neutral-500">
+                {file.name}
+              </span>
+              <button
+                type="button"
+                onClick={clearFile}
+                className="shrink-0 rounded-full border border-neutral-300 bg-white px-3 py-1 text-[11px] font-medium text-neutral-600 transition hover:border-neutral-900"
+              >
+                削除
+              </button>
+            </div>
+          </div>
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,video/*"
+          onChange={onPickFile}
+          className="hidden"
+        />
+        <p className="mt-1 text-[10px] text-neutral-400">
+          画像は 15 MB、動画は 100 MB まで。
+        </p>
+      </div>
 
       {msg && <p className="text-xs text-neutral-600">{msg}</p>}
 
