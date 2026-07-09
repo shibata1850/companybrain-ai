@@ -8,6 +8,7 @@ import {
   type Session,
 } from '@google/genai';
 import useIsMobile from '@/lib/useIsMobile';
+import { TARGET_INPUT_RATE, floatTo16kPcm } from '@/lib/audioResample';
 
 type Status =
   | 'idle'
@@ -1010,18 +1011,16 @@ export default function StreamingStage({
         // server and can never trigger a spurious turn boundary.
         if (!isTalkingRef.current) return;
         const input = e.inputBuffer.getChannelData(0);
-        const pcm = new Int16Array(input.length);
-        for (let i = 0; i < input.length; i++) {
-          const s = Math.max(-1, Math.min(1, input[i]));
-          pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-        }
+        // 実際のコンテキストのサンプルレートで受け取り、16kHz に変換する。
+        // iOS は sampleRate 指定を無視して 48kHz になるため必須。
+        const pcm = floatTo16kPcm(input, e.inputBuffer.sampleRate);
         const b64 = int16ToBase64(pcm);
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (sessionRef.current as any)?.sendRealtimeInput?.({
             audio: {
               data: b64,
-              mimeType: `audio/pcm;rate=${INPUT_SAMPLE_RATE}`,
+              mimeType: `audio/pcm;rate=${TARGET_INPUT_RATE}`,
             },
           });
         } catch {
