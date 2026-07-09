@@ -130,7 +130,11 @@ export default function StreamingStage({
   /** Fires when the user toggles the minimise button on the stage. */
   onToggleMinimized?: () => void;
 }) {
-  const isMobile = useIsMobile();
+  // タッチ端末(coarse ポインタ)は、押している間だけ話す方式ではなく
+  // 「1回タップで開始→もう一度タップで停止」にする。画面幅ではなく
+  // ポインタ種別で判定するので、大きめのスマホ/タブレットでも確実に
+  // タップ・トグルになる。
+  const isTouch = useIsMobile('(pointer: coarse)');
   const [status, setStatus] = useState<Status>('idle');
   // Mirror status in a ref so event handlers (which capture stale state)
   // can read the current value without being recreated on every change.
@@ -1562,8 +1566,8 @@ export default function StreamingStage({
                   ? '今月の音声会話上限に達しました(毎月1日リセット)。テキストで質問できます。'
                   : '音声会話はスターター以上のプランで利用できます。テキストで質問できます。'}
               </div>
-            ) : isMobile ? (
-              // Mobile: tap to start, tap again to stop (toggle).
+            ) : isTouch ? (
+              // タッチ端末: 1回タップで開始、もう一度タップで停止(トグル)。
               <button
                 type="button"
                 onClick={() => {
@@ -1577,9 +1581,9 @@ export default function StreamingStage({
                     ? 'animate-pulse bg-red-500 text-white ring-4 ring-red-300/60'
                     : 'bg-white/95 text-neutral-900 hover:bg-white'
                 }`}
-                title="タップで話す。もう一度タップで停止"
+                title="タップで開始。もう一度タップで停止"
               >
-                {isTalking ? '停止' : '話す'}
+                {isTalking ? 'タップで停止' : 'タップで話す'}
               </button>
             ) : (
               // Desktop: hold to talk (mouse / Space).
