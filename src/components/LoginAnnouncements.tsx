@@ -15,12 +15,11 @@ type N = {
 
 // このセッションで既にポップアップを出したか(タブを閉じるまで再表示
 // しない)。ログインし直す or 新しいタブを開くと再度チェックされる。
-const SESSION_KEY = 'cb-announce-shown';
-
 /**
- * モンスト等のアプリのように、ログイン後の初回に未読のお知らせを
- * ポップアップで順番に見せる。最後まで見て閉じると、表示した未読は
- * まとめて既読になる(以後ベルのバッジもクリア)。
+ * モンスト等のアプリのように、ログインしてページを開いた時に未読の
+ * お知らせをポップアップで順番に見せる。最後まで見て閉じると、表示した
+ * 未読はまとめて既読になる(以後ベルのバッジもクリア)。既読になるので
+ * 次回以降は自然に出なくなり、新しい未読が来たときだけ再び出る。
  *
  * 認証済みユーザーのレイアウトにのみマウントされる。
  */
@@ -30,12 +29,6 @@ export default function LoginAnnouncements() {
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
-    // セッション中に一度出したらもう出さない。
-    try {
-      if (sessionStorage.getItem(SESSION_KEY)) return;
-    } catch {
-      // sessionStorage 不可の環境でもポップアップ自体は動かす
-    }
     let cancelled = false;
     fetch('/api/notifications?unread=1', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
@@ -47,11 +40,6 @@ export default function LoginAnnouncements() {
         setItems([...unread].reverse());
         setIndex(0);
         setOpen(true);
-        try {
-          sessionStorage.setItem(SESSION_KEY, '1');
-        } catch {
-          // ignore
-        }
       })
       .catch(() => {});
     return () => {
