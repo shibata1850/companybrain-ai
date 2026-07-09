@@ -125,11 +125,7 @@ export default function NotificationsClient() {
                     <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-red-500" />
                   )}
                 </div>
-                {n.body && (
-                  <p className="mt-1 text-sm leading-relaxed text-neutral-600">
-                    {n.body}
-                  </p>
-                )}
+                {n.body && <NotificationBody body={n.body} />}
                 {n.media_url && n.media_type === 'image' && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -216,6 +212,53 @@ export default function NotificationsClient() {
             </li>
           )}
         </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * お知らせ本文。長い本文は約6行で折りたたみ、「続きを読む」で全文表示。
+ * 折りたたみが不要な短い本文ではトグルを出さない。トグルは親の
+ * <Link>/<button> へ伝播させない(遷移・既読化を誘発しない)。
+ */
+function NotificationBody({ body }: { body: string }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // 折りたたみ時(line-clamp 適用中)に実高さが表示高さを超えるかで
+    // トグルの要否を判定する。
+    if (!expanded) {
+      setOverflowing(el.scrollHeight - el.clientHeight > 2);
+    }
+  }, [body, expanded]);
+
+  return (
+    <div className="mt-1">
+      <p
+        ref={ref}
+        className={`whitespace-pre-wrap text-sm leading-relaxed text-neutral-600 ${
+          expanded ? '' : 'line-clamp-6'
+        }`}
+      >
+        {body}
+      </p>
+      {(overflowing || expanded) && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setExpanded((v) => !v);
+          }}
+          className="mt-1 text-xs font-bold text-neutral-500 transition hover:text-neutral-900"
+        >
+          {expanded ? '折りたたむ' : '続きを読む'}
+        </button>
       )}
     </div>
   );
