@@ -58,6 +58,67 @@ export default function TrainingClient({ avatarId }: { avatarId: string }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkMoving, setBulkMoving] = useState(false);
 
+  // 重複/類似素材の検出と統合。
+  type DedupeMember = {
+    id: string;
+    file_name: string | null;
+    summary: string | null;
+    folder: string | null;
+  };
+  type DedupeGroup = { similarity: number; members: DedupeMember[] };
+  const [dedupeOpen, setDedupeOpen] = useState(false);
+  const [dedupeLoading, setDedupeLoading] = useState(false);
+  const [dedupeGroups, setDedupeGroups] = useState<DedupeGroup[] | null>(null);
+  const [mergingKey, setMergingKey] = useState<string | null>(null);
+
+  async function runDedupe() {
+    setDedupeOpen(true);
+    setDedupeLoading(true);
+    setDedupeGroups(null);
+    setError(null);
+    try {
+      const res = await fetch(`/api/avatars/${avatarId}/dedupe`, {
+        method: 'POST',
+      });
+      const json = (await res.json()) as {
+        groups?: DedupeGroup[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      setDedupeGroups(json.groups ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setDedupeOpen(false);
+    } finally {
+      setDedupeLoading(false);
+    }
+  }
+
+  async function mergeGroup(members: DedupeMember[]) {
+    const ids = members.map((m) => m.id);
+    const key = ids.join(',');
+    setMergingKey(key);
+    setError(null);
+    try {
+      const res = await fetch(`/api/avatars/${avatarId}/dedupe/merge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      // 統合したグループを提案リストから除く。
+      setDedupeGroups((prev) =>
+        (prev ?? []).filter((g) => g.members.map((m) => m.id).join(',') !== key),
+      );
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setMergingKey(null);
+    }
+  }
+
   function toggleSelected(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -567,7 +628,97 @@ export default function TrainingClient({ avatarId }: { avatarId: string }) {
             >
               {selectionMode ? '選択モード解除' : '選択して一括移動'}
             </button>
+            <button
+              type="button"
+              onClick={runDedupe}
+              disabled={dedupeLoading}
+              className="rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:border-neutral-900 disabled:opacity-50"
+            >
+              {dedupeLoading ? '検出中…' : '重複を検出'}
+            </button>
           </div>
+
+          {/* 重複/類似素材の提案パネル */}
+          {dedupeOpen && (
+            <div className="space-y-3 rounded-2xl border border-indigo-200 bg-indigo-50/50 p-4 anim-fade-in">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-bold text-neutral-900">
+                  重複・類似の素材
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setDedupeOpen(false)}
+                  className="text-xs text-neutral-400 transition hover:text-neutral-900"
+                >
+                  閉じる
+                </button>
+              </div>
+              {dedupeLoading ? (
+                <p className="py-6 text-center text-xs text-neutral-500">
+                  素材の意味を比較しています…
+                </p>
+              ) : !dedupeGroups || dedupeGroups.length === 0 ? (
+                <p className="py-6 text-center text-xs text-neutral-500">
+                  まとめられそうな重複素材は見つかりませんでした。
+                </p>
+              ) : (
+                <>
+                  <p className="text-[11px] text-neutral-500">
+                    内容がほぼ同じ素材のグループです。統合すると、先頭の素材に
+                    本文をまとめ、残りは削除されます(元に戻せません)。
+                  </p>
+                  <ul className="space-y-3">
+                    {dedupeGroups.map((g) => {
+                      const key = g.members.map((m) => m.id).join(',');
+                      const busy = mergingKey === key;
+                      return (
+                        <li
+                          key={key}
+                          className="rounded-xl border border-neutral-200 bg-white p-3"
+                        >
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700">
+                              類似度 {g.similarity}% · {g.members.length} 件
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => mergeGroup(g.members)}
+                              disabled={busy}
+                              className="rounded-full bg-neutral-900 px-4 py-1.5 text-[11px] font-bold text-white transition hover:bg-neutral-700 disabled:opacity-50"
+                            >
+                              {busy ? '統合中…' : '1つに統合'}
+                            </button>
+                          </div>
+                          <ul className="space-y-1">
+                            {g.members.map((m, i) => (
+                              <li
+                                key={m.id}
+                                className="flex items-start gap-2 text-xs"
+                              >
+                                <span className="mt-0.5 shrink-0 text-[10px] text-neutral-400">
+                                  {i === 0 ? '残す' : '削除'}
+                                </span>
+                                <span className="min-w-0">
+                                  <span className="block truncate font-medium text-neutral-800">
+                                    {m.file_name ?? m.id}
+                                  </span>
+                                  {m.summary && (
+                                    <span className="block truncate text-[11px] text-neutral-500">
+                                      {m.summary}
+                                    </span>
+                                  )}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Bulk-action bar (appears when one or more cards are selected) */}
           {selectionMode && selectedIds.size > 0 && (
