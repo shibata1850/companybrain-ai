@@ -53,7 +53,6 @@ const LIVE_MODEL_FALLBACKS = [
   'gemini-2.5-flash-native-audio-preview-12-2025',
 ];
 
-const INPUT_SAMPLE_RATE = 16000;
 const OUTPUT_SAMPLE_RATE = 24000;
 
 /**
@@ -989,7 +988,11 @@ export default function StreamingStage({
         (window as unknown as { webkitAudioContext?: typeof AudioContext })
           .webkitAudioContext || window.AudioContext
       ) as typeof AudioContext;
-      const inputCtx = new InputCtx({ sampleRate: INPUT_SAMPLE_RATE });
+      // サンプルレートは指定しない(ネイティブに任せる)。iOS は 16000 の
+      // 強制指定を無視するうえ、非対応レートを強制すると onaudioprocess が
+      // 発火しなくなることがある。実レートは floatTo16kPcm で 16kHz に
+      // 変換して送るので、ここで固定する必要はない。
+      const inputCtx = new InputCtx();
       inputCtxRef.current = inputCtx;
       await inputCtx.resume?.();
       const source = inputCtx.createMediaStreamSource(stream);
@@ -1101,6 +1104,13 @@ export default function StreamingStage({
     if (textOnlyRef.current) return; // 音声なしプラン: マイク入力は無効
     if (isTalkingRef.current) return;
     if (mutedRef.current) return;
+    // iOS 対策: 録音/再生の AudioContext を、この直接のタップ操作の中で
+    // 確実に再開する。start() は await(通信)を挟むため、iOS では
+    // resume がジェスチャ外扱いになりコンテキストが suspended のまま
+    // 残ることがあり、その場合 ScriptProcessor の onaudioprocess が
+    // 発火せずマイク音声が全く流れない(=話しても何も起きない)。
+    void inputCtxRef.current?.resume?.().catch(() => {});
+    void outputCtxRef.current?.resume?.().catch(() => {});
     // Cut off any in-flight agent audio — the user is starting a new
     // turn, they shouldn't have to talk over the previous answer.
     stopAllPlayback();
