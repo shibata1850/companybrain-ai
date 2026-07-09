@@ -284,7 +284,13 @@ function EntriesStep({ user, brain }: { user: string; brain: Brain }) {
   useEffect(() => {
     fetch('/api/plan', { cache: 'no-store' })
       .then((r) => r.json())
-      .then((j) => setCanCsv(j.role === 'admin' || j.plan?.id === 'pro'))
+      .then((j) =>
+        setCanCsv(
+          j.role === 'admin' ||
+            j.plan?.id === 'pro' ||
+            j.plan?.id === 'enterprise',
+        ),
+      )
       .catch(() => {});
   }, []);
 

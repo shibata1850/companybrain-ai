@@ -38,6 +38,10 @@ export type AppUser = {
   display_name: string | null;
   /** Storage path of the user's profile picture, or null. */
   avatar_path: string | null;
+  /** 所属組織(個人アカウントは null)。 */
+  org_id: string | null;
+  /** 組織内の役割('company_admin' = 会社管理者 / 'member')。 */
+  org_role: 'company_admin' | 'member' | null;
 };
 
 /**
@@ -54,11 +58,25 @@ export async function getAppUser(): Promise<AppUser | null> {
   if (!email) return null;
 
   const db = supabaseAdmin();
-  const { data } = await db
-    .from('app_users')
-    .select('email, role, display_name, suspended_at, avatar_path')
-    .eq('email', email)
-    .single();
+  // org_id / org_role(0026)が未適用の環境でも動くよう、失敗時は従来列で
+  // 取り直す。
+  const cols = 'email, role, display_name, suspended_at, avatar_path, org_id, org_role';
+  const legacy = 'email, role, display_name, suspended_at, avatar_path';
+  const full = await db.from('app_users').select(cols).eq('email', email).single();
+  const res = full.error
+    ? await db.from('app_users').select(legacy).eq('email', email).single()
+    : full;
+  const data = res.data as
+    | {
+        email: string;
+        role: string;
+        display_name: string | null;
+        suspended_at: string | null;
+        avatar_path: string | null;
+        org_id?: string | null;
+        org_role?: string | null;
+      }
+    | null;
   if (!data) return null;
   // Suspended accounts are treated as if they don't exist for the rest
   // of the app — no brain access, no audit visibility, no requests.
@@ -68,6 +86,13 @@ export async function getAppUser(): Promise<AppUser | null> {
     role: data.role === 'admin' ? 'admin' : 'member',
     display_name: data.display_name ?? null,
     avatar_path: data.avatar_path ?? null,
+    org_id: data.org_id ?? null,
+    org_role:
+      data.org_role === 'company_admin'
+        ? 'company_admin'
+        : data.org_id
+        ? 'member'
+        : null,
   };
 }
 

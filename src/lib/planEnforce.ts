@@ -1,4 +1,4 @@
-import { PLANS, type Plan, type PlanId } from './plans';
+import { ENTERPRISE_PLAN, PLANS, type Plan, type PlanId } from './plans';
 import { supabaseAdmin } from './supabase';
 import { quotaMonthStart } from './quota';
 import type { AppUser } from './authServer';
@@ -46,8 +46,11 @@ export async function getPlanUsage(user: AppUser): Promise<PlanUsage> {
   if (planErr) {
     throw new Error(`plan lookup failed: ${planErr.message}`);
   }
+  // 組織に所属していれば、個人プランではなくエンタープライズの
+  // 「1シートあたりの上限」で制限する。個人アカウントは従来どおり。
+  const inOrg = !!user.org_id;
   const planId = (row?.plan ?? 'free') as PlanId;
-  const plan = PLANS.find((p) => p.id === planId) ?? PLANS[0];
+  const plan = inOrg ? ENTERPRISE_PLAN : PLANS.find((p) => p.id === planId) ?? PLANS[0];
 
   // Active brains (excludes trashed). Request-built brains (gifted by
   // an admin) are exempt from plan limits, so we never count them.
@@ -194,7 +197,10 @@ export function planLimitResponse(
     error: messages[reason],
     code: 'plan_limit_exceeded',
     plan: usage.plan.id,
-    upgrade_to: usage.plan.id === 'pro' ? null : nextPlanId(usage.plan.id),
+    upgrade_to:
+      usage.plan.id === 'pro' || usage.plan.id === 'enterprise'
+        ? null
+        : nextPlanId(usage.plan.id),
   };
 }
 
@@ -222,6 +228,13 @@ function nextPlanId(current: PlanId): PlanId {
  */
 function modelForPlanId(id: PlanId): string {
   switch (id) {
+    case 'enterprise':
+      // 企業向けは最上位。専用 env が無ければ Pro 相当にフォールバック。
+      return (
+        process.env.GEMINI_MODEL_ENTERPRISE ||
+        process.env.GEMINI_MODEL_PRO ||
+        'gemini-2.5-pro'
+      );
     case 'pro':
       return process.env.GEMINI_MODEL_PRO || 'gemini-2.5-pro';
     case 'standard':
@@ -280,6 +293,8 @@ export function liveModelForPlan(planId: PlanId, fallback: string): string {
     starter: process.env.GEMINI_LIVE_MODEL_STARTER,
     standard: process.env.GEMINI_LIVE_MODEL_STANDARD,
     pro: process.env.GEMINI_LIVE_MODEL_PRO,
+    enterprise:
+      process.env.GEMINI_LIVE_MODEL_ENTERPRISE || process.env.GEMINI_LIVE_MODEL_PRO,
   };
   return byTier[planId] || fallback;
 }

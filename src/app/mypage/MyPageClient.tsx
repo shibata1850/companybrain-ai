@@ -9,6 +9,8 @@ type Me = {
   role: 'admin' | 'member';
   display_name: string | null;
   avatar_url?: string | null;
+  org_id?: string | null;
+  org_role?: 'company_admin' | 'member' | null;
 };
 
 type Usage = {
@@ -159,6 +161,14 @@ export default function MyPageClient() {
         <MenuLink href="/audit" label="監査ログ" />
         <MenuLink href="/trash" label="ゴミ箱" />
         <MenuLink href="/account/password" label="パスワード変更" />
+        {me?.org_role === 'company_admin' && (
+          <>
+            <div className="border-t border-neutral-100 bg-neutral-50/60 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wider text-neutral-500">
+              会社管理
+            </div>
+            <MenuLink href="/org" label="メンバー管理(自社)" />
+          </>
+        )}
         {isAdmin && (
           <>
             <div className="border-t border-neutral-100 bg-neutral-50/60 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wider text-neutral-500">
@@ -166,6 +176,7 @@ export default function MyPageClient() {
             </div>
             <MenuLink href="/admin/avatars" label="ユーザーブレイン管理" />
             <MenuLink href="/admin/users" label="ユーザー管理" />
+            <MenuLink href="/admin/orgs" label="組織・シート管理" />
           </>
         )}
       </section>

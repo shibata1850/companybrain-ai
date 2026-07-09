@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { PLANS, type Plan } from '@/lib/plans';
+import { ENTERPRISE_PLAN, PLANS, type Plan } from '@/lib/plans';
 
 export default function LandingClient() {
   // If the user arrived from /login (or anywhere) with a hash like
@@ -2171,6 +2171,51 @@ function Pricing() {
             <PlanCard key={p.id} plan={p} />
           ))}
         </div>
+
+        {/* 企業向け(組織テナント・シート課金)。個人4プランとは別枠で
+            「お問い合わせ」導線にする。 */}
+        <div className="mt-5 overflow-hidden rounded-2xl border border-neutral-900 bg-neutral-900 text-white">
+          <div className="grid gap-6 p-6 sm:p-8 md:grid-cols-[1.1fr_1fr] md:items-center">
+            <div>
+              <span className="inline-block rounded-full bg-white/15 px-3 py-1 text-[11px] font-bold uppercase tracking-wider">
+                Enterprise
+              </span>
+              <h3 className="mt-3 text-2xl font-semibold tracking-tight">
+                {ENTERPRISE_PLAN.name}
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-neutral-300">
+                部署横断・全社導入する企業向け。ユーザーごとにアカウントを分けつつ、
+                会社がシート単位でまとめて契約・管理できます(1シート=1ユーザー)。
+              </p>
+              <ul className="mt-4 grid gap-2">
+                {ENTERPRISE_PLAN.features.map((f) => (
+                  <li key={f} className="flex items-start gap-2 text-sm text-neutral-100">
+                    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden className="mt-1 shrink-0">
+                      <path d="M3 8.5l3 3L13 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                    </svg>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="rounded-2xl bg-white/5 p-6 text-center ring-1 ring-white/10">
+              <p className="text-sm text-neutral-300">料金</p>
+              <p className="mt-1 text-2xl font-semibold tracking-tight">
+                シート課金・要お見積り
+              </p>
+              <p className="mt-1 text-xs text-neutral-400">
+                人数と要件に応じて個別にご案内します(請求書 / 銀行振込)。
+              </p>
+              <Link
+                href="/signup"
+                className="mt-5 inline-flex w-full items-center justify-center rounded-full bg-white px-5 py-2.5 text-sm font-bold text-neutral-900 transition hover:bg-neutral-100"
+              >
+                お問い合わせ
+              </Link>
+            </div>
+          </div>
+        </div>
+
         <p className="mt-10 text-center text-xs text-neutral-500">
           ※ Gemini Live (音声) は弊社で API 料金を負担しているため、各プランの上限内で課金されません。
         </p>
