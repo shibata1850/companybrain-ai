@@ -88,9 +88,24 @@ export default function SortableGrid({
   }, [editMode]);
   useEffect(() => {
     setMounted(true);
+    return () => {
+      // Detach any pending long-press watchers if we unmount mid-press.
+      if (pendingWatchersRef.current) {
+        pendingWatchersRef.current();
+        pendingWatchersRef.current = null;
+      }
+    };
   }, []);
 
   const view = draftIds ?? ids;
+
+  // Window-level watchers that cancel a pending long-press the moment the
+  // gesture turns into a scroll. Element onPointerMove is unreliable on
+  // touch: once the browser starts scrolling it stops delivering move
+  // events to the tile and instead fires pointercancel — so we listen
+  // globally for touchmove / scroll / pointercancel while a press is
+  // pending. Stored so we can detach them together.
+  const pendingWatchersRef = useRef<(() => void) | null>(null);
 
   const cancelLongPress = useCallback(() => {
     if (longPressTimerRef.current != null) {
@@ -98,6 +113,10 @@ export default function SortableGrid({
       longPressTimerRef.current = null;
     }
     pressStartRef.current = null;
+    if (pendingWatchersRef.current) {
+      pendingWatchersRef.current();
+      pendingWatchersRef.current = null;
+    }
   }, []);
 
   const getTileAt = useCallback(
@@ -214,24 +233,52 @@ export default function SortableGrid({
       return;
     }
     // Not editing yet → arm a long-press. A short tap falls through to
-    // the tile's normal <Link> navigation.
-    pressStartRef.current = { x: clientX, y: clientY };
+    // the tile's normal <Link> navigation; any scroll cancels it.
     cancelLongPress();
+    pressStartRef.current = { x: clientX, y: clientY };
+
+    const MOVE_CANCEL = 8; // px of movement that counts as "scrolling"
+    const onWinMove = (ev: PointerEvent | TouchEvent) => {
+      const start = pressStartRef.current;
+      if (!start) return;
+      const pt =
+        'touches' in ev
+          ? ev.touches[0] ?? ev.changedTouches[0]
+          : (ev as PointerEvent);
+      if (!pt) return;
+      if (
+        Math.abs(pt.clientX - start.x) > MOVE_CANCEL ||
+        Math.abs(pt.clientY - start.y) > MOVE_CANCEL
+      ) {
+        cancelLongPress();
+      }
+    };
+    const onCancel = () => cancelLongPress();
+    // passive so we never block the browser's native scroll.
+    window.addEventListener('pointermove', onWinMove, { passive: true });
+    window.addEventListener('touchmove', onWinMove, { passive: true });
+    window.addEventListener('scroll', onCancel, {
+      passive: true,
+      capture: true,
+    });
+    window.addEventListener('pointercancel', onCancel);
+    window.addEventListener('pointerup', onCancel);
+    pendingWatchersRef.current = () => {
+      window.removeEventListener('pointermove', onWinMove);
+      window.removeEventListener('touchmove', onWinMove);
+      window.removeEventListener('scroll', onCancel, true);
+      window.removeEventListener('pointercancel', onCancel);
+      window.removeEventListener('pointerup', onCancel);
+    };
+
     longPressTimerRef.current = window.setTimeout(() => {
       longPressTimerRef.current = null;
+      if (pendingWatchersRef.current) {
+        pendingWatchersRef.current();
+        pendingWatchersRef.current = null;
+      }
       beginDrag(id, clientX, clientY);
-    }, 300);
-  }
-
-  function onPointerMove(e: React.PointerEvent) {
-    // Cancel a pending long-press if the finger moves enough to be a
-    // scroll/tap-drag — keeps page scrolling intact.
-    const start = pressStartRef.current;
-    if (start && longPressTimerRef.current != null) {
-      const dx = Math.abs(e.clientX - start.x);
-      const dy = Math.abs(e.clientY - start.y);
-      if (dx > 10 || dy > 10) cancelLongPress();
-    }
+    }, 400);
   }
 
   function onPointerUp() {
@@ -270,8 +317,8 @@ export default function SortableGrid({
                 data-sort-id={id}
                 transition={{ type: 'spring', stiffness: 520, damping: 40 }}
                 onPointerDown={(e) => onPointerDown(e, id)}
-                onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
+                onPointerCancel={onPointerUp}
                 onClickCapture={onClickCapture}
                 style={{ touchAction: draggingId ? 'none' : 'auto' }}
               >
