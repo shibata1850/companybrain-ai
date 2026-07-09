@@ -1855,8 +1855,11 @@ function Impact() {
         </div>
 
         <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_1.15fr]">
-          {/* 効果が出る仕組み */}
-          <div className="rounded-2xl border border-neutral-200 bg-white p-6">
+          {/* 効果が出る仕組み。min-w-0: グリッドアイテムの自動最小幅
+              (min-content)を無効化する。これが無いと、チャートSVGの
+              固有サイズ(viewBox 340px)がトラック幅をビューポート超え
+              まで押し広げ、スマホで横スクロール(左右のブレ)が発生する。 */}
+          <div className="min-w-0 rounded-2xl border border-neutral-200 bg-white p-6">
             <h3 className="text-base font-semibold tracking-tight text-neutral-900">
               効果が出る仕組み
             </h3>
@@ -1899,7 +1902,7 @@ function Impact() {
           </div>
 
           {/* 導入後の変化 */}
-          <div className="rounded-2xl border border-neutral-200 bg-white p-6">
+          <div className="min-w-0 rounded-2xl border border-neutral-200 bg-white p-6">
             <h3 className="text-base font-semibold tracking-tight text-neutral-900">
               導入後の変化{' '}
               <span className="text-xs font-normal text-neutral-500">
