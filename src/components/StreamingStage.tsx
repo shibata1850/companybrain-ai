@@ -1352,25 +1352,6 @@ export default function StreamingStage({
   return (
     <div className="w-full space-y-3">
       <div className="relative aspect-[4/3] w-full overflow-hidden rounded-3xl border border-neutral-200 bg-neutral-900 sm:aspect-video">
-        {/* Minimise toggle — collapses the stage into a thin status bar. */}
-        {onToggleMinimized && (
-          <button
-            type="button"
-            onClick={onToggleMinimized}
-            aria-label="ステージを隠す"
-            className="absolute left-3 top-3 z-10 inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1 text-[11px] font-medium text-neutral-700 shadow-sm backdrop-blur transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-white"
-          >
-            <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
-              <path
-                d="M2 5h8M2 8h8"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-              />
-            </svg>
-            ステージを隠す
-          </button>
-        )}
         {(stageUrl || coverUrl) ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -1385,24 +1366,51 @@ export default function StreamingStage({
         )}
 
         {/* Edit-stage-background affordance, only visible while idle. */}
-        {!isLive && status !== 'connecting' && onEditStage && (
-          <button
-            type="button"
-            onClick={onEditStage}
-            className="absolute right-3 top-3 z-10 inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1 text-[11px] font-medium text-neutral-700 shadow-sm backdrop-blur transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-white"
-          >
-            <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden>
-              <path
-                d="M11 1.5l3.5 3.5L5 14.5H1.5V11L11 1.5z"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            背景を変更
-          </button>
+        {/* 右上のボタン群。「背景を変更」と「隠す」を同じ形・同じ場所に
+            まとめ、隠す/広げるの操作を一貫した見た目にする。 */}
+        {(onToggleMinimized ||
+          (!isLive && status !== 'connecting' && onEditStage)) && (
+          <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5">
+            {!isLive && status !== 'connecting' && onEditStage && (
+              <button
+                type="button"
+                onClick={onEditStage}
+                className="inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1 text-[11px] font-medium text-neutral-700 shadow-sm backdrop-blur transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-white"
+              >
+                <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden>
+                  <path
+                    d="M11 1.5l3.5 3.5L5 14.5H1.5V11L11 1.5z"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                背景を変更
+              </button>
+            )}
+            {onToggleMinimized && (
+              <button
+                type="button"
+                onClick={onToggleMinimized}
+                aria-label="ステージを隠す"
+                className="inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1 text-[11px] font-medium text-neutral-700 shadow-sm backdrop-blur transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-white"
+              >
+                <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
+                  <path
+                    d="M2 7.5l4-4 4 4"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                隠す
+              </button>
+            )}
+          </div>
         )}
 
         {/* Speaking pulse — radial glow that grows when the agent talks. */}
@@ -1768,15 +1776,17 @@ function CompactBar({
           </button>
         )}
         {onExpand && (
+          // 「隠す」と対になる復元ボタン。同じピル形状+シェブロン+ラベルで
+          // 見た目を揃える(下向き=展開して広げる)。
           <button
             type="button"
             onClick={onExpand}
             aria-label="ステージを表示"
-            className="grid h-7 w-7 place-items-center rounded-full bg-white/15 transition hover:bg-white/25"
+            className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-[10px] font-medium text-white transition hover:bg-white/25"
           >
             <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
               <path
-                d="M3 5l3-3 3 3M3 7l3 3 3-3"
+                d="M2 4.5l4 4 4-4"
                 stroke="currentColor"
                 strokeWidth="1.6"
                 fill="none"
@@ -1784,6 +1794,7 @@ function CompactBar({
                 strokeLinejoin="round"
               />
             </svg>
+            広げる
           </button>
         )}
       </div>
