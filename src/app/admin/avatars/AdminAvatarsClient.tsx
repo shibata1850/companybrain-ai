@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import ShowMoreButton from '@/components/ShowMoreButton';
 
 type Row = {
   id: string;
@@ -84,6 +85,14 @@ export default function AdminAvatarsClient() {
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [filtered]);
 
+  // owner グループが多くてもページが伸びすぎないよう先頭 PAGE 組だけ
+  // 表示。検索・owner フィルタが変わったらリセットする。
+  const GROUP_PAGE = 10;
+  const [visible, setVisible] = useState(GROUP_PAGE);
+  useEffect(() => {
+    setVisible(GROUP_PAGE);
+  }, [q, owner]);
+
   if (forbidden) {
     return (
       <div className="mx-auto max-w-md py-16 text-center">
@@ -164,7 +173,7 @@ export default function AdminAvatarsClient() {
         </div>
       ) : (
         <div className="space-y-5">
-          {grouped.map(([ownerEmail, list]) => (
+          {grouped.slice(0, visible).map(([ownerEmail, list]) => (
             <div key={ownerEmail} className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
               <div className="flex items-center justify-between border-b border-neutral-100 bg-neutral-50 px-4 py-2 text-xs">
                 <span className="min-w-0 truncate font-medium text-neutral-700">
@@ -210,6 +219,13 @@ export default function AdminAvatarsClient() {
               </ul>
             </div>
           ))}
+          <ShowMoreButton
+            visible={visible}
+            total={grouped.length}
+            step={GROUP_PAGE}
+            onMore={() => setVisible((v) => v + GROUP_PAGE)}
+            onCollapse={() => setVisible(GROUP_PAGE)}
+          />
         </div>
       )}
     </div>

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PortalMenu from '@/components/PortalMenu';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import { uploadVideoDirect } from '@/lib/clientUpload';
 import { MAX_VIDEO_BYTES, MAX_VIDEO_LABEL } from '@/lib/uploadLimits';
 
@@ -205,6 +206,15 @@ export default function TrainingClient({ avatarId }: { avatarId: string }) {
     });
     return filtered;
   }, [data, activeFolder, search]);
+
+  // 素材が多いとページが縦に伸びすぎるので、先頭 MATERIAL_PAGE 件だけ
+  // 表示し「もっと見る」で増やす。フォルダ切替・検索でリセットする。
+  const MATERIAL_PAGE = 12;
+  const [materialVisible, setMaterialVisible] = useState(MATERIAL_PAGE);
+  useEffect(() => {
+    setMaterialVisible(MATERIAL_PAGE);
+  }, [activeFolder, search]);
+  const shownMaterials = visibleMaterials.slice(0, materialVisible);
 
   async function addVideo(e: React.FormEvent) {
     e.preventDefault();
@@ -541,7 +551,7 @@ export default function TrainingClient({ avatarId }: { avatarId: string }) {
               className="flex-1 rounded-full border border-neutral-300 bg-white px-4 py-2 text-xs focus:border-neutral-900 focus:outline-none"
             />
             <span className="text-[11px] text-neutral-500">
-              {visibleMaterials.length} 件表示
+              {visibleMaterials.length} 件
             </span>
             <button
               type="button"
@@ -597,19 +607,29 @@ export default function TrainingClient({ avatarId }: { avatarId: string }) {
               </p>
             </div>
           ) : (
-            <ul className="grid grid-cols-1 gap-3 anim-stagger sm:grid-cols-2">
-              {visibleMaterials.map((m) => (
-                <MaterialCard
-                  key={m.id}
-                  material={m}
-                  folderOptions={folderOptions}
-                  selectionMode={selectionMode}
-                  selected={selectedIds.has(m.id)}
-                  onToggleSelected={() => toggleSelected(m.id)}
-                  onReload={load}
-                />
-              ))}
-            </ul>
+            <>
+              <ul className="grid grid-cols-1 gap-3 anim-stagger sm:grid-cols-2">
+                {shownMaterials.map((m) => (
+                  <MaterialCard
+                    key={m.id}
+                    material={m}
+                    folderOptions={folderOptions}
+                    selectionMode={selectionMode}
+                    selected={selectedIds.has(m.id)}
+                    onToggleSelected={() => toggleSelected(m.id)}
+                    onReload={load}
+                  />
+                ))}
+              </ul>
+              <ShowMoreButton
+                className="mt-3"
+                visible={materialVisible}
+                total={visibleMaterials.length}
+                step={MATERIAL_PAGE}
+                onMore={() => setMaterialVisible((v) => v + MATERIAL_PAGE)}
+                onCollapse={() => setMaterialVisible(MATERIAL_PAGE)}
+              />
+            </>
           )}
         </div>
       </div>

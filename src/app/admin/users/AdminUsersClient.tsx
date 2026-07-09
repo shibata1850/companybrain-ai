@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import SlideToConfirm from '@/components/SlideToConfirm';
+import ShowMoreButton from '@/components/ShowMoreButton';
 
 type User = {
   email: string;
@@ -19,6 +20,9 @@ export default function AdminUsersClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
+  // ユーザーが多くてもページが伸びすぎないよう先頭 PAGE 件だけ表示。
+  const USER_PAGE = 20;
+  const [visible, setVisible] = useState(USER_PAGE);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -180,7 +184,7 @@ export default function AdminUsersClient() {
           </p>
         ) : (
           <ul className="divide-y divide-neutral-100">
-            {users.map((u) => (
+            {users.slice(0, visible).map((u) => (
               <li
                 key={u.email}
                 className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
@@ -245,6 +249,16 @@ export default function AdminUsersClient() {
               </li>
             ))}
           </ul>
+        )}
+        {!loading && !forbidden && users.length > 0 && (
+          <ShowMoreButton
+            className="mt-3"
+            visible={visible}
+            total={users.length}
+            step={USER_PAGE}
+            onMore={() => setVisible((v) => v + USER_PAGE)}
+            onCollapse={() => setVisible(USER_PAGE)}
+          />
         )}
       </div>
     </div>
