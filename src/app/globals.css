@@ -302,6 +302,19 @@ body {
   }
 }
 
+/* iPhone-style "jiggle" for the brain grid's edit/reorder mode.
+   Applied to each tile's inner wrapper (the outer wrapper is owned by
+   framer-motion's layout animation, so the two transforms don't fight). */
+@keyframes cb-jiggle {
+  0% { transform: rotate(-1.15deg); }
+  50% { transform: rotate(1.15deg); }
+  100% { transform: rotate(-1.15deg); }
+}
+.cb-jiggle {
+  animation: cb-jiggle 0.26s ease-in-out infinite;
+  transform-origin: 50% 50%;
+}
+
 /* Indeterminate top navigation progress bar (NavProgress component). */
 .cb-nav-progress {
   position: fixed;

@@ -258,7 +258,7 @@ export default function HomePage() {
           ) : (
             <>
               <p className="text-[11px] text-neutral-400">
-                スマホは長押し、PC はドラッグでブレインの並びを変更できます。
+                カードを長押しすると並び替えモードになります。ドラッグで移動、「完了」で終了。
               </p>
               <SortableGrid
                 ids={avatars.map((a) => a.id)}
@@ -289,7 +289,7 @@ export default function HomePage() {
                       setError('並び替えの保存に失敗しました');
                     });
                 }}
-                className="grid grid-cols-2 gap-3 anim-stagger sm:grid-cols-4 lg:grid-cols-6"
+                className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6"
               >
                 {avatars.map((a) => (
                   <div key={a.id} data-sort-id={a.id}>

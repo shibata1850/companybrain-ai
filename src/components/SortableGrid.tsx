@@ -9,6 +9,8 @@ import {
   useRef,
   useState,
 } from 'react';
+import { createPortal } from 'react-dom';
+import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 
 type Props = {
   /** Stable ids in the current order. */
@@ -22,15 +24,30 @@ type Props = {
   children: ReactNode;
 };
 
+type Ghost = {
+  /** viewport-fixed top-left of the floating clone */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** pointer offset within the picked-up tile */
+  offX: number;
+  offY: number;
+};
+
 /**
- * Long-press (~250ms) on touch, or mouse-down + drag on desktop, to
- * pick up a tile and drop it elsewhere in the grid. We rely on the
- * Pointer Events API so the same code path covers touch and mouse.
+ * iPhone-home-screen-style reordering.
  *
- * The grid still uses CSS Grid for layout. While dragging, we measure
- * each tile's bounding rect and compute which tile the pointer is over,
- * then reorder the `ids` array preview-style. On drop we call
- * onReorder with the final order.
+ * - Long-press any tile (~300ms) enters "edit mode": every tile jiggles.
+ * - The pressed tile is lifted and follows the finger/cursor as a
+ *   floating clone; the other tiles slide out of the way (framer-motion
+ *   `layout` animates the grid reflow).
+ * - Release drops the tile into the gap. Edit mode stays on so several
+ *   moves can be made in a row; tap 「完了」 or press Esc to finish.
+ * - While in edit mode a normal tap does NOT navigate (tiles are for
+ *   dragging); outside edit mode taps behave normally.
+ *
+ * The `ids` / `onReorder` / `data-sort-id` contract is unchanged.
  */
 export default function SortableGrid({
   ids,
@@ -39,19 +56,24 @@ export default function SortableGrid({
   children,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [editMode, setEditMode] = useState(false);
   const [draftIds, setDraftIds] = useState<string[] | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const dragOriginRef = useRef<{ x: number; y: number } | null>(null);
-  const longPressTimerRef = useRef<number | null>(null);
-  const ghostStyleRef = useRef<{ x: number; y: number } | null>(null);
-  const [, force] = useState(0);
+  const [ghost, setGhost] = useState<Ghost | null>(null);
+  const [mounted, setMounted] = useState(false);
 
-  // Mirrors so the global drag listeners can be attached once per drag
-  // (deps: [draggingId]) instead of re-subscribing on every pointermove
-  // (which previously happened because draftIds was a dependency).
+  // Pending long-press bookkeeping.
+  const longPressTimerRef = useRef<number | null>(null);
+  const pressStartRef = useRef<{ x: number; y: number } | null>(null);
+  // Suppress the click that fires right after a drag so the card's
+  // <Link> doesn't navigate on drop.
+  const suppressClickRef = useRef(false);
+
+  // Refs mirrored for the once-per-drag global listeners.
   const draftIdsRef = useRef<string[] | null>(null);
   const idsRef = useRef<string[]>(ids);
   const onReorderRef = useRef(onReorder);
+  const editModeRef = useRef(false);
   useEffect(() => {
     draftIdsRef.current = draftIds;
   }, [draftIds]);
@@ -61,6 +83,12 @@ export default function SortableGrid({
   useEffect(() => {
     onReorderRef.current = onReorder;
   }, [onReorder]);
+  useEffect(() => {
+    editModeRef.current = editMode;
+  }, [editMode]);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const view = draftIds ?? ids;
 
@@ -69,6 +97,7 @@ export default function SortableGrid({
       window.clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
+    pressStartRef.current = null;
   }, []);
 
   const getTileAt = useCallback(
@@ -92,29 +121,49 @@ export default function SortableGrid({
     [],
   );
 
-  const move = useCallback(
-    (id: string, overId: string) => {
-      setDraftIds((prev) => {
-        const base = prev ?? ids;
-        const from = base.indexOf(id);
-        const to = base.indexOf(overId);
-        if (from < 0 || to < 0 || from === to) return base;
-        const next = base.slice();
-        next.splice(from, 1);
-        next.splice(to, 0, id);
-        return next;
-      });
-    },
-    [ids],
-  );
+  const move = useCallback((id: string, overId: string) => {
+    setDraftIds((prev) => {
+      const base = prev ?? idsRef.current;
+      const from = base.indexOf(id);
+      const to = base.indexOf(overId);
+      if (from < 0 || to < 0 || from === to) return base;
+      const next = base.slice();
+      next.splice(from, 1);
+      next.splice(to, 0, id);
+      return next;
+    });
+  }, []);
 
-  // Global listeners attached only while dragging.
+  function beginDrag(id: string, clientX: number, clientY: number) {
+    const container = containerRef.current;
+    if (!container) return;
+    const el = container.querySelector<HTMLElement>(
+      `[data-sort-id="${CSS.escape(id)}"]`,
+    );
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setEditMode(true);
+    setDraggingId(id);
+    setDraftIds(idsRef.current.slice());
+    setGhost({
+      x: r.left,
+      y: r.top,
+      w: r.width,
+      h: r.height,
+      offX: clientX - r.left,
+      offY: clientY - r.top,
+    });
+    suppressClickRef.current = true;
+  }
+
+  // Global listeners active only while a tile is picked up.
   useEffect(() => {
     if (!draggingId) return;
     function onMove(e: PointerEvent) {
       e.preventDefault();
-      ghostStyleRef.current = { x: e.clientX, y: e.clientY };
-      force((n) => n + 1);
+      setGhost((g) =>
+        g ? { ...g, x: e.clientX - g.offX, y: e.clientY - g.offY } : g,
+      );
       const overId = getTileAt(e.clientX, e.clientY);
       if (overId && overId !== draggingId) move(draggingId!, overId);
     }
@@ -122,13 +171,16 @@ export default function SortableGrid({
       const baseIds = idsRef.current;
       const finalOrder = draftIdsRef.current ?? baseIds;
       setDraggingId(null);
-      ghostStyleRef.current = null;
-      // Only fire onReorder if anything actually changed.
+      setGhost(null);
       const changed =
         finalOrder.length === baseIds.length &&
         finalOrder.some((id, i) => id !== baseIds[i]);
       if (changed) onReorderRef.current(finalOrder);
       setDraftIds(null);
+      // Let the click that trails this pointerup be swallowed, then reset.
+      window.setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 0);
     }
     window.addEventListener('pointermove', onMove, { passive: false });
     window.addEventListener('pointerup', onUp);
@@ -140,34 +192,45 @@ export default function SortableGrid({
     };
   }, [draggingId, getTileAt, move]);
 
-  function startDrag(id: string, clientX: number, clientY: number) {
-    dragOriginRef.current = { x: clientX, y: clientY };
-    setDraggingId(id);
-    ghostStyleRef.current = { x: clientX, y: clientY };
-  }
+  // Esc leaves edit mode.
+  useEffect(() => {
+    if (!editMode) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !draggingId) setEditMode(false);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editMode, draggingId]);
 
   function onPointerDown(e: React.PointerEvent, id: string) {
-    // Drag only starts from an explicit handle (an element with
-    // [data-drag-handle]). Tile content (links / buttons) stays
-    // tappable as normal — without this gate every card wrapped in
-    // <Link> would block drag entirely because closest('a') matches.
     if (e.button !== 0 && e.pointerType !== 'touch') return;
-    const target = e.target as HTMLElement;
-    if (!target.closest('[data-drag-handle]')) return;
-    // Capture coordinates before React pools the event.
     const clientX = e.clientX;
     const clientY = e.clientY;
-    // Stop the surrounding <Link> from navigating when the handle is
-    // pressed; we only want the drag.
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.pointerType === 'touch') {
-      cancelLongPress();
-      longPressTimerRef.current = window.setTimeout(() => {
-        startDrag(id, clientX, clientY);
-      }, 180);
-    } else {
-      startDrag(id, clientX, clientY);
+    // Already editing → pick up immediately (no long-press needed), and
+    // block the <Link> navigation.
+    if (editModeRef.current) {
+      e.preventDefault();
+      beginDrag(id, clientX, clientY);
+      return;
+    }
+    // Not editing yet → arm a long-press. A short tap falls through to
+    // the tile's normal <Link> navigation.
+    pressStartRef.current = { x: clientX, y: clientY };
+    cancelLongPress();
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressTimerRef.current = null;
+      beginDrag(id, clientX, clientY);
+    }, 300);
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    // Cancel a pending long-press if the finger moves enough to be a
+    // scroll/tap-drag — keeps page scrolling intact.
+    const start = pressStartRef.current;
+    if (start && longPressTimerRef.current != null) {
+      const dx = Math.abs(e.clientX - start.x);
+      const dy = Math.abs(e.clientY - start.y);
+      if (dx > 10 || dy > 10) cancelLongPress();
     }
   }
 
@@ -175,45 +238,101 @@ export default function SortableGrid({
     cancelLongPress();
   }
 
-  function onPointerLeave() {
-    cancelLongPress();
+  function onClickCapture(e: React.MouseEvent) {
+    // Swallow the click after a drag, and all tile clicks while editing.
+    if (suppressClickRef.current || editModeRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
   }
 
-  // Render children in the (possibly draft) order, decorating each
-  // with sort handlers + visual state for the dragging tile.
+  // Map children by id so we can render them in the (draft) view order.
   const childArray = Children.toArray(children).filter(isValidElement);
   const byId = new Map<string, React.ReactElement>();
   for (const child of childArray) {
     const id = (child.props as { 'data-sort-id'?: string })['data-sort-id'];
     if (typeof id === 'string') byId.set(id, child as React.ReactElement);
   }
-  const ordered = view.map((id) => byId.get(id)).filter(Boolean) as React.ReactElement[];
+  const draggingChild = draggingId ? byId.get(draggingId) : null;
 
   return (
-    <div ref={containerRef} className={className}>
-      {ordered.map((child) => {
-        const id = (child.props as { 'data-sort-id'?: string })['data-sort-id']!;
-        const isDragging = draggingId === id;
-        return (
-          <div
-            key={id}
-            data-sort-id={id}
-            onPointerDown={(e) => onPointerDown(e, id)}
-            onPointerUp={onPointerUp}
-            onPointerLeave={onPointerLeave}
-            className={`touch-none transition-transform ${
-              isDragging
-                ? 'scale-[1.04] opacity-80 shadow-2xl ring-2 ring-neutral-900'
-                : draggingId
-                ? 'opacity-60'
-                : ''
-            }`}
-            style={{ touchAction: draggingId ? 'none' : 'auto' }}
-          >
-            {child}
+    <>
+      <LayoutGroup>
+        <div ref={containerRef} className={className}>
+          {view.map((id, index) => {
+            const child = byId.get(id);
+            if (!child) return null;
+            const isDragging = draggingId === id;
+            return (
+              <motion.div
+                key={id}
+                layout
+                data-sort-id={id}
+                transition={{ type: 'spring', stiffness: 520, damping: 40 }}
+                onPointerDown={(e) => onPointerDown(e, id)}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onClickCapture={onClickCapture}
+                style={{ touchAction: draggingId ? 'none' : 'auto' }}
+              >
+                {/* Inner wrapper owns the jiggle so it never collides with
+                    framer-motion's layout transform on the outer div. The
+                    lifted tile is a floating clone (below), so its slot
+                    here is just a faded placeholder that reflows. */}
+                <div
+                  className={
+                    editMode && !isDragging ? 'cb-jiggle' : ''
+                  }
+                  style={{
+                    animationDelay: `${((index % 5) - 2) * 0.045}s`,
+                    animationDuration: `${0.24 + (index % 3) * 0.02}s`,
+                    visibility: isDragging ? 'hidden' : 'visible',
+                  }}
+                >
+                  {child}
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        {editMode && (
+          <div className="pointer-events-none fixed inset-x-0 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-50 flex justify-center sm:bottom-6">
+            <button
+              type="button"
+              onClick={() => {
+                if (!draggingId) setEditMode(false);
+              }}
+              className="pointer-events-auto rounded-full bg-neutral-900 px-6 py-2.5 text-sm font-bold text-white shadow-lg ring-1 ring-black/5 transition active:scale-95"
+            >
+              完了
+            </button>
           </div>
-        );
-      })}
-    </div>
+        )}
+      </LayoutGroup>
+
+      {/* Floating clone of the lifted tile, following the pointer. */}
+      {mounted &&
+        ghost &&
+        draggingChild &&
+        createPortal(
+          <AnimatePresence>
+            <motion.div
+              initial={{ scale: 1 }}
+              animate={{ scale: 1.08 }}
+              className="pointer-events-none fixed z-[9999] drop-shadow-2xl"
+              style={{
+                left: ghost.x,
+                top: ghost.y,
+                width: ghost.w,
+                height: ghost.h,
+              }}
+            >
+              {draggingChild}
+            </motion.div>
+          </AnimatePresence>,
+          document.body,
+        )}
+    </>
   );
 }
