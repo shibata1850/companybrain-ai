@@ -22,6 +22,10 @@ export default function NotificationsClient() {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // お知らせが溜まっても縦に伸び続けないよう、最初は先頭 PAGE 件だけ
+  // 表示し、「もっと見る」で増やす。
+  const PAGE = 8;
+  const [visible, setVisible] = useState(PAGE);
 
   const load = useCallback(async () => {
     setError(null);
@@ -104,7 +108,7 @@ export default function NotificationsClient() {
         </div>
       ) : (
         <ul className="space-y-2">
-          {items.map((n) => {
+          {items.slice(0, visible).map((n) => {
             const inner = (
               <div
                 className={`rounded-2xl border p-4 transition ${
@@ -186,6 +190,31 @@ export default function NotificationsClient() {
               </li>
             );
           })}
+          {visible < items.length && (
+            <li>
+              <button
+                type="button"
+                onClick={() => setVisible((v) => v + PAGE)}
+                className="w-full rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900"
+              >
+                もっと見る(残り {items.length - visible} 件)
+              </button>
+            </li>
+          )}
+          {visible > PAGE && (
+            <li>
+              <button
+                type="button"
+                onClick={() => {
+                  setVisible(PAGE);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="w-full py-1 text-center text-xs text-neutral-400 transition hover:text-neutral-700"
+              >
+                折りたたむ
+              </button>
+            </li>
+          )}
         </ul>
       )}
     </div>
