@@ -400,24 +400,8 @@ function BrainCard({
         </div>
       </Link>
 
-      {/* Drag handle (only initiator of SortableGrid drags). Sits at
-          top-left so it's distinct from the actions menu and so its
-          large touch target is easy to grab. */}
-      <span
-        data-drag-handle
-        title="ドラッグで並び替え"
-        aria-label="ドラッグで並び替え"
-        className="absolute left-1.5 top-1.5 grid h-6 w-6 cursor-grab touch-none place-items-center rounded-full bg-white/90 text-neutral-500 opacity-0 shadow-sm ring-1 ring-neutral-200 backdrop-blur transition group-hover:opacity-100 group-focus-within:opacity-100 active:cursor-grabbing sm:opacity-100"
-      >
-        <svg width="12" height="12" viewBox="0 0 14 14" aria-hidden>
-          <circle cx="4.5" cy="3.5" r="1" fill="currentColor" />
-          <circle cx="9.5" cy="3.5" r="1" fill="currentColor" />
-          <circle cx="4.5" cy="7" r="1" fill="currentColor" />
-          <circle cx="9.5" cy="7" r="1" fill="currentColor" />
-          <circle cx="4.5" cy="10.5" r="1" fill="currentColor" />
-          <circle cx="9.5" cy="10.5" r="1" fill="currentColor" />
-        </svg>
-      </span>
+      {/* 並べ替えはカード長押しで開始するようになったため、
+          左上のドラッグハンドル(点々)は廃止した。 */}
 
       <button
         type="button"
