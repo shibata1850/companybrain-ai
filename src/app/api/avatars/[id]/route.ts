@@ -33,14 +33,30 @@ export async function GET(
   const videos: Array<Record<string, unknown>> = [];
   const PAGE = 1000;
   for (let from = 0; ; from += PAGE) {
-    const { data: page, error: pageErr } = await db
+    const first = await db
       .from('training_videos')
       .select(
-        'id, file_name, mime_type, status, summary, transcript, folder, created_at',
+        'id, file_name, mime_type, status, summary, transcript, folder, created_at, extracted_rules',
       )
       .eq('avatar_id', params.id)
       .order('created_at', { ascending: false })
       .range(from, from + PAGE - 1);
+    let page = first.data as Array<Record<string, unknown>> | null;
+    let pageErr: { message: string } | null = first.error;
+    if (pageErr) {
+      // extracted_rules 列(0023)が未適用の環境では従来の列だけで
+      // 取り直す(列の露出は増やさず、後方互換だけ確保する)。
+      const legacy = await db
+        .from('training_videos')
+        .select(
+          'id, file_name, mime_type, status, summary, transcript, folder, created_at',
+        )
+        .eq('avatar_id', params.id)
+        .order('created_at', { ascending: false })
+        .range(from, from + PAGE - 1);
+      page = legacy.data as Array<Record<string, unknown>> | null;
+      pageErr = legacy.error;
+    }
     if (pageErr) break;
     if (!page || page.length === 0) break;
     videos.push(...page);

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { chunkTranscript, embedTexts } from '@/lib/gemini';
+import { chunkTranscript, embedTexts, understandMaterial } from '@/lib/gemini';
+import { saveExtractedRules } from '@/lib/materialRules';
 
 /**
  * Insert or replace one text knowledge entry for a brain: writes the
@@ -86,14 +87,32 @@ export async function upsertTextKnowledge(params: {
       const { error } = await db.from('knowledge_chunks').insert(rows);
       if (error) throw error;
     }
+    // 素材の「理解」: 要約と振る舞いルールの抽出。アプリ内の学習経路と
+    // 同じ扱いにする(外部同期の差し替えで旧ルールが残らないよう、
+    // 失敗時はルールを失効させる)。
+    let summary = text.length > 120 ? text.slice(0, 120) + '…' : text;
+    let rules: string[] = [];
+    try {
+      const understood = await understandMaterial(text);
+      if (understood.summary) summary = understood.summary;
+      rules = understood.rules;
+    } catch (understandErr) {
+      console.warn(
+        '[ingestText] understandMaterial failed:',
+        understandErr instanceof Error
+          ? understandErr.message
+          : String(understandErr),
+      );
+    }
     await db
       .from('training_videos')
       .update({
         status: 'ready',
         transcript: text,
-        summary: text.length > 120 ? text.slice(0, 120) + '…' : text,
+        summary,
       })
       .eq('id', videoId);
+    await saveExtractedRules(videoId, rules);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     await db

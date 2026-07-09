@@ -1,4 +1,10 @@
-import { chunkTranscript, embedTexts, transcribeVideo } from './gemini';
+import {
+  chunkTranscript,
+  embedTexts,
+  transcribeVideo,
+  understandMaterial,
+} from './gemini';
+import { saveExtractedRules } from './materialRules';
 import { supabaseAdmin } from './supabase';
 
 /**
@@ -19,10 +25,25 @@ export async function processTrainingVideo(params: {
     .eq('id', params.videoId);
 
   try {
-    const { transcript, summary } = await transcribeVideo(
+    const { transcript, summary: transcribeSummary } = await transcribeVideo(
       params.videoBytes,
       params.mimeType,
     );
+
+    // 素材の「理解」: 要約と振る舞いルールの抽出。失敗しても学習
+    // 本体(文字起こし+埋め込み)は成立させる。
+    let summary = transcribeSummary;
+    let rules: string[] = [];
+    try {
+      const understood = await understandMaterial(transcript);
+      if (understood.summary) summary = understood.summary;
+      rules = understood.rules;
+    } catch (e) {
+      console.warn(
+        '[processing] understandMaterial failed (要約は文字起こし結果を使用):',
+        e instanceof Error ? e.message : String(e),
+      );
+    }
 
     const chunks = chunkTranscript(transcript);
     const embeddings = chunks.length > 0 ? await embedTexts(chunks) : [];
@@ -46,6 +67,7 @@ export async function processTrainingVideo(params: {
         summary,
       })
       .eq('id', params.videoId);
+    await saveExtractedRules(params.videoId, rules);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     await db

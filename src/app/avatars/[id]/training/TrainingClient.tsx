@@ -23,6 +23,8 @@ type Material = {
   transcript: string | null;
   folder: string | null;
   created_at: string;
+  /** 素材から抽出した振る舞いルール(毎回の回答に適用される)。 */
+  extracted_rules?: string | null;
 };
 
 type DetailResponse = {
@@ -851,8 +853,28 @@ function MaterialCard({
   const [removed, setRemoved] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reanalyzing, setReanalyzing] = useState(false);
 
   const isText = material.mime_type?.startsWith('text/');
+
+  /** 素材の「理解」(要約+ルール抽出)をやり直す。理解機能の導入前に
+   *  学習した素材にルールを効かせたいときに使う。 */
+  async function reanalyze() {
+    setReanalyzing(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/training-videos/${material.id}/reanalyze`, {
+        method: 'POST',
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      await onReload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setReanalyzing(false);
+    }
+  }
 
   async function save() {
     setSaving(true);
@@ -1018,15 +1040,41 @@ function MaterialCard({
         />
       </div>
 
-      {material.transcript && (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="mt-2 text-[11px] text-neutral-500 transition hover:text-neutral-900"
-        >
-          {expanded ? '本文を閉じる' : '本文を見る'}
-        </button>
+      {/* 素材から抽出した振る舞いルール。RAG検索とは別に、会話の
+          たびにシステム指示へ注入され常に適用される。 */}
+      {material.extracted_rules && (
+        <div className="mt-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2">
+          <p className="text-[10px] font-bold tracking-wide text-indigo-700">
+            学習したルール(毎回の回答に適用)
+          </p>
+          <p className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed text-indigo-900">
+            {material.extracted_rules}
+          </p>
+        </div>
       )}
+
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        {material.transcript && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="text-[11px] text-neutral-500 transition hover:text-neutral-900"
+          >
+            {expanded ? '本文を閉じる' : '本文を見る'}
+          </button>
+        )}
+        {material.transcript && (
+          <button
+            type="button"
+            onClick={reanalyze}
+            disabled={reanalyzing}
+            title="要約とルール抽出をやり直します"
+            className="text-[11px] text-neutral-500 transition hover:text-neutral-900 disabled:opacity-50"
+          >
+            {reanalyzing ? '解析中…' : 'AIの理解を更新'}
+          </button>
+        )}
+      </div>
 
       {expanded && material.transcript && (
         <p className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-xs leading-relaxed text-neutral-700 anim-fade-in">

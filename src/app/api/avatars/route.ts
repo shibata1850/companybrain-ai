@@ -4,7 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { storageBucket, supabaseAdmin } from '@/lib/supabase';
 import { extractFrameAndAudio } from '@/lib/media';
 import { processTrainingVideo } from '@/lib/processing';
-import { chunkTranscript, embedTexts } from '@/lib/gemini';
+import { chunkTranscript, embedTexts, understandMaterial } from '@/lib/gemini';
+import { saveExtractedRules } from '@/lib/materialRules';
 import { getAppUser } from '@/lib/authServer';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { reportError } from '@/lib/errorReport';
@@ -381,14 +382,29 @@ async function seedTextKnowledge(
       const { error } = await db.from('knowledge_chunks').insert(rows);
       if (error) throw error;
     }
+    // 素材の「理解」: 要約と振る舞いルールの抽出(失敗しても学習
+    // 本体は成立させる)。
+    let summary = text.length > 120 ? text.slice(0, 120) + '…' : text;
+    let rules: string[] = [];
+    try {
+      const understood = await understandMaterial(text);
+      if (understood.summary) summary = understood.summary;
+      rules = understood.rules;
+    } catch (e) {
+      console.warn(
+        '[avatars text seed] understandMaterial failed:',
+        e instanceof Error ? e.message : String(e),
+      );
+    }
     await db
       .from('training_videos')
       .update({
         status: 'ready',
         transcript: text,
-        summary: text.length > 120 ? text.slice(0, 120) + '…' : text,
+        summary,
       })
       .eq('id', videoId);
+    await saveExtractedRules(videoId, rules);
   } catch (e) {
     reportError(e, { route: 'POST /api/avatars (text seed)', avatarId });
     const message = e instanceof Error ? e.message : String(e);

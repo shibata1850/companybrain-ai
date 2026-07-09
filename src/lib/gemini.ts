@@ -142,6 +142,70 @@ export async function transcribeVideo(
 }
 
 /**
+ * 学習素材を「理解」する。取り込み時に一度だけ実行し、
+ *   - summary: 素材に何が書かれているかの短い要約(学習フォルダに表示)
+ *   - rules:   素材に含まれる「AIの振る舞い・回答形式への指示」
+ * を抽出する。rules は会話のたびにシステム指示へ注入されるため、
+ * RAG 検索でたまたまヒットしたときだけ従う、という不安定さが無くなる。
+ */
+export async function understandMaterial(text: string): Promise<{
+  summary: string;
+  rules: string[];
+}> {
+  // 長すぎる素材は先頭を優先して切り詰める(指示は冒頭に書かれる
+  // ことが多く、全文は要約の精度にほぼ寄与しないため)。
+  const MAX_CHARS = 20000;
+  const clipped =
+    text.length > MAX_CHARS ? `${text.slice(0, MAX_CHARS)}\n…(以下略)` : text;
+
+  const prompt = `次の「学習素材」を分析してください。出力は次のJSON形式のみ。前後に説明文を書かないでください。
+
+{
+  "summary": "<素材に何が書かれているかを2〜3文で要約>",
+  "rules": ["<素材がAIアシスタントの振る舞い・回答形式・口調への指示を含む場合、その指示を1件ずつ命令形で>", "..."]
+}
+
+rules の判定基準:
+- 「〜と答えて」「〜の場合は〜を返す」「〜してはいけない」「〜という口調で」のような、回答の仕方そのものへの指示だけを rules に入れる
+- 事実・知識・経験談・規程の内容は rules に入れない(それらは検索で参照される)
+- 指示が無ければ rules は空配列 [] にする
+- 指示の意味を変えず、条件と動作が明確な短い命令文に整える
+
+# 学習素材
+${clipped}`;
+
+  const raw = await generateWithFallback({
+    preferred: 'gemini-2.5-flash',
+    fallbacks: ['gemini-flash-latest', 'gemini-2.5-pro'],
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    config: { responseMimeType: 'application/json' },
+  });
+  // モデル応答が空・null・非オブジェクトの場合は「抽出失敗」として
+  // 明確に throw する(呼び出し側が握るか温存するかを決める)。
+  // 黙って rules=[] に潰すと、再解析時に稼働中のルールを消してしまう。
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('素材解析の応答を読み取れませんでした');
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('素材解析の応答形式が不正です');
+  }
+  const obj = parsed as { summary?: unknown; rules?: unknown };
+  const rules = Array.isArray(obj.rules)
+    ? obj.rules
+        .filter((r): r is string => typeof r === 'string' && r.trim().length > 0)
+        .map((r) => r.trim())
+        .slice(0, 20)
+    : [];
+  return {
+    summary: typeof obj.summary === 'string' ? obj.summary.trim() : '',
+    rules,
+  };
+}
+
+/**
  * Generate 768-dim embeddings for a list of text chunks. The pgvector
  * column is sized vector(768), so we always request that dimensionality.
  *
@@ -216,6 +280,9 @@ export async function answerAsPersona(params: {
   length?: AnswerLength;
   /** Optional model override (used by plan-tier routing). */
   model?: string;
+  /** 学習素材から抽出した振る舞いルール(行頭 "- " のブロック)。
+   *  他のどの方針よりも優先して守らせる。 */
+  rules?: string;
 }): Promise<string> {
   const {
     personaName,
@@ -223,6 +290,7 @@ export async function answerAsPersona(params: {
     knowledge,
     length = 'standard',
     model,
+    rules,
   } = params;
 
   const contextBlock =
@@ -236,7 +304,7 @@ export async function answerAsPersona(params: {
       parts: [
         {
           text: `あなたは「${personaName}」という人物になりきって回答してください。
-
+${rules ? `\n# 学習素材からの指示(最優先・厳守)\n以下のルールは、下の「答え方の方針」と矛盾しても常に優先する:\n${rules}\n` : ''}
 以下は、その人が過去に話した発言の抜粋です。
 これは「その人の口調・価値観・考え方・性格の癖」を知るための参考資料です。
 学習素材として丸暗記する知識ではなく、人物像を掴むためのヒントとして扱ってください。

@@ -4,7 +4,8 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 import { reportError } from '@/lib/errorReport';
 import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase';
-import { chunkTranscript, embedTexts } from '@/lib/gemini';
+import { chunkTranscript, embedTexts, understandMaterial } from '@/lib/gemini';
+import { saveExtractedRules } from '@/lib/materialRules';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -92,14 +93,30 @@ export async function POST(
       const { error } = await db.from('knowledge_chunks').insert(rows);
       if (error) throw error;
     }
+    // 素材の「理解」: 要約と振る舞いルールの抽出。失敗しても学習
+    // 本体は成立させ、要約は従来どおり先頭の切り出しにフォールバック。
+    let summary = text.length > 120 ? text.slice(0, 120) + '…' : text;
+    let rules: string[] = [];
+    try {
+      const understood = await understandMaterial(text);
+      if (understood.summary) summary = understood.summary;
+      rules = understood.rules;
+    } catch (e) {
+      console.warn(
+        '[train-text] understandMaterial failed:',
+        e instanceof Error ? e.message : String(e),
+      );
+    }
+
     await db
       .from('training_videos')
       .update({
         status: 'ready',
         transcript: text,
-        summary: text.length > 120 ? text.slice(0, 120) + '…' : text,
+        summary,
       })
       .eq('id', videoId);
+    await saveExtractedRules(videoId, rules);
   } catch (e) {
     reportError(e, { route: 'POST /api/avatars/[id]/train-text', actor: auth.me.email });
     const message = e instanceof Error ? e.message : String(e);

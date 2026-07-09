@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { storageBucket, supabaseAdmin } from '@/lib/supabase';
-import { chunkTranscript, embedTexts } from '@/lib/gemini';
+import { chunkTranscript, embedTexts, understandMaterial } from '@/lib/gemini';
+import { saveExtractedRules } from '@/lib/materialRules';
 import { authorizeAvatar } from '@/lib/authServer';
 import { reportError } from '@/lib/errorReport';
 
@@ -85,6 +86,28 @@ export async function PATCH(
         }));
         const { error } = await db.from('knowledge_chunks').insert(rows);
         if (error) throw error;
+      }
+      // 本文が変わったので「理解」もやり直す。旧本文から抽出した
+      // ルールが残り続けると、削除したはずの指示が毎セッション注入
+      // され続けてしまう。理解に失敗した場合はルールを空にして
+      // 失効させる(残存よりも消える方が安全)。
+      try {
+        const understood = await understandMaterial(newText);
+        if (understood.summary) {
+          await db
+            .from('training_videos')
+            .update({ summary: understood.summary })
+            .eq('id', params.id);
+        }
+        await saveExtractedRules(params.id, understood.rules);
+      } catch (understandErr) {
+        console.warn(
+          '[training-videos PATCH] understandMaterial failed — 旧ルールを失効:',
+          understandErr instanceof Error
+            ? understandErr.message
+            : String(understandErr),
+        );
+        await saveExtractedRules(params.id, []);
       }
       await db
         .from('training_videos')

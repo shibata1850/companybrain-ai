@@ -14,6 +14,7 @@ import {
 } from '@/lib/planEnforce';
 import type { PlanId } from '@/lib/plans';
 import { enforceRateLimit } from '@/lib/rateLimit';
+import { collectMaterialRules } from '@/lib/materialRules';
 import { reportError } from '@/lib/errorReport';
 
 export const runtime = 'nodejs';
@@ -138,9 +139,15 @@ export async function POST(req: NextRequest) {
       ? avatar.persona_prompt.trim()
       : '';
 
+  // 学習素材から取り込み時に抽出した振る舞いルール。RAG 検索とは
+  // 独立に毎セッション必ず注入されるため、「検索でヒットしたときだけ
+  // 従う」という不安定さが無い。
+  const materialRules = await collectMaterialRules(avatarId);
+
   const systemInstruction = `あなたは「${avatar.name}」という人物として、ユーザーと自然な対話を行ってください。
 ${avatar.description ? `\nプロフィール: ${avatar.description}\n` : ''}
-${personaOverride ? `\n# 振る舞いの指示(運用者から)\n${personaOverride}\n` : ''}
+${personaOverride ? `\n# 振る舞いの指示(運用者から・最優先)\n${personaOverride}\n- この運用者からの指示は、「学習素材からの指示」を含む他のどの方針と矛盾しても常に優先する\n` : ''}
+${materialRules ? `\n# 学習素材からの指示(厳守)\nこのブレインの学習素材には、回答の仕方そのものへの指示が含まれている。以下のルールは、上の「運用者からの指示」と矛盾する場合のみそちらを優先し、それ以外では下の「会話の方針」を含む他のどの方針よりも優先して、すべてのターンで厳守する:\n${materialRules}\n` : ''}
 以下は、その人が過去に話した発言の抜粋です。
 これは「口調・価値観・考え方・性格の癖」を読み取るための参考資料であり、知識の上限ではありません。
 

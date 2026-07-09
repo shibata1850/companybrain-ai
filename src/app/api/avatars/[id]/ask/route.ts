@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase';
 import { answerAsPersona, embedTexts, type AnswerLength } from '@/lib/gemini';
 import { authorizeAvatar } from '@/lib/authServer';
+import { collectMaterialRules } from '@/lib/materialRules';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { reportError } from '@/lib/errorReport';
 import {
@@ -96,11 +97,15 @@ export async function POST(
       (matches as Array<{ content: string }> | null)?.map((m) => m.content) ??
       [];
 
+    // 学習素材から抽出した振る舞いルール(毎回適用)。
+    const rules = await collectMaterialRules(avatarId);
+
     const answer = await answerAsPersona({
       personaName: avatar.name,
       question,
       knowledge,
       length,
+      rules: rules || undefined,
       // Higher plans route to higher-tier Gemini models automatically.
       // Admins always get the highest-quality model.
       model: usage ? answerModelForPlan(usage.plan) : adminAnswerModel(),
