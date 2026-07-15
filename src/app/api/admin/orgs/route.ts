@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAppUser } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabase';
-import { countOrgMembers } from '@/lib/org';
+import { countOrgMembers, listOrgMembers } from '@/lib/org';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -28,10 +28,16 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   const orgs = await Promise.all(
-    (data ?? []).map(async (o) => ({
-      ...o,
-      used: await countOrgMembers(o.id as string),
-    })),
+    (data ?? []).map(async (o) => {
+      const members = await listOrgMembers(o.id as string);
+      return {
+        ...o,
+        used: members.length,
+        admins: members
+          .filter((m) => m.org_role === 'company_admin')
+          .map((m) => m.email),
+      };
+    }),
   );
   return NextResponse.json({ orgs });
 }

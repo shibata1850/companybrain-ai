@@ -9,6 +9,7 @@ type Org = {
   seats: number;
   used: number;
   seat_price_jpy: number | null;
+  admins: string[];
 };
 
 /**
@@ -92,24 +93,38 @@ export default function AdminOrgsClient() {
     }
   }
 
-  async function assign(
-    id: string,
-    email: string,
-    role: 'company_admin' | 'member',
-  ) {
-    if (!email.trim()) return;
+  // 会社管理者をこの画面だけで作成する。事前登録は不要:
+  // (1) 認証アカウント + allowlist を作り(既存なら無視)、
+  // (2) その組織の会社管理者として割り当てる。
+  async function createCompanyAdmin(id: string, email: string, password: string) {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || password.length < 8) {
+      setError('メールアドレスと8文字以上の初期パスワードを入力してください');
+      return false;
+    }
     setError(null);
     try {
-      const res = await fetch('/api/admin/orgs/assign', {
+      // 1) アカウント作成(既存メールなら allowlist を upsert するだけ)
+      const create = await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), org_id: id, org_role: role }),
+        body: JSON.stringify({ email: cleanEmail, password, role: 'member' }),
       });
-      const json = (await res.json()) as { ok?: boolean; error?: string };
-      if (!res.ok || !json.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      const cj = (await create.json()) as { ok?: boolean; error?: string };
+      if (!create.ok || !cj.ok) throw new Error(cj.error || `HTTP ${create.status}`);
+      // 2) 会社管理者に割り当て
+      const assign = await fetch('/api/admin/orgs/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, org_id: id, org_role: 'company_admin' }),
+      });
+      const aj = (await assign.json()) as { ok?: boolean; error?: string };
+      if (!assign.ok || !aj.ok) throw new Error(aj.error || `HTTP ${assign.status}`);
       await load();
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      return false;
     }
   }
 
@@ -129,8 +144,8 @@ export default function AdminOrgsClient() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">組織・シート管理</h1>
           <p className="mt-1 text-sm text-neutral-500">
-            会社(テナント)を作成し、会社管理者を任命します。会社管理者が
-            自社メンバーをシート内で招待・管理します。
+            手順:① 会社を作成(会社名+シート数)→ ② その会社に「会社管理者」を
+            追加。以後は会社管理者が自社メンバーをシート枠内で招待・管理します。
           </p>
         </div>
         <Link
@@ -197,7 +212,12 @@ export default function AdminOrgsClient() {
       ) : (
         <ul className="space-y-3">
           {orgs.map((o) => (
-            <OrgRow key={o.id} org={o} onSeats={updateSeats} onAssign={assign} />
+            <OrgRow
+              key={o.id}
+              org={o}
+              onSeats={updateSeats}
+              onCreateAdmin={createCompanyAdmin}
+            />
           ))}
         </ul>
       )}
@@ -208,14 +228,26 @@ export default function AdminOrgsClient() {
 function OrgRow({
   org,
   onSeats,
-  onAssign,
+  onCreateAdmin,
 }: {
   org: Org;
   onSeats: (id: string, next: number) => void;
-  onAssign: (id: string, email: string, role: 'company_admin' | 'member') => void;
+  onCreateAdmin: (id: string, email: string, password: string) => Promise<boolean>;
 }) {
   const [seatDraft, setSeatDraft] = useState(String(org.seats));
   const [adminEmail, setAdminEmail] = useState('');
+  const [adminPw, setAdminPw] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit() {
+    setBusy(true);
+    const ok = await onCreateAdmin(org.id, adminEmail, adminPw);
+    setBusy(false);
+    if (ok) {
+      setAdminEmail('');
+      setAdminPw('');
+    }
+  }
 
   return (
     <li className="rounded-2xl border border-neutral-200 bg-white p-4">
@@ -228,6 +260,14 @@ function OrgRow({
               <> · 単価 ¥{org.seat_price_jpy.toLocaleString()}/月</>
             )}
           </p>
+          <p className="mt-0.5 text-[11px] text-neutral-500">
+            会社管理者:{' '}
+            {org.admins.length > 0 ? (
+              <span className="text-neutral-800">{org.admins.join(', ')}</span>
+            ) : (
+              <span className="text-amber-700">未設定</span>
+            )}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <input
@@ -235,6 +275,7 @@ function OrgRow({
             min={1}
             value={seatDraft}
             onChange={(e) => setSeatDraft(e.target.value)}
+            aria-label="シート数"
             className="w-20 rounded-lg border border-neutral-300 px-2 py-1 text-xs tabular-nums focus:border-neutral-900 focus:outline-none"
           />
           <button
@@ -246,29 +287,43 @@ function OrgRow({
           </button>
         </div>
       </div>
-      <div className="mt-3 flex flex-col gap-2 border-t border-neutral-100 pt-3 sm:flex-row">
-        <input
-          type="email"
-          value={adminEmail}
-          onChange={(e) => setAdminEmail(e.target.value)}
-          placeholder="会社管理者にするメールアドレス(登録済み)"
-          className="flex-1 rounded-lg border border-neutral-300 px-3 py-2 text-xs focus:border-neutral-900 focus:outline-none"
-        />
-        <button
-          type="button"
-          onClick={() => {
-            onAssign(org.id, adminEmail, 'company_admin');
-            setAdminEmail('');
-          }}
-          className="rounded-full bg-neutral-900 px-4 py-2 text-xs font-bold text-white transition hover:bg-neutral-700"
-        >
-          会社管理者に任命
-        </button>
+
+      {/* 会社管理者をこの場で作成(事前登録不要) */}
+      <div className="mt-3 border-t border-neutral-100 pt-3">
+        <p className="mb-2 text-xs font-bold text-neutral-700">
+          会社管理者を追加
+        </p>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input
+            type="email"
+            value={adminEmail}
+            onChange={(e) => setAdminEmail(e.target.value)}
+            placeholder="担当者のメールアドレス"
+            className="flex-1 rounded-lg border border-neutral-300 px-3 py-2 text-xs focus:border-neutral-900 focus:outline-none"
+          />
+          <input
+            type="text"
+            value={adminPw}
+            onChange={(e) => setAdminPw(e.target.value)}
+            placeholder="初期パスワード(8文字以上)"
+            className="flex-1 rounded-lg border border-neutral-300 px-3 py-2 text-xs focus:border-neutral-900 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={submit}
+            disabled={busy}
+            className="rounded-full bg-neutral-900 px-4 py-2 text-xs font-bold text-white transition hover:bg-neutral-700 disabled:opacity-50"
+          >
+            {busy ? '作成中…' : '会社管理者にする'}
+          </button>
+        </div>
+        <p className="mt-1.5 text-[10px] text-neutral-400">
+          このメールで新しくアカウントを作成し、この会社の管理者に設定します
+          (この画面だけで完結。既存メールなら管理者権限だけ付与)。設定した
+          初期パスワードを本人にお伝えください。以後、その人が自社メンバーを
+          招待・管理します。
+        </p>
       </div>
-      <p className="mt-1.5 text-[10px] text-neutral-400">
-        ※ 事前に「ユーザー管理」で対象メールを登録しておいてください。任命後は
-        その人が自社メンバーを招待できます。
-      </p>
     </li>
   );
 }
