@@ -143,10 +143,6 @@ export default function AdminOrgsClient() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">組織・シート管理</h1>
-          <p className="mt-1 text-sm text-neutral-500">
-            手順:① 会社を作成(会社名+シート数)→ ② その会社に「会社管理者」を
-            追加。以後は会社管理者が自社メンバーをシート枠内で招待・管理します。
-          </p>
         </div>
         <Link
           href="/admin/users"
