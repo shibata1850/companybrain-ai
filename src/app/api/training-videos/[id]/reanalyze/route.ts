@@ -33,7 +33,7 @@ export async function POST(
     return NextResponse.json({ error: 'not found' }, { status: 404 });
   }
   // Only the owner of the parent brain may reanalyze its material.
-  const auth = await authorizeAvatar(existing.avatar_id as string);
+  const auth = await authorizeAvatar(existing.avatar_id as string, { requireOwner: true });
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }

@@ -97,15 +97,28 @@ export async function getAppUser(): Promise<AppUser | null> {
 }
 
 /**
- * Authorize the current user against one brain for USE / EDIT / DELETE.
- * A brain belongs solely to its creator — admins have NO access to
- * other people's brains (their oversight is the audit log only). The
- * owner is the only one who passes.
+ * Authorize the current user against one brain.
+ *
+ * - 所有者(owner): フルアクセス(利用・編集・削除)。access='owner'。
+ * - 共有相手(shared): 同じ会社のメンバーで、そのブレインが自分に共有
+ *   されている場合、閲覧・会話のみ可。access='shared'。
+ * - それ以外: 403。管理者(role='admin')も他人のブレインには入れない
+ *   (監査ログのみ)。
+ *
+ * 編集・削除系のルートは requireOwner:true を渡すこと。共有相手(shared)は
+ * その場合 403 になり、素材追加・編集・削除などができない。
  */
 export async function authorizeAvatar(
   avatarId: string,
+  opts: { requireOwner?: boolean } = {},
 ): Promise<
-  | { ok: true; me: AppUser; fromRequest: boolean }
+  | {
+      ok: true;
+      me: AppUser;
+      fromRequest: boolean;
+      access: 'owner' | 'shared';
+      ownerEmail: string;
+    }
   | { ok: false; status: number }
 > {
   const me = await getAppUser();
@@ -114,16 +127,86 @@ export async function authorizeAvatar(
   const db = supabaseAdmin();
   const { data } = await db
     .from('avatars')
-    .select('owner_email, request_id')
+    .select('owner_email, request_id, shared_with_org, deleted_at')
     .eq('id', avatarId)
     .single();
   if (!data) return { ok: false, status: 404 };
-  if (
-    (data.owner_email ?? '').toLowerCase() !== me.email.toLowerCase()
-  ) {
+
+  const ownerEmail = (data.owner_email ?? '').toLowerCase();
+  const isOwner = ownerEmail === me.email.toLowerCase();
+  if (isOwner) {
+    return {
+      ok: true,
+      me,
+      fromRequest: data.request_id != null,
+      access: 'owner',
+      ownerEmail,
+    };
+  }
+
+  // 編集系は所有者専用。共有相手は到達できない。
+  if (opts.requireOwner) return { ok: false, status: 403 };
+
+  // 所有者がゴミ箱に入れた(soft delete)ブレインには、共有相手は
+  // アクセスできない。所有者による削除がそのまま共有解除になる。
+  if ((data as { deleted_at?: string | null }).deleted_at != null) {
     return { ok: false, status: 403 };
   }
-  // request_id != null ⇒ this brain was built by an admin on request
-  // and gifted; the owner may use it but not add learning material.
-  return { ok: true, me, fromRequest: data.request_id != null };
+
+  // 共有アクセスの判定(閲覧・会話のみ)。同一組織 かつ 共有対象のとき。
+  const sharedOk = await isBrainSharedWith(
+    db,
+    avatarId,
+    ownerEmail,
+    (data as { shared_with_org?: boolean }).shared_with_org === true,
+    me,
+  );
+  if (!sharedOk) return { ok: false, status: 403 };
+  return {
+    ok: true,
+    me,
+    fromRequest: data.request_id != null,
+    access: 'shared',
+    ownerEmail,
+  };
+}
+
+/**
+ * ブレインが「自分に共有されているか」を判定する。共有は同一組織内に
+ * 限る(所有者と自分が同じ org_id)。org 全体共有(shared_with_org)か、
+ * 個別共有(avatar_shares に自分の行)のいずれかで true。
+ * 0027 未適用の環境では shared_with_org / avatar_shares が無いため、
+ * エラーは握りつぶして「共有なし」とする(既存の非共有挙動に一致)。
+ */
+async function isBrainSharedWith(
+  db: ReturnType<typeof supabaseAdmin>,
+  avatarId: string,
+  ownerEmail: string,
+  sharedWithOrg: boolean,
+  me: AppUser,
+): Promise<boolean> {
+  if (!me.org_id) return false; // 個人アカウントは共有の対象外
+  // 管理者(プラットフォーム管理者)は他人のブレインに共有で入れない。
+  // 通常 admin は org_id=null だが、万一 org に割り当てられても監査のみ
+  // という原則を、データ衛生だけに頼らずコードで担保する。
+  if (me.role === 'admin') return false;
+  // 所有者が同じ会社に属していること。
+  const { data: owner } = await db
+    .from('app_users')
+    .select('org_id')
+    .eq('email', ownerEmail)
+    .single();
+  const ownerOrg = (owner as { org_id?: string | null } | null)?.org_id ?? null;
+  if (!ownerOrg || ownerOrg !== me.org_id) return false;
+
+  if (sharedWithOrg) return true;
+
+  const { data: share, error } = await db
+    .from('avatar_shares')
+    .select('id')
+    .eq('avatar_id', avatarId)
+    .eq('shared_with_email', me.email.toLowerCase())
+    .maybeSingle();
+  if (error) return false; // 0027 未適用など
+  return !!share;
 }

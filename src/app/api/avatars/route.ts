@@ -47,9 +47,14 @@ export async function GET() {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  // 自分に共有されているブレイン(エンタープライズ)も一覧に含める。
+  // 閲覧・会話のみなので shared:true を付け、UI 側で編集系を隠す。
+  const ownRows = data ?? [];
+  const sharedRows = await listSharedBrains(db, me);
+
   const bucket = storageBucket();
-  const avatars = await Promise.all(
-    (data ?? []).map(async (a) => {
+  const own = await Promise.all(
+    ownRows.map(async (a) => {
       let cover_url: string | null = null;
       if (a.cover_image_path) {
         const { data: s } = await db.storage
@@ -58,10 +63,36 @@ export async function GET() {
         cover_url = s?.signedUrl ?? null;
       }
       const { request_id, ...rest } = a;
-      return { ...rest, cover_url, from_request: request_id != null };
+      return { ...rest, cover_url, from_request: request_id != null, shared: false };
     }),
   );
-  return NextResponse.json({ avatars });
+  const shared = await Promise.all(
+    sharedRows.map(async (a) => {
+      let cover_url: string | null = null;
+      const coverPath = a.cover_image_path as string | null;
+      if (coverPath) {
+        const { data: s } = await db.storage
+          .from(bucket)
+          .createSignedUrl(coverPath, 60 * 60);
+        cover_url = s?.signedUrl ?? null;
+      }
+      return {
+        id: a.id,
+        name: a.name,
+        description: a.description,
+        cover_image_path: a.cover_image_path,
+        owner_email: a.owner_email,
+        created_at: a.created_at,
+        sort_order: 0,
+        cover_url,
+        from_request: false,
+        shared: true,
+        shared_by: a.owner_email as string,
+      };
+    }),
+  );
+  // 自分のブレインを先、共有を後に。
+  return NextResponse.json({ avatars: [...own, ...shared] });
 }
 
 export async function POST(req: NextRequest) {
@@ -413,5 +444,65 @@ async function seedTextKnowledge(
       .update({ status: 'error', error_message: message })
       .eq('id', videoId);
     throw e;
+  }
+}
+
+/**
+ * 自分に共有されているブレインを返す(エンタープライズ限定)。
+ * org 全体共有(shared_with_org=true)+ 個別共有(avatar_shares)を、
+ * 同じ会社の所有者のものだけに絞って集める。0027 未適用や個人アカウント
+ * では空配列。
+ */
+async function listSharedBrains(
+  db: SupabaseClient,
+  me: { email: string; org_id: string | null },
+): Promise<Array<Record<string, unknown>>> {
+  if (!me.org_id) return [];
+  try {
+    // 自社メンバーのメール一覧(共有元は同じ会社の人に限る)。
+    const { data: orgUsers } = await db
+      .from('app_users')
+      .select('email')
+      .eq('org_id', me.org_id);
+    const orgEmails = new Set(
+      (orgUsers ?? []).map((u) => (u.email as string).toLowerCase()),
+    );
+    if (orgEmails.size === 0) return [];
+
+    const ids = new Set<string>();
+
+    // 個別共有(自分宛て)
+    const { data: shares } = await db
+      .from('avatar_shares')
+      .select('avatar_id')
+      .eq('shared_with_email', me.email.toLowerCase());
+    for (const s of shares ?? []) ids.add(s.avatar_id as string);
+
+    // org 全体共有
+    const { data: orgShared } = await db
+      .from('avatars')
+      .select('id, owner_email')
+      .eq('shared_with_org', true)
+      .is('deleted_at', null);
+    for (const a of orgShared ?? []) {
+      if (orgEmails.has((a.owner_email as string).toLowerCase())) {
+        ids.add(a.id as string);
+      }
+    }
+
+    if (ids.size === 0) return [];
+    const { data: rows } = await db
+      .from('avatars')
+      .select('id, name, description, cover_image_path, owner_email, created_at')
+      .in('id', Array.from(ids))
+      .is('deleted_at', null)
+      .neq('owner_email', me.email); // 自分のは own 側で出す
+    // 所有者が同じ会社に属していることを最終確認。
+    return (rows ?? []).filter((a) =>
+      orgEmails.has((a.owner_email as string).toLowerCase()),
+    );
+  } catch {
+    // 0027 未適用など: 共有機能なしとして扱う。
+    return [];
   }
 }

@@ -14,6 +14,9 @@ type Avatar = {
   cover_image_path: string | null;
   created_at: string;
   from_request?: boolean;
+  /** 他の社員から共有されたブレイン(閲覧・会話のみ)。 */
+  shared?: boolean;
+  shared_by?: string;
 };
 
 export default function HomePage() {
@@ -391,7 +394,17 @@ function BrainCard({
                 依頼
               </span>
             )}
+            {avatar.shared && (
+              <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-medium text-emerald-700">
+                共有
+              </span>
+            )}
           </div>
+          {avatar.shared && avatar.shared_by && (
+            <p className="mt-0.5 truncate text-[10px] text-neutral-400">
+              {avatar.shared_by} から共有
+            </p>
+          )}
           {avatar.description && (
             <p className="mt-0.5 line-clamp-2 text-[11px] text-neutral-500">
               {avatar.description}
@@ -403,24 +416,28 @@ function BrainCard({
       {/* 並べ替えはカード長押しで開始するようになったため、
           左上のドラッグハンドル(点々)は廃止した。 */}
 
-      <button
-        type="button"
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setMenuOpen((o) => !o);
-        }}
-        aria-label="操作メニュー"
-        className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-white/90 text-neutral-700 opacity-0 shadow-sm ring-1 ring-neutral-200 backdrop-blur transition duration-200 hover:bg-white group-hover:opacity-100 group-focus-within:opacity-100"
-      >
-        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
-          <circle cx="3" cy="7" r="1.2" fill="currentColor" />
-          <circle cx="7" cy="7" r="1.2" fill="currentColor" />
-          <circle cx="11" cy="7" r="1.2" fill="currentColor" />
-        </svg>
-      </button>
+      {/* 共有されたブレイン(閲覧・会話のみ)は削除できないため、
+          操作メニュー自体を出さない。 */}
+      {!avatar.shared && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setMenuOpen((o) => !o);
+          }}
+          aria-label="操作メニュー"
+          className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-white/90 text-neutral-700 opacity-0 shadow-sm ring-1 ring-neutral-200 backdrop-blur transition duration-200 hover:bg-white group-hover:opacity-100 group-focus-within:opacity-100"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+            <circle cx="3" cy="7" r="1.2" fill="currentColor" />
+            <circle cx="7" cy="7" r="1.2" fill="currentColor" />
+            <circle cx="11" cy="7" r="1.2" fill="currentColor" />
+          </svg>
+        </button>
+      )}
 
-      {menuOpen && (
+      {!avatar.shared && menuOpen && (
         <div className="absolute right-2 top-12 z-20 w-44 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg anim-fade-in">
           <button
             type="button"

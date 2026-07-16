@@ -87,10 +87,23 @@ export async function GET(
     stageUrl = signed?.signedUrl ?? null;
   }
 
+  // 共有相手(閲覧・会話のみ)の場合は can_edit=false。UI 側で編集系を隠す。
+  const canEdit = auth.access === 'owner';
+  // 作成者が書いた回答ルール(persona_prompt)は所有者専用。共有相手には
+  // 返さない(会話には Live トークン発行時にサーバー側で注入される)。
+  const avatarOut = canEdit
+    ? avatar
+    : { ...avatar, persona_prompt: null };
   return NextResponse.json({
-    avatar: { ...avatar, cover_url: coverUrl, stage_url: stageUrl },
-    training_videos: videos,
-    generations: generations ?? [],
+    avatar: {
+      ...avatarOut,
+      cover_url: coverUrl,
+      stage_url: stageUrl,
+      can_edit: canEdit,
+      shared: auth.access === 'shared',
+    },
+    training_videos: canEdit ? videos : [],
+    generations: canEdit ? generations ?? [] : [],
   });
 }
 
@@ -102,7 +115,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const auth = await authorizeAvatar(params.id);
+  const auth = await authorizeAvatar(params.id, { requireOwner: true });
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }
@@ -172,7 +185,7 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const auth = await authorizeAvatar(params.id);
+  const auth = await authorizeAvatar(params.id, { requireOwner: true });
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }

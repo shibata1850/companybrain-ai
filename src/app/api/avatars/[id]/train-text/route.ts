@@ -20,7 +20,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const auth = await authorizeAvatar(params.id);
+  const auth = await authorizeAvatar(params.id, { requireOwner: true });
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }

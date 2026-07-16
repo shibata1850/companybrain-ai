@@ -21,6 +21,9 @@ type Avatar = {
   voice: string | null;
   language: string | null;
   request_id: string | null;
+  /** false のとき、共有された(閲覧・会話のみの)ブレイン。編集系は隠す。 */
+  can_edit?: boolean;
+  shared?: boolean;
 };
 
 type ChatThread = {
@@ -656,6 +659,9 @@ export default function AvatarDetail({ id }: { id: string }) {
     return <DetailSkeleton />;
   }
   const { avatar, training_videos } = data;
+  // 共有された(閲覧・会話のみの)ブレインは編集不可。旧レスポンスとの
+  // 後方互換のため、can_edit が明示的に false のときだけ編集を隠す。
+  const canEdit = avatar.can_edit !== false;
   // Keep the audit logger's name copy current (read by a []-deps cb).
   avatarNameRef.current = avatar.name;
   // 声の変更を出すか: プランで音声が使えるユーザー、または依頼で
@@ -698,26 +704,28 @@ export default function AvatarDetail({ id }: { id: string }) {
               />
             ) : null}
           </div>
-          <button
-            type="button"
-            onClick={() => openFilePicker('cover')}
-            aria-label="アバター写真を変更"
-            className="absolute -bottom-1 -right-1 grid h-5 w-5 place-items-center rounded-full bg-neutral-900 text-white shadow-md transition hover:bg-neutral-700 focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:ring-offset-2"
-          >
-            <svg width="9" height="9" viewBox="0 0 16 16" aria-hidden>
-              <path
-                d="M11 1.5l3.5 3.5L5 14.5H1.5V11L11 1.5z"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => openFilePicker('cover')}
+              aria-label="アバター写真を変更"
+              className="absolute -bottom-1 -right-1 grid h-5 w-5 place-items-center rounded-full bg-neutral-900 text-white shadow-md transition hover:bg-neutral-700 focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:ring-offset-2"
+            >
+              <svg width="9" height="9" viewBox="0 0 16 16" aria-hidden>
+                <path
+                  d="M11 1.5l3.5 3.5L5 14.5H1.5V11L11 1.5z"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          )}
         </div>
         <div className="min-w-0 flex-1">
-          {editingName ? (
+          {editingName && canEdit ? (
             <input
               autoFocus
               value={nameDraft}
@@ -736,26 +744,37 @@ export default function AvatarDetail({ id }: { id: string }) {
             />
           ) : (
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setNameDraft(avatar.name);
-                  setEditingName(true);
-                }}
-                className="block max-w-full truncate rounded-md text-left text-base font-semibold tracking-tight transition hover:bg-neutral-100"
-                title="クリックで編集"
-              >
-                {avatar.name}
-              </button>
+              {canEdit ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNameDraft(avatar.name);
+                    setEditingName(true);
+                  }}
+                  className="block max-w-full truncate rounded-md text-left text-base font-semibold tracking-tight transition hover:bg-neutral-100"
+                  title="クリックで編集"
+                >
+                  {avatar.name}
+                </button>
+              ) : (
+                <h1 className="block max-w-full truncate text-base font-semibold tracking-tight">
+                  {avatar.name}
+                </h1>
+              )}
               {avatar.request_id && (
                 <span className="shrink-0 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700">
                   依頼で作成
                 </span>
               )}
+              {!canEdit && (
+                <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                  共有
+                </span>
+              )}
             </div>
           )}
 
-          {editingDesc ? (
+          {editingDesc && canEdit ? (
             <input
               autoFocus
               value={descDraft}
@@ -773,7 +792,7 @@ export default function AvatarDetail({ id }: { id: string }) {
               placeholder="説明(任意)"
               className="mt-0.5 w-full rounded-md border border-neutral-300 bg-white px-2 py-0.5 text-xs focus:border-neutral-900 focus:outline-none"
             />
-          ) : (
+          ) : canEdit ? (
             <button
               type="button"
               onClick={() => {
@@ -785,6 +804,12 @@ export default function AvatarDetail({ id }: { id: string }) {
             >
               {avatar.description || '+ 説明を追加'}
             </button>
+          ) : (
+            avatar.description && (
+              <p className="mt-0.5 block max-w-full truncate text-xs text-neutral-500">
+                {avatar.description}
+              </p>
+            )
           )}
         </div>
         <input
@@ -803,9 +828,11 @@ export default function AvatarDetail({ id }: { id: string }) {
         />
       </header>
 
-      {/* Collapsible settings: 声 / 言語 / 回答ルール. Closed by default
+      {/* 共有相手(閲覧・会話のみ)には声・言語・回答ルールの変更を出さない。 */}
+      {canEdit && (
+      /* Collapsible settings: 声 / 言語 / 回答ルール. Closed by default
           to keep the top of the page compact; open to reveal the
-          3-column control row. */}
+          3-column control row. */
       <details className="group overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
         <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-2.5 text-sm font-bold text-neutral-700 transition hover:bg-neutral-50">
           <span>{showVoiceOption ? '声・言語・回答ルール' : '言語・回答ルール'}</span>
@@ -862,6 +889,10 @@ export default function AvatarDetail({ id }: { id: string }) {
           </SettingCell>
         </div>
       </details>
+      )}
+
+      {/* 所有者のみ・エンタープライズ限定の共有パネル。 */}
+      {canEdit && <SharePanel avatarId={avatar.id} />}
 
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 anim-fade-in">
@@ -879,7 +910,7 @@ export default function AvatarDetail({ id }: { id: string }) {
             avatarName={avatar.name}
             onMessage={handleTranscriptMessage}
             onPartial={handlePartial}
-            onEditStage={() => openFilePicker('stage')}
+            onEditStage={canEdit ? () => openFilePicker('stage') : undefined}
             minimized={stageMinimized}
             onToggleMinimized={() => setStageMinimized((v) => !v)}
           />
@@ -908,7 +939,21 @@ export default function AvatarDetail({ id }: { id: string }) {
         </div>
 
         <div className="md:col-span-1">
-          {avatar.request_id ? (
+          {!canEdit ? (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-5">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-neutral-900">共有されたブレイン</h2>
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                  閲覧・会話のみ
+                </span>
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-neutral-600">
+                このブレインは同じ会社のメンバーから共有されています。
+                会話はできますが、素材の追加・編集・削除、声や回答ルールの
+                変更はできません。変更が必要な場合は作成者にご相談ください。
+              </p>
+            </div>
+          ) : avatar.request_id ? (
             <div className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-5">
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-semibold text-neutral-900">学習させる</h2>
@@ -2440,5 +2485,195 @@ function DetailSkeleton() {
         <div className="h-80 rounded-2xl anim-shimmer" />
       </div>
     </div>
+  );
+}
+
+/* ===========================================================
+ * 共有パネル(所有者のみ・エンタープライズ限定)
+ * 同じ会社のメンバーに、閲覧・会話のみでブレインを共有する。
+ * =========================================================== */
+
+type ShareConfig = {
+  enabled: boolean;
+  shared_with_org?: boolean;
+  shared_emails?: string[];
+  members?: string[];
+};
+
+function SharePanel({ avatarId }: { avatarId: string }) {
+  const [config, setConfig] = useState<ShareConfig | null>(null);
+  const [sharedWithOrg, setSharedWithOrg] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/avatars/${avatarId}/share`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j: ShareConfig) => {
+        if (!alive) return;
+        setConfig(j);
+        setSharedWithOrg(j.shared_with_org === true);
+        setSelected(new Set((j.shared_emails ?? []).map((e) => e.toLowerCase())));
+      })
+      .catch(() => {
+        if (alive) setConfig({ enabled: false });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [avatarId]);
+
+  // 個人アカウント(組織なし)や取得失敗時はパネル自体を出さない。
+  if (!config || !config.enabled) return null;
+
+  const members = config.members ?? [];
+
+  function toggleMember(email: string) {
+    setSaved(false);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const key = email.toLowerCase();
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  async function save() {
+    setSaving(true);
+    setErr(null);
+    setSaved(false);
+    try {
+      const res = await fetch(`/api/avatars/${avatarId}/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shared_with_org: sharedWithOrg,
+          emails: Array.from(selected),
+        }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      setSaved(true);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const sharedCount = sharedWithOrg ? members.length : selected.size;
+
+  return (
+    <details className="group overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+      <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-2.5 text-sm font-bold text-neutral-700 transition hover:bg-neutral-50">
+        <span className="flex items-center gap-2">
+          社員に共有
+          {sharedCount > 0 && (
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+              {sharedWithOrg ? '会社全体' : `${sharedCount}人`}
+            </span>
+          )}
+        </span>
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 16 16"
+          aria-hidden
+          className="text-neutral-400 transition-transform group-open:rotate-180"
+        >
+          <path
+            d="M4 6l4 4 4-4"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </summary>
+      <div className="space-y-3 border-t border-neutral-100 p-4">
+        <p className="text-[11px] leading-relaxed text-neutral-500">
+          同じ会社のメンバーに、このブレインを共有できます。共有された相手は
+          <span className="font-medium text-neutral-700">閲覧・会話のみ</span>
+          可能で、素材の追加・編集・削除、声や回答ルールの変更はできません。
+        </p>
+
+        <label className="flex items-start gap-2.5 rounded-lg border border-neutral-200 p-3">
+          <input
+            type="checkbox"
+            checked={sharedWithOrg}
+            onChange={(e) => {
+              setSaved(false);
+              setSharedWithOrg(e.target.checked);
+            }}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-neutral-900"
+          />
+          <span>
+            <span className="block text-xs font-medium text-neutral-900">
+              会社全体に共有する
+            </span>
+            <span className="block text-[11px] text-neutral-500">
+              自社の全メンバーが閲覧・会話できます。
+            </span>
+          </span>
+        </label>
+
+        {!sharedWithOrg && (
+          <div>
+            <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-neutral-500">
+              共有するメンバーを選ぶ
+            </p>
+            {members.length === 0 ? (
+              <p className="text-xs text-neutral-400">
+                共有できるメンバーがいません。
+              </p>
+            ) : (
+              <ul className="max-h-56 space-y-1 overflow-y-auto">
+                {members.map((email) => {
+                  const checked = selected.has(email.toLowerCase());
+                  return (
+                    <li key={email}>
+                      <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs text-neutral-700 transition hover:bg-neutral-50">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleMember(email)}
+                          className="h-4 w-4 shrink-0 accent-neutral-900"
+                        />
+                        <span className="truncate">{email}</span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {err && (
+          <p className="rounded-md bg-red-50 px-2 py-1.5 text-[11px] text-red-700">
+            {err}
+          </p>
+        )}
+
+        <div className="flex items-center justify-end gap-2">
+          {saved && (
+            <span className="text-[11px] text-emerald-600">保存しました</span>
+          )}
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving}
+            className="rounded-full bg-neutral-900 px-4 py-2 text-xs font-medium text-white transition hover:bg-neutral-700 active:scale-[0.99] disabled:opacity-40"
+          >
+            {saving ? '保存中…' : '共有設定を保存'}
+          </button>
+        </div>
+      </div>
+    </details>
   );
 }

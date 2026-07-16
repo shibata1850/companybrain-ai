@@ -19,9 +19,20 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const auth = await authorizeAvatar(params.id);
+  const auth = await authorizeAvatar(params.id, { requireOwner: true });
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
+  }
+  // 依頼で作成されたブレインは素材ロック。フォルダの改名・統合も素材の
+  // 整理にあたるため、train / dedupe などと同じくここでも拒否する。
+  if (auth.fromRequest) {
+    return NextResponse.json(
+      {
+        error: '依頼で作成されたブレインの素材は変更できません。',
+        code: 'request_brain_locked',
+      },
+      { status: 403 },
+    );
   }
   const body = (await req.json().catch(() => ({}))) as {
     from?: string;

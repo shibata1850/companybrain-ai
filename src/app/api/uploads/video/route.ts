@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
 
   let path: string;
   if (body.avatarId) {
-    const auth = await authorizeAvatar(body.avatarId);
+    const auth = await authorizeAvatar(body.avatarId, { requireOwner: true });
     if (!auth.ok) {
       return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
     }
