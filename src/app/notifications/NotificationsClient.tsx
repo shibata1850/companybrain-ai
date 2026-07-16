@@ -21,6 +21,8 @@ export default function NotificationsClient() {
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  // 会社管理者は自社メンバー限定でお知らせを作成できる。
+  const [isCompanyAdmin, setIsCompanyAdmin] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // お知らせが溜まっても縦に伸び続けないよう、最初は先頭 PAGE 件だけ
   // 表示し、「もっと見る」で増やす。
@@ -46,7 +48,12 @@ export default function NotificationsClient() {
     load();
     fetch('/api/auth/me', { cache: 'no-store' })
       .then((r) => r.json())
-      .then((j) => setIsAdmin(j.user?.role === 'admin'))
+      .then((j) => {
+        setIsAdmin(j.user?.role === 'admin');
+        setIsCompanyAdmin(
+          !!j.user?.org_id && j.user?.org_role === 'company_admin',
+        );
+      })
       .catch(() => {});
   }, [load]);
 
@@ -98,7 +105,9 @@ export default function NotificationsClient() {
         )}
       </header>
 
-      {isAdmin && <Compose onSent={load} />}
+      {(isAdmin || isCompanyAdmin) && (
+        <Compose onSent={load} companyAdmin={isCompanyAdmin && !isAdmin} />
+      )}
 
       {error && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -297,10 +306,16 @@ function NotificationBody({ body }: { body: string }) {
 type AdminUser = { email: string; admin_label: string | null; company: string | null };
 
 /**
- * Admin-only composer: write an announcement to all users or a single
- * user. Members never see this — they can only read notifications.
+ * お知らせ作成。運営者は全ユーザー/任意の1人へ、会社管理者は自社メンバー
+ * のみへ送れる(companyAdmin=true のとき宛先は自社に限定)。
  */
-function Compose({ onSent }: { onSent: () => void }) {
+function Compose({
+  onSent,
+  companyAdmin = false,
+}: {
+  onSent: () => void;
+  companyAdmin?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [target, setTarget] = useState('all');
@@ -338,11 +353,27 @@ function Compose({ onSent }: { onSent: () => void }) {
 
   useEffect(() => {
     if (!open || users.length > 0) return;
-    fetch('/api/admin/users', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((j) => setUsers(j.users ?? []))
-      .catch(() => {});
-  }, [open, users.length]);
+    // 会社管理者は自社メンバー一覧(/api/org)、運営者は全ユーザー一覧。
+    if (companyAdmin) {
+      fetch('/api/org', { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((j) =>
+          setUsers(
+            (j.members ?? []).map((m: { email: string }) => ({
+              email: m.email,
+              admin_label: null,
+              company: null,
+            })),
+          ),
+        )
+        .catch(() => {});
+    } else {
+      fetch('/api/admin/users', { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((j) => setUsers(j.users ?? []))
+        .catch(() => {});
+    }
+  }, [open, users.length, companyAdmin]);
 
   async function send() {
     setSending(true);
@@ -383,7 +414,7 @@ function Compose({ onSent }: { onSent: () => void }) {
         onClick={() => setOpen(true)}
         className="w-full rounded-2xl border border-dashed border-neutral-300 bg-white px-4 py-3 text-sm font-bold text-neutral-700 transition hover:border-neutral-900"
       >
-        ＋ お知らせを作成(管理者)
+        ＋ お知らせを作成{companyAdmin ? '(自社向け)' : '(管理者)'}
       </button>
     );
   }
@@ -391,7 +422,9 @@ function Compose({ onSent }: { onSent: () => void }) {
   return (
     <div className="space-y-3 rounded-2xl border border-neutral-300 bg-white p-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold text-neutral-900">お知らせを作成</h2>
+        <h2 className="text-sm font-bold text-neutral-900">
+          お知らせを作成{companyAdmin ? '(自社メンバー向け)' : ''}
+        </h2>
         <button
           type="button"
           onClick={() => setOpen(false)}
@@ -408,7 +441,9 @@ function Compose({ onSent }: { onSent: () => void }) {
           onChange={(e) => setTarget(e.target.value)}
           className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
         >
-          <option value="all">全ユーザー</option>
+          <option value="all">
+            {companyAdmin ? '自社の全メンバー' : '全ユーザー'}
+          </option>
           {users.map((u) => (
             <option key={u.email} value={u.email}>
               {u.admin_label || u.company || u.email}({u.email})

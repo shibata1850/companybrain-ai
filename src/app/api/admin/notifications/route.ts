@@ -13,7 +13,10 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(req: NextRequest) {
   const me = await getAppUser();
-  if (!me || me.role !== 'admin') {
+  // 運営者(全ユーザーへ)または会社管理者(自社メンバーのみへ)が作成可。
+  const isSuperAdmin = me?.role === 'admin';
+  const isCompanyAdmin = !!me?.org_id && me?.org_role === 'company_admin';
+  if (!me || (!isSuperAdmin && !isCompanyAdmin)) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
   const { title, body, link, target, mediaPath, mediaType } = (await req
@@ -50,21 +53,28 @@ export async function POST(req: NextRequest) {
 
   const db = supabaseAdmin();
 
+  // 会社管理者は自社メンバーのみが対象。運営者は全ユーザーが対象。
   let recipients: string[] = [];
   if (target === 'all') {
-    const { data } = await db.from('app_users').select('email');
+    let q = db.from('app_users').select('email');
+    if (!isSuperAdmin) q = q.eq('org_id', me.org_id!);
+    const { data } = await q;
     recipients = (data ?? []).map((u) => u.email as string);
   } else {
     const email = target.trim().toLowerCase();
-    const { data } = await db
-      .from('app_users')
-      .select('email')
-      .eq('email', email)
-      .single();
+    let q = db.from('app_users').select('email, org_id').eq('email', email);
+    const { data } = await q.single();
     if (!data) {
       return NextResponse.json(
         { error: 'そのユーザーは登録されていません' },
         { status: 404 },
+      );
+    }
+    // 会社管理者は自社メンバー以外には送れない。
+    if (!isSuperAdmin && (data as { org_id?: string }).org_id !== me.org_id) {
+      return NextResponse.json(
+        { error: '自社のメンバーにのみお知らせを送れます。' },
+        { status: 403 },
       );
     }
     recipients = [email];

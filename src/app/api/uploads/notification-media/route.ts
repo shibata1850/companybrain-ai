@@ -24,7 +24,12 @@ const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
  */
 export async function POST(req: NextRequest) {
   const me = await getAppUser();
-  if (!me || me.role !== 'admin') {
+  // 運営者、または会社管理者(自社お知らせの添付用)が発行可。
+  const canPost =
+    !!me &&
+    (me.role === 'admin' ||
+      (!!me.org_id && me.org_role === 'company_admin'));
+  if (!me || !canPost) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
   const limited = enforceRateLimit(`notif-upload:${me.email}`, 30, 60_000);
