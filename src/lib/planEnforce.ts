@@ -61,11 +61,14 @@ export async function getPlanUsage(user: AppUser): Promise<PlanUsage> {
     .is('deleted_at', null)
     .is('request_id', null);
 
-  // Questions asked this month — only across the user's OWN (non-request)
-  // brains; questions to gifted request-brains don't count. The month
-  // boundary is JST (quotaMonthStart), not server-local UTC.
-  // 管理者が手動リセットした場合は、そのリセット時刻(月初より後なら)を
-  // 起点にして、それ以降の質問だけを数える。
+  // Questions asked this month — 「質問した本人」で集計する。会話は
+  // Gemini Live 経由で、1問につき role='user' の監査ログが1行残る
+  // (actor はサーバー側でログイン本人のメールに上書き済み)。共有
+  // ブレインで同僚が質問した分は所有者ではなくその同僚に課金される
+  // ため、共有により所有者が自分のブレインから締め出される問題を防ぐ。
+  // 依頼で作成された(贈与された)ブレインへの質問は従来どおり免除。
+  // 月境界は JST(quotaMonthStart)。管理者が手動リセットした場合は、
+  // そのリセット時刻(月初より後なら)以降の質問だけを数える。
   const monthStart = quotaMonthStart();
   const resetAt = row?.questions_reset_at
     ? new Date(row.questions_reset_at)
@@ -73,28 +76,28 @@ export async function getPlanUsage(user: AppUser): Promise<PlanUsage> {
   const since =
     resetAt && resetAt.getTime() > monthStart.getTime() ? resetAt : monthStart;
 
-  // Own (non-request) brains — questions to gifted request-brains are
-  // exempt, so we only count activity on these.
-  const { data: ownedBrains } = await db
+  // 免除対象(依頼ブレイン)の id を集め、集計から除外する。
+  const { data: requestBrains } = await db
     .from('avatars')
     .select('id')
-    .eq('owner_email', user.email)
-    .is('request_id', null);
-  const brainIds = (ownedBrains ?? []).map((b) => b.id as string);
+    .not('request_id', 'is', null);
+  const requestBrainIds = (requestBrains ?? []).map((b) => b.id as string);
 
-  // Questions asked this month. Conversations run over Gemini Live and
-  // are recorded in audit_logs (one role='user' row per question), NOT
-  // in `generations` (the /ask route is unused). Count those.
-  let questionsThisMonth = 0;
-  if (brainIds.length > 0) {
-    const { count } = await db
-      .from('audit_logs')
-      .select('id', { count: 'exact', head: true })
-      .eq('role', 'user')
-      .in('avatar_id', brainIds)
-      .gte('created_at', since.toISOString());
-    questionsThisMonth = count ?? 0;
+  let questionsQuery = db
+    .from('audit_logs')
+    .select('id', { count: 'exact', head: true })
+    .eq('role', 'user')
+    .eq('actor', user.email)
+    .gte('created_at', since.toISOString());
+  if (requestBrainIds.length > 0) {
+    questionsQuery = questionsQuery.not(
+      'avatar_id',
+      'in',
+      `(${requestBrainIds.join(',')})`,
+    );
   }
+  const { count: questionCount } = await questionsQuery;
+  const questionsThisMonth = questionCount ?? 0;
 
   return {
     plan,
