@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import StreamingStage, {
   type TranscriptMessage,
   type TranscriptSource,
@@ -831,11 +831,12 @@ export default function AvatarDetail({ id }: { id: string }) {
       {/* 共有相手(閲覧・会話のみ)には声・言語・回答ルールの変更を出さない。 */}
       {canEdit && (
       /* Collapsible settings: 声 / 言語 / 回答ルール. Closed by default
-          to keep the top of the page compact; open to reveal the
-          3-column control row. */
+          to keep the top of the page compact. A vertical settings list
+          (iOS/Linear 風)で、各行に現在値を出す。小さなピルより読みやすく
+          タップ範囲も広い。 */
       <details className="group overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
-        <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-2.5 text-sm font-bold text-neutral-700 transition hover:bg-neutral-50">
-          <span>{showVoiceOption ? '声・言語・回答ルール' : '言語・回答ルール'}</span>
+        <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-bold text-neutral-700 transition hover:bg-neutral-50">
+          <span>詳細設定</span>
           <svg
             width="14"
             height="14"
@@ -853,40 +854,30 @@ export default function AvatarDetail({ id }: { id: string }) {
             />
           </svg>
         </summary>
-        <div
-          className={`grid gap-2 border-t border-neutral-100 p-2 ${
-            showVoiceOption ? 'grid-cols-3' : 'grid-cols-2'
-          }`}
-        >
+        <div className="divide-y divide-neutral-100 border-t border-neutral-100 px-2">
           {showVoiceOption && (
-            <SettingCell label="声">
-              <VoicePicker
-                current={avatar.voice}
-                onChange={async (v) => {
-                  await saveMeta({ voice: v });
-                }}
-                disabled={savingMeta}
-              />
-            </SettingCell>
+            <VoicePicker
+              current={avatar.voice}
+              onChange={async (v) => {
+                await saveMeta({ voice: v });
+              }}
+              disabled={savingMeta}
+            />
           )}
-          <SettingCell label="言語">
-            <LanguagePicker
-              current={avatar.language}
-              onChange={async (l) => {
-                await saveMeta({ language: l });
-              }}
-              disabled={savingMeta}
-            />
-          </SettingCell>
-          <SettingCell label="回答ルール">
-            <PersonaPromptButton
-              current={avatar.persona_prompt}
-              onSave={async (next) => {
-                await saveMeta({ persona_prompt: next });
-              }}
-              disabled={savingMeta}
-            />
-          </SettingCell>
+          <LanguagePicker
+            current={avatar.language}
+            onChange={async (l) => {
+              await saveMeta({ language: l });
+            }}
+            disabled={savingMeta}
+          />
+          <PersonaPromptButton
+            current={avatar.persona_prompt}
+            onSave={async (next) => {
+              await saveMeta({ persona_prompt: next });
+            }}
+            disabled={savingMeta}
+          />
         </div>
       </details>
       )}
@@ -2154,24 +2145,60 @@ function Highlight({ text, term }: { text: string; term: string }) {
  * Label above, the live picker control below. Centered + same height
  * so 声 / 言語 / 回答ルール line up cleanly.
  */
-function SettingCell({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+/**
+ * 設定リストの1行(iOS/Linear 風)。左にアイコン、中央に項目名+補足、
+ * 右に現在値+シェブロン。行全体がタップ領域で、現在値が開かずに読める。
+ * value は文字列(通常値)か ReactNode(バッジ等)を受け取る。
+ */
+const SettingRow = forwardRef<
+  HTMLButtonElement,
+  {
+    icon: React.ReactNode;
+    title: string;
+    subtitle: string;
+    value: React.ReactNode;
+    onClick: () => void;
+    disabled?: boolean;
+  }
+>(function SettingRow({ icon, title, subtitle, value, onClick, disabled }, ref) {
   return (
-    <div className="flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-center">
-      <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
-        {label}
+    <button
+      ref={ref}
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="flex w-full items-center gap-3.5 rounded-xl px-2 py-3.5 text-left transition hover:bg-neutral-50 disabled:opacity-40"
+    >
+      <span
+        aria-hidden
+        className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-neutral-100 text-neutral-700"
+      >
+        {icon}
       </span>
-      <div className="flex w-full min-w-0 items-center justify-center">
-        {children}
-      </div>
-    </div>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] font-bold leading-tight text-neutral-900">
+          {title}
+        </span>
+        <span className="mt-0.5 block truncate text-[12px] text-neutral-500">
+          {subtitle}
+        </span>
+      </span>
+      <span className="flex shrink-0 items-center gap-1.5 text-[13px] font-medium text-neutral-500">
+        {value}
+        <svg width="8" height="13" viewBox="0 0 8 14" aria-hidden className="text-neutral-400">
+          <path
+            d="M1 1l5 6-5 6"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </span>
+    </button>
   );
-}
+});
 
 function PersonaPromptButton({
   current,
@@ -2203,22 +2230,32 @@ function PersonaPromptButton({
 
   return (
     <>
-      <button
-        type="button"
+      <SettingRow
         disabled={disabled}
         onClick={() => setOpen(true)}
-        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition disabled:opacity-40 ${
-          current
-            ? 'border-amber-300 bg-amber-50 text-amber-800 hover:border-amber-600'
-            : 'border-neutral-300 bg-white text-neutral-600 hover:border-neutral-900 hover:text-neutral-900'
-        }`}
-        title={
-          current ??
-          '回答のルール(口調・専門分野・答えてはいけないこと等)を設定'
+        icon={
+          <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden>
+            <path
+              d="M3 3h10M3 7h10M3 11h6"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              fill="none"
+              strokeLinecap="round"
+            />
+          </svg>
         }
-      >
-        回答ルール{current ? '(設定済み)' : ''}
-      </button>
+        title="回答ルール"
+        subtitle="口調・答え方の決まりごと"
+        value={
+          current ? (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">
+              設定済み
+            </span>
+          ) : (
+            <span className="text-neutral-400">未設定</span>
+          )
+        }
+      />
       {open && (
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4 anim-fade-in"
@@ -2289,39 +2326,26 @@ function VoicePicker({
 
   return (
     <>
-      <button
+      <SettingRow
         ref={buttonRef}
-        type="button"
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1 rounded-full border border-neutral-300 bg-white px-2 py-0.5 text-[11px] font-medium text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900 disabled:opacity-40"
-        title="クリックで声を変更"
-      >
-        <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden>
-          <path
-            d="M6 3a2 2 0 0 1 4 0v6a2 2 0 1 1-4 0V3z"
-            fill="currentColor"
-          />
-          <path
-            d="M3 9a5 5 0 0 0 10 0M8 14v1.5"
-            stroke="currentColor"
-            strokeWidth="1.2"
-            fill="none"
-            strokeLinecap="round"
-          />
-        </svg>
-        声: {label}
-        <svg width="8" height="8" viewBox="0 0 10 10" aria-hidden>
-          <path
-            d="M2 4l3 3 3-3"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            fill="none"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
+        icon={
+          <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden>
+            <path d="M6 3a2 2 0 0 1 4 0v6a2 2 0 1 1-4 0V3z" fill="currentColor" />
+            <path
+              d="M3 9a5 5 0 0 0 10 0M8 14v1.5"
+              stroke="currentColor"
+              strokeWidth="1.2"
+              fill="none"
+              strokeLinecap="round"
+            />
+          </svg>
+        }
+        title="声"
+        subtitle="会話で話す声のトーン"
+        value={label}
+      />
       <PortalMenu
         anchorRef={buttonRef}
         open={open}
@@ -2389,42 +2413,25 @@ function LanguagePicker({
 
   return (
     <>
-      <button
+      <SettingRow
         ref={buttonRef}
-        type="button"
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1 rounded-full border border-neutral-300 bg-white px-2 py-0.5 text-[11px] font-medium text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900 disabled:opacity-40"
-        title="クリックで言語を変更"
-      >
-        <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden>
-          <circle
-            cx="8"
-            cy="8"
-            r="6"
-            stroke="currentColor"
-            strokeWidth="1.3"
-            fill="none"
-          />
-          <path
-            d="M2 8h12M8 2c2 2 2 10 0 12M8 2c-2 2-2 10 0 12"
-            stroke="currentColor"
-            strokeWidth="1.1"
-            fill="none"
-          />
-        </svg>
-        言語: {currentLabel}
-        <svg width="8" height="8" viewBox="0 0 10 10" aria-hidden>
-          <path
-            d="M2 4l3 3 3-3"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            fill="none"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
+        icon={
+          <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden>
+            <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.3" fill="none" />
+            <path
+              d="M2 8h12M8 2c2 2 2 10 0 12M8 2c-2 2-2 10 0 12"
+              stroke="currentColor"
+              strokeWidth="1.1"
+              fill="none"
+            />
+          </svg>
+        }
+        title="言語"
+        subtitle="音声認識の対象言語"
+        value={currentLabel}
+      />
       <PortalMenu
         anchorRef={buttonRef}
         open={open}
