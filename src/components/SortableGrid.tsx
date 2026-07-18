@@ -68,6 +68,9 @@ export default function SortableGrid({
   // Suppress the click that fires right after a drag so the card's
   // <Link> doesn't navigate on drop.
   const suppressClickRef = useRef(false);
+  // The tile we last swapped with. Used to stop the reorder from
+  // oscillating while the layout animation is still in flight (see onMove).
+  const lastOverIdRef = useRef<string | null>(null);
 
   // Refs mirrored for the once-per-drag global listeners.
   const draftIdsRef = useRef<string[] | null>(null);
@@ -164,6 +167,7 @@ export default function SortableGrid({
     setEditMode(true);
     setDraggingId(id);
     setDraftIds(idsRef.current.slice());
+    lastOverIdRef.current = null;
     setGhost({
       x: r.left,
       y: r.top,
@@ -184,13 +188,27 @@ export default function SortableGrid({
         g ? { ...g, x: e.clientX - g.offX, y: e.clientY - g.offY } : g,
       );
       const overId = getTileAt(e.clientX, e.clientY);
-      if (overId && overId !== draggingId) move(draggingId!, overId);
+      // Hysteresis: only reorder when the pointer enters a *different*
+      // tile than the one we last swapped with. Without this, a tile's
+      // mid-flight layout animation keeps reporting the same neighbour
+      // under a stationary pointer, so the order flips back and forth
+      // every frame — the visible "trembling" when tiles overlap. Over
+      // our own placeholder (or an empty gap) we clear the marker so
+      // re-entering a tile triggers a fresh swap.
+      if (!overId || overId === draggingId) {
+        lastOverIdRef.current = null;
+        return;
+      }
+      if (overId === lastOverIdRef.current) return;
+      lastOverIdRef.current = overId;
+      move(draggingId!, overId);
     }
     function onUp() {
       const baseIds = idsRef.current;
       const finalOrder = draftIdsRef.current ?? baseIds;
       setDraggingId(null);
       setGhost(null);
+      lastOverIdRef.current = null;
       const changed =
         finalOrder.length === baseIds.length &&
         finalOrder.some((id, i) => id !== baseIds[i]);
