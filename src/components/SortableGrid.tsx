@@ -340,17 +340,21 @@ export default function SortableGrid({
                 onClickCapture={onClickCapture}
                 style={{ touchAction: draggingId ? 'none' : 'auto' }}
               >
-                {/* Inner wrapper keeps the dragged tile's slot hidden (the
-                    lifted tile is a floating clone below), so its slot here
-                    is just a faded placeholder that reflows. The iPhone-style
-                    jiggle was removed per UX feedback — reorder mode no longer
-                    shakes the tiles. */}
-                <div
-                  style={{
-                    visibility: isDragging ? 'hidden' : 'visible',
-                  }}
-                >
-                  {child}
+                {/* 移動中のタイルは、元の場所に破線のドロップ枠を出す。
+                    実体(child)は visibility:hidden でスロットの大きさだけ
+                    保ち(レイアウトを崩さない)、その上に枠を重ねる。持ち上げ
+                    たタイルは下のフローティングクローンとして指に追従する。 */}
+                <div className="relative">
+                  <div
+                    style={{
+                      visibility: isDragging ? 'hidden' : 'visible',
+                    }}
+                  >
+                    {child}
+                  </div>
+                  {isDragging && (
+                    <div className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-dashed border-neutral-300 bg-neutral-100/60" />
+                  )}
                 </div>
               </motion.div>
             );
@@ -379,8 +383,8 @@ export default function SortableGrid({
         createPortal(
           <AnimatePresence>
             <motion.div
-              initial={{ scale: 1 }}
-              animate={{ scale: 1.08 }}
+              initial={{ scale: 1, rotate: 0 }}
+              animate={{ scale: 1.06, rotate: -2.5 }}
               className="pointer-events-none fixed z-[9999] drop-shadow-2xl"
               style={{
                 left: ghost.x,
@@ -389,7 +393,10 @@ export default function SortableGrid({
                 height: ghost.h,
               }}
             >
-              {draggingChild}
+              {/* 持ち上げたブレインだと一目で分かるようにリング(枠)を重ねる。 */}
+              <div className="overflow-hidden rounded-2xl ring-2 ring-neutral-900/80 ring-offset-2 ring-offset-white">
+                {draggingChild}
+              </div>
             </motion.div>
           </AnimatePresence>,
           document.body,
