@@ -306,7 +306,7 @@ export default function SortableGrid({
     <>
       <LayoutGroup>
         <div ref={containerRef} className={className}>
-          {view.map((id, index) => {
+          {view.map((id) => {
             const child = byId.get(id);
             if (!child) return null;
             const isDragging = draggingId === id;
@@ -322,17 +322,13 @@ export default function SortableGrid({
                 onClickCapture={onClickCapture}
                 style={{ touchAction: draggingId ? 'none' : 'auto' }}
               >
-                {/* Inner wrapper owns the jiggle so it never collides with
-                    framer-motion's layout transform on the outer div. The
-                    lifted tile is a floating clone (below), so its slot
-                    here is just a faded placeholder that reflows. */}
+                {/* Inner wrapper keeps the dragged tile's slot hidden (the
+                    lifted tile is a floating clone below), so its slot here
+                    is just a faded placeholder that reflows. The iPhone-style
+                    jiggle was removed per UX feedback — reorder mode no longer
+                    shakes the tiles. */}
                 <div
-                  className={
-                    editMode && !isDragging ? 'cb-jiggle' : ''
-                  }
                   style={{
-                    animationDelay: `${((index % 5) - 2) * 0.045}s`,
-                    animationDuration: `${0.24 + (index % 3) * 0.02}s`,
                     visibility: isDragging ? 'hidden' : 'visible',
                   }}
                 >
