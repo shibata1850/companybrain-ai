@@ -219,11 +219,21 @@ export default function SortableGrid({
         suppressClickRef.current = false;
       }, 0);
     }
+    // Touch devices otherwise claim the finger movement as a scroll and
+    // fire pointercancel on the very first move, aborting the drag. We
+    // cancel the default (scroll) on touchmove while dragging. touch-action
+    // can't help here: it's evaluated at touchstart, which happened before
+    // the long-press turned this into a drag, so it was still 'auto'.
+    function onTouchMove(e: TouchEvent) {
+      if (e.cancelable) e.preventDefault();
+    }
     window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onUp);
     return () => {
       window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
     };
