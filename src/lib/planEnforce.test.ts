@@ -54,8 +54,13 @@ describe('canAsk', () => {
 });
 
 describe('canStartVoice', () => {
-  it('denies the free tier (0 voice minutes)', () => {
-    expect(canStartVoice(planById('free'), 0)).toBe(false);
+  it('allows the free voice trial, then blocks once the cap is reached', () => {
+    const free = planById('free');
+    const mins = free.limits.monthlyVoiceMinutes;
+    expect(mins).toBe(15); // free voice trial
+    if (mins === 'unlimited') return;
+    expect(canStartVoice(free, 0)).toBe(true); // trial available
+    expect(canStartVoice(free, mins * 60)).toBe(false); // exhausted
   });
   it('denies once the per-month second budget is exhausted', () => {
     const starter = planById('starter');

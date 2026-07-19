@@ -59,7 +59,7 @@ export const PLANS: Plan[] = [
     limits: {
       brains: 1,
       monthlyQuestions: 20,
-      monthlyVoiceMinutes: 0,
+      monthlyVoiceMinutes: 15,
       materialMb: 1,
       historyDays: 3,
       modelTier: 'flash',
@@ -67,7 +67,7 @@ export const PLANS: Plan[] = [
     features: [
       'ブレイン 1 個',
       'テキスト質問 月 20 回',
-      '音声会話なし(テキスト回答のみ)',
+      '音声会話 月 15 分(お試し)',
       '素材 合計 1 MB まで',
       '監査ログ・履歴: 3 日分',
       'コミュニティサポート',
@@ -84,7 +84,7 @@ export const PLANS: Plan[] = [
     limits: {
       brains: 3,
       monthlyQuestions: 300,
-      monthlyVoiceMinutes: 10,
+      monthlyVoiceMinutes: 60,
       materialMb: 30,
       historyDays: 30,
       modelTier: 'flash',
@@ -92,7 +92,7 @@ export const PLANS: Plan[] = [
     features: [
       'ブレイン 3 個',
       'テキスト質問 月 300 回',
-      '音声会話 月 10 分',
+      '音声会話 月 60 分',
       '素材 合計 30 MB まで',
       '監査ログ・履歴: 30 日分',
       'メールサポート',
@@ -109,7 +109,7 @@ export const PLANS: Plan[] = [
     limits: {
       brains: 8,
       monthlyQuestions: 2000,
-      monthlyVoiceMinutes: 60,
+      monthlyVoiceMinutes: 300,
       materialMb: 300,
       historyDays: 180,
       modelTier: 'pro',
@@ -117,7 +117,7 @@ export const PLANS: Plan[] = [
     features: [
       'ブレイン 8 個',
       'テキスト質問 月 2,000 回',
-      '音声会話 月 1 時間',
+      '音声会話 月 5 時間',
       '素材 合計 300 MB(動画は 1 本 50 MB まで)',
       '監査ログ・履歴: 180 日分',
       'ブレイン譲渡 / 依頼ワークフロー',
@@ -135,7 +135,7 @@ export const PLANS: Plan[] = [
     limits: {
       brains: 30,
       monthlyQuestions: 8000,
-      monthlyVoiceMinutes: 300,
+      monthlyVoiceMinutes: 600,
       materialMb: 2000,
       historyDays: 'unlimited',
       modelTier: 'pro-2.5',
@@ -143,7 +143,7 @@ export const PLANS: Plan[] = [
     features: [
       'ブレイン 30 個',
       'テキスト質問 月 8,000 回',
-      '音声会話 月 5 時間',
+      '音声会話 月 10 時間',
       '素材 合計 2 GB(動画は 1 本 50 MB まで)',
       '監査ログ・履歴: 無期限保存',
       'CSV エクスポート',
@@ -156,22 +156,22 @@ export const PLANS: Plan[] = [
 /**
  * 企業向け(組織テナント)プラン。個人向けの PLANS 配列とは別に持つ。
  * 上限は「1シート(1ユーザー)あたり」で、組織に所属するユーザーは
- * 個人プランではなくこの上限で制限される。料金は会社ごとにシート課金
- * (請求書)で、公開価格は「お問い合わせ」。ここでは enforcement に使う
- * 上限のみを定義し、priceJpy は参考値(実額は組織ごとに設定)。
+ * 個人プランではなくこの上限で制限される。料金はシート課金(請求書 /
+ * 銀行振込)。開始価格を公開(¥2,980〜/シート・月)し、実額は人数と
+ * 要件に応じて個別に案内する。priceJpy はその開始価格。
  */
 export const ENTERPRISE_PLAN: Plan = {
   id: 'enterprise',
   name: 'エンタープライズ',
   tagline: '部署横断・全社導入する企業向け(シート課金)',
-  priceJpy: 3000, // 1シートあたりの参考単価。実額は組織ごとに設定/請求。
+  priceJpy: 2980, // 1シートあたりの開始価格(公開)。実額は人数・要件で案内。
   bestFor: '組織 / 30 名〜',
-  priceNote: '1 シート(1 ユーザー)あたり・要お問い合わせ',
+  priceNote: '1 シート(1 ユーザー)あたり 月額(税別)',
   ctaLabel: 'お問い合わせ',
   limits: {
     brains: 50,
     monthlyQuestions: 10000,
-    monthlyVoiceMinutes: 600,
+    monthlyVoiceMinutes: 1200,
     materialMb: 5000,
     historyDays: 'unlimited',
     modelTier: 'pro-2.5',
@@ -179,9 +179,9 @@ export const ENTERPRISE_PLAN: Plan = {
   features: [
     'ユーザーごとにアカウント(監査・退職者対応に対応)',
     '会社管理者が自社メンバーを招待・管理',
-    'シート課金・一括請求',
+    'シート課金・一括請求(請求書 / 銀行振込)',
     '1 ユーザーあたり ブレイン 50 個 / 質問 月 10,000 回',
-    '1 ユーザーあたり 音声会話 月 10 時間 / 素材 5 GB',
+    '1 ユーザーあたり 音声会話 月 20 時間 / 素材 5 GB',
     '監査ログ・履歴: 無期限 + CSV エクスポート',
     '最新最上位モデル / 優先サポート',
   ],

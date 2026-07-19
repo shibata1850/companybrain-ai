@@ -15,10 +15,12 @@ describe('PLANS catalog', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('free tier is genuinely free and gated', () => {
+  it('free tier is genuinely free and includes a small voice trial', () => {
     const free = PLANS.find((p) => p.id === 'free')!;
     expect(free.priceJpy).toBe(0);
-    expect(free.limits.monthlyVoiceMinutes).toBe(0); // no voice on free
+    // Free now gets a small monthly voice trial so users can experience
+    // the headline feature before upgrading (API cost is absorbed).
+    expect(free.limits.monthlyVoiceMinutes).toBe(15);
   });
 
   it('every plan has complete, sane limits', () => {
