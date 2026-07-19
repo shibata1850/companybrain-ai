@@ -103,8 +103,8 @@ export default function HomePage() {
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">ブレイン</h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-500">
-            動画から学習した人物に質問すると、その人の口調と知識で答える動画が
-            自動生成されます。
+            学習させた人物に質問すると、その人の口調と知識で
+            リアルタイムに音声で答えます。テキストでの質問にも対応します。
           </p>
         </div>
         {/* Desktop: inline create button (top-right is fine with a mouse).

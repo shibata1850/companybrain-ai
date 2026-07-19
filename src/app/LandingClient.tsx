@@ -559,7 +559,7 @@ function Features() {
     {
       icon: 'video',
       title: '動画から人格を学習',
-      body: '対象人物の動画をアップロードするだけで、表情・話し方・口癖まで取り込みます。',
+      body: '対象人物の動画をアップロードするだけで、声のトーン・話し方・口癖まで学習します。',
       detail: '話者の口調をそのまま再現',
       accent: 'from-indigo-500 to-violet-600',
     },
@@ -572,8 +572,8 @@ function Features() {
     },
     {
       icon: 'docs',
-      title: '社内資料を一括学習',
-      body: 'PDF・議事録・規程・URL をまとめて投入。意味で検索して答えます。',
+      title: '社内資料を学習',
+      body: '議事録・規程・マニュアルなどのテキストや動画を学習。意味で検索し、根拠に基づいて答えます。',
       detail: 'pgvector 意味検索',
       accent: 'from-sky-500 to-cyan-500',
     },
