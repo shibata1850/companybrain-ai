@@ -579,10 +579,17 @@ function Features() {
     },
     {
       icon: 'shield',
-      title: '完全プライベート',
-      body: 'ブレインは作成者本人だけが利用可能。他のユーザーや管理者にも中身は見えません。',
-      detail: '所有者のみアクセス',
+      title: '既定でプライベート',
+      body: 'ブレインは既定で作成者本人だけが利用可能。管理者にも中身は見えず、監査ログのみです。',
+      detail: '既定は所有者のみ',
       accent: 'from-emerald-500 to-teal-600',
+    },
+    {
+      icon: 'share',
+      title: '社内で共有(エンタープライズ)',
+      body: '同じ会社のメンバーにブレインを共有できます。共有相手は閲覧・会話のみで、素材や設定は変更できません。',
+      detail: '閲覧・会話のみ / 同一組織内',
+      accent: 'from-blue-500 to-indigo-600',
     },
     {
       icon: 'log',
@@ -685,6 +692,13 @@ const ICONS = {
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M3 8h13M12 4l4 4-4 4" />
       <path d="M21 16H8M12 12l-4 4 4 4" />
+    </svg>
+  ),
+  share: () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="9" cy="8" r="3" />
+      <path d="M3.5 19a5.5 5.5 0 0 1 11 0" />
+      <path d="M16 5.6a3 3 0 0 1 0 5.8M20.5 19a5.2 5.2 0 0 0-4-5" />
     </svg>
   ),
   /* Industry icons for the Use Cases section. */
