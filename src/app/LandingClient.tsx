@@ -572,8 +572,8 @@ function Features() {
     },
     {
       icon: 'docs',
-      title: '社内資料を学習',
-      body: '議事録・規程・マニュアルなどのテキストや動画を学習。意味で検索し、根拠に基づいて答えます。',
+      title: '社内資料をまとめて学習',
+      body: 'PDF・Word・Excel・議事録・規程などをアップロード。意味で検索し、根拠に基づいて答えます。',
       detail: 'pgvector 意味検索',
       accent: 'from-sky-500 to-cyan-500',
     },

@@ -114,6 +114,8 @@ export default function AvatarDetail({ id }: { id: string }) {
   const [trainTextTitle, setTrainTextTitle] = useState('');
   const [trainFolder, setTrainFolder] = useState<string | null>(null);
   const [trainingText, setTrainingText] = useState(false);
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [trainingDoc, setTrainingDoc] = useState(false);
 
   // Live transcript log. Persisted as a collection of threads so the
   // operator can keep multiple conversations per brain, switch between
@@ -537,6 +539,30 @@ export default function AvatarDetail({ id }: { id: string }) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setTrainingText(false);
+    }
+  }
+
+  async function addTrainingDocument(e: React.FormEvent) {
+    e.preventDefault();
+    if (!docFile) return;
+    const form = new FormData();
+    form.append('document', docFile);
+    if (trainFolder) form.append('folder', trainFolder);
+    setTrainingDoc(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/avatars/${id}/train-document`, {
+        method: 'POST',
+        body: form,
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      setDocFile(null);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setTrainingDoc(false);
     }
   }
 
@@ -973,6 +999,10 @@ export default function AvatarDetail({ id }: { id: string }) {
               onChangeTextTitle={setTrainTextTitle}
               onSubmitText={addTrainingText}
               submittingText={trainingText}
+              docFile={docFile}
+              onPickDoc={setDocFile}
+              onSubmitDoc={addTrainingDocument}
+              submittingDoc={trainingDoc}
               trainFolder={trainFolder}
               onChangeFolder={setTrainFolder}
             />
@@ -1023,6 +1053,10 @@ function TrainingPanel({
   onChangeTextTitle,
   onSubmitText,
   submittingText,
+  docFile,
+  onPickDoc,
+  onSubmitDoc,
+  submittingDoc,
   trainFolder,
   onChangeFolder,
 }: {
@@ -1039,10 +1073,14 @@ function TrainingPanel({
   onChangeTextTitle: (v: string) => void;
   onSubmitText: (e: React.FormEvent) => void;
   submittingText: boolean;
+  docFile: File | null;
+  onPickDoc: (f: File | null) => void;
+  onSubmitDoc: (e: React.FormEvent) => void;
+  submittingDoc: boolean;
   trainFolder: string | null;
   onChangeFolder: (folder: string | null) => void;
 }) {
-  const [mode, setMode] = useState<'video' | 'text'>('text');
+  const [mode, setMode] = useState<'video' | 'text' | 'document'>('text');
 
   // Compact folder summary derived from the videos list. Skips the
   // synthetic 未分類 bucket so the picker only suggests folders the
@@ -1086,6 +1124,17 @@ function TrainingPanel({
         </button>
         <button
           type="button"
+          onClick={() => setMode('document')}
+          className={`flex-1 rounded-full px-3 py-1 transition ${
+            mode === 'document'
+              ? 'bg-white text-neutral-900 shadow-sm'
+              : 'text-neutral-500 hover:text-neutral-900'
+          }`}
+        >
+          文書
+        </button>
+        <button
+          type="button"
           onClick={() => setMode('video')}
           className={`flex-1 rounded-full px-3 py-1 transition ${
             mode === 'video'
@@ -1117,6 +1166,31 @@ function TrainingPanel({
             className="w-full rounded-full bg-neutral-900 px-4 py-2 text-xs font-medium text-white transition hover:bg-neutral-700 active:scale-[0.99] disabled:opacity-40"
           >
             {submittingVideo ? '学習中…' : '動画から学習'}
+          </button>
+        </form>
+      ) : mode === 'document' ? (
+        <form onSubmit={onSubmitDoc} className="space-y-3">
+          <input
+            type="file"
+            accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.md,application/pdf"
+            onChange={(e) => onPickDoc(e.target.files?.[0] ?? null)}
+            className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs file:mr-3 file:rounded-md file:border-0 file:bg-neutral-900 file:px-3 file:py-1 file:text-white"
+          />
+          <p className="text-[10px] leading-relaxed text-neutral-400">
+            PDF・Word(.docx)・Excel(.xlsx)・CSV・テキストに対応。文書内の
+            文字を読み取って学習します(画像だけの PDF は読み取れません)。
+          </p>
+          {docFile && (
+            <p className="truncate text-[11px] text-neutral-600">
+              選択中: {docFile.name}
+            </p>
+          )}
+          <button
+            type="submit"
+            disabled={!docFile || submittingDoc}
+            className="w-full rounded-full bg-neutral-900 px-4 py-2 text-xs font-medium text-white transition hover:bg-neutral-700 active:scale-[0.99] disabled:opacity-40"
+          >
+            {submittingDoc ? '学習中…' : '文書から学習'}
           </button>
         </form>
       ) : (
