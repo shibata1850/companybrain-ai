@@ -2178,7 +2178,7 @@ function Pricing() {
         <SectionHeading
           eyebrow="PRICING"
           title="まずは無料で。成長に合わせて選べる 4 プラン。"
-          subtitle="年契約で 2 ヶ月分無料 · いつでもアップグレード / 解約可能 · 税抜"
+          subtitle="いつでもアップグレード / 解約可能 · 税抜"
         />
         <div className="mt-12 grid gap-5 lg:grid-cols-4">
           {PLANS.map((p) => (
