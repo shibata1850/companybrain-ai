@@ -555,7 +555,19 @@ export default function AvatarDetail({ id }: { id: string }) {
         method: 'POST',
         body: form,
       });
-      const json = (await res.json()) as { error?: string };
+      // サーバーが JSON でなく HTML エラーページを返す場合(500/413/504 等)
+      // があるため、text で受けてから JSON を試み、分かりやすい文言を出す。
+      const raw = await res.text();
+      let json: { error?: string } = {};
+      try {
+        json = raw ? (JSON.parse(raw) as { error?: string }) : {};
+      } catch {
+        throw new Error(
+          res.status === 413
+            ? 'ファイルが大きすぎます。分割してお試しください。'
+            : `サーバーでエラーが発生しました(${res.status})。時間をおいて再度お試しください。`,
+        );
+      }
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
       setDocFile(null);
       await load();
