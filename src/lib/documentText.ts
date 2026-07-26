@@ -1,6 +1,8 @@
-import mammoth from 'mammoth';
-import * as XLSX from 'xlsx';
-import { PDFParse } from 'pdf-parse';
+// パーサ(pdf-parse / mammoth / xlsx)は各抽出関数の中で動的 import する。
+// トップレベルで読み込むと、ルートのモジュール読込時にこれらが評価され、
+// サーバーレスでの読み込み失敗がルート全体の 500(HTML)になってしまう。
+// 関数内で読み込めば、失敗しても呼び出し側の try/catch が JSON エラーに
+// できるうえ、必要な形式のパーサだけを読み込める。
 
 /**
  * 社内文書(PDF / Word / Excel / CSV / テキスト)からプレーンテキストを
@@ -67,6 +69,7 @@ function normalize(s: string): string {
 }
 
 async function extractPdf(buffer: Buffer): Promise<string> {
+  const { PDFParse } = await import('pdf-parse');
   const parser = new PDFParse({ data: new Uint8Array(buffer) });
   try {
     const result = await parser.getText();
@@ -87,11 +90,13 @@ async function extractPdf(buffer: Buffer): Promise<string> {
 }
 
 async function extractWord(buffer: Buffer): Promise<string> {
+  const mammoth = await import('mammoth');
   const result = await mammoth.extractRawText({ buffer });
   return result?.value ?? '';
 }
 
-function extractSpreadsheet(buffer: Buffer): string {
+async function extractSpreadsheet(buffer: Buffer): Promise<string> {
+  const XLSX = await import('xlsx');
   const wb = XLSX.read(buffer, { type: 'buffer' });
   const parts: string[] = [];
   for (const sheetName of wb.SheetNames) {
@@ -126,7 +131,7 @@ export async function extractDocumentText(
   } else if (kind === 'word') {
     text = await extractWord(buffer);
   } else if (kind === 'excel' || kind === 'csv') {
-    text = extractSpreadsheet(buffer);
+    text = await extractSpreadsheet(buffer);
   } else {
     text = buffer.toString('utf-8');
   }
