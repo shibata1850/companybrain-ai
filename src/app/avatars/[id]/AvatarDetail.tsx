@@ -116,6 +116,18 @@ export default function AvatarDetail({ id }: { id: string }) {
   const [trainingText, setTrainingText] = useState(false);
   const [docFile, setDocFile] = useState<File | null>(null);
   const [trainingDoc, setTrainingDoc] = useState(false);
+  // 学習完了の控えめな通知と、ファイル入力クリア用のキー。
+  const [learnedNote, setLearnedNote] = useState<string | null>(null);
+  const [fileResetKey, setFileResetKey] = useState(0);
+  const learnedTimerRef = useRef<number | null>(null);
+  const flashLearned = useCallback((msg = '学習が完了しました') => {
+    setLearnedNote(msg);
+    if (learnedTimerRef.current) window.clearTimeout(learnedTimerRef.current);
+    learnedTimerRef.current = window.setTimeout(
+      () => setLearnedNote(null),
+      4000,
+    );
+  }, []);
 
   // Live transcript log. Persisted as a collection of threads so the
   // operator can keep multiple conversations per brain, switch between
@@ -507,7 +519,9 @@ export default function AvatarDetail({ id }: { id: string }) {
       const json = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
       setTrainFile(null);
+      setFileResetKey((k) => k + 1);
       await load();
+      flashLearned('動画を学習しました');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -535,6 +549,7 @@ export default function AvatarDetail({ id }: { id: string }) {
       setTrainText('');
       setTrainTextTitle('');
       await load();
+      flashLearned('テキストを学習しました');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -570,7 +585,9 @@ export default function AvatarDetail({ id }: { id: string }) {
       }
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
       setDocFile(null);
+      setFileResetKey((k) => k + 1);
       await load();
+      flashLearned('文書を学習しました');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1017,6 +1034,8 @@ export default function AvatarDetail({ id }: { id: string }) {
               submittingDoc={trainingDoc}
               trainFolder={trainFolder}
               onChangeFolder={setTrainFolder}
+              learnedNote={learnedNote}
+              fileResetKey={fileResetKey}
             />
           )}
         </div>
@@ -1071,6 +1090,8 @@ function TrainingPanel({
   submittingDoc,
   trainFolder,
   onChangeFolder,
+  learnedNote,
+  fileResetKey,
 }: {
   avatarId: string;
   avatarName: string;
@@ -1091,6 +1112,10 @@ function TrainingPanel({
   submittingDoc: boolean;
   trainFolder: string | null;
   onChangeFolder: (folder: string | null) => void;
+  /** 学習完了時の控えめな通知(数秒で消える)。null で非表示。 */
+  learnedNote: string | null;
+  /** これが変わるとファイル入力を再マウントして選択をクリアする。 */
+  fileResetKey: number;
 }) {
   const [mode, setMode] = useState<'video' | 'text' | 'document'>('text');
 
@@ -1164,9 +1189,30 @@ function TrainingPanel({
         onChange={onChangeFolder}
       />
 
+      {/* 学習完了の控えめな通知。数秒で消える。 */}
+      {learnedNote && (
+        <div
+          role="status"
+          className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 anim-fade-in"
+        >
+          <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden>
+            <path
+              d="M3 8.5l3 3L13 5"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          {learnedNote}
+        </div>
+      )}
+
       {mode === 'video' ? (
         <form onSubmit={onSubmitVideo} className="space-y-3">
           <input
+            key={`video-${fileResetKey}`}
             type="file"
             accept="video/*"
             onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
@@ -1183,6 +1229,7 @@ function TrainingPanel({
       ) : mode === 'document' ? (
         <form onSubmit={onSubmitDoc} className="space-y-3">
           <input
+            key={`doc-${fileResetKey}`}
             type="file"
             accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.md,application/pdf"
             onChange={(e) => onPickDoc(e.target.files?.[0] ?? null)}
