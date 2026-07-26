@@ -100,8 +100,12 @@ export async function POST(
       route: 'POST /api/avatars/[id]/train-document (extract)',
       actor: auth.me.email,
     });
+    // 原因切り分けのため、失敗理由(パーサからのメッセージ)を短く添える。
+    const detail = e instanceof Error ? e.message : String(e);
     return NextResponse.json(
-      { error: 'ファイルの読み取りに失敗しました。別の形式でお試しください。' },
+      {
+        error: `ファイルの読み取りに失敗しました(${fileName}): ${detail.slice(0, 300)}`,
+      },
       { status: 400 },
     );
   }
