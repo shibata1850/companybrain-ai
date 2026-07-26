@@ -69,24 +69,14 @@ function normalize(s: string): string {
 }
 
 async function extractPdf(buffer: Buffer): Promise<string> {
-  const { PDFParse } = await import('pdf-parse');
-  const parser = new PDFParse({ data: new Uint8Array(buffer) });
-  try {
-    const result = await parser.getText();
-    // pdf-parse はページ境界に「-- 1 of 3 --」のようなマーカーを挟むので、
-    // 学習テキストを汚さないよう取り除く。
-    return (result?.text ?? '').replace(
-      /^\s*--\s*\d+\s*of\s*\d+\s*--\s*$/gm,
-      '',
-    );
-  } finally {
-    // ページリソースを解放(サーバーレスでのメモリリークを避ける)。
-    try {
-      await parser.destroy();
-    } catch {
-      // best effort
-    }
-  }
+  // unpdf はサーバーレス/エッジ向けの pdfjs ビルドを内包しており、
+  // DOMMatrix や canvas などブラウザ専用 API に依存せずテキスト抽出できる
+  // (pdf-parse は DOMMatrix を要求し Vercel で "DOMMatrix is not defined"
+  // になったため置き換え)。
+  const { getDocumentProxy, extractText } = await import('unpdf');
+  const pdf = await getDocumentProxy(new Uint8Array(buffer));
+  const { text } = await extractText(pdf, { mergePages: true });
+  return Array.isArray(text) ? text.join('\n') : text ?? '';
 }
 
 async function extractWord(buffer: Buffer): Promise<string> {
@@ -130,9 +120,11 @@ export async function extractDocumentText(
     text = await extractPdf(buffer);
   } else if (kind === 'word') {
     text = await extractWord(buffer);
-  } else if (kind === 'excel' || kind === 'csv') {
+  } else if (kind === 'excel') {
     text = await extractSpreadsheet(buffer);
   } else {
+    // csv / text は素の UTF-8 テキストとして読む。CSV を XLSX 経由で読むと
+    // 日本語(UTF-8)が文字化けするため、そのままデコードする。
     text = buffer.toString('utf-8');
   }
 

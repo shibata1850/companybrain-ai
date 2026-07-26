@@ -130,20 +130,30 @@ export async function POST(
     return NextResponse.json({ error: 'avatar not found' }, { status: 404 });
   }
 
-  const { data: tv, error: tvErr } = await db
+  // size_bytes(0021)が未適用の本番では列が無く挿入が失敗するため、
+  // その場合は size_bytes を外して再挿入する(容量計上は 0021 適用後に有効)。
+  const baseRow = {
+    avatar_id: params.id,
+    storage_path: null,
+    file_name: fileName,
+    mime_type: mimeType || 'application/octet-stream',
+    source_type: 'document',
+    folder,
+    status: 'processing',
+  };
+  let ins = await db
     .from('training_videos')
-    .insert({
-      avatar_id: params.id,
-      storage_path: null,
-      file_name: fileName,
-      mime_type: mimeType || 'application/octet-stream',
-      size_bytes: buffer.length,
-      source_type: 'document',
-      folder,
-      status: 'processing',
-    })
+    .insert({ ...baseRow, size_bytes: buffer.length })
     .select('id')
     .single();
+  if (ins.error && /size_bytes/i.test(ins.error.message)) {
+    ins = await db
+      .from('training_videos')
+      .insert(baseRow)
+      .select('id')
+      .single();
+  }
+  const { data: tv, error: tvErr } = ins;
   if (tvErr || !tv) {
     return NextResponse.json(
       { error: tvErr?.message || 'insert failed' },

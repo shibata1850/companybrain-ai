@@ -7,7 +7,7 @@ const nextConfig = {
     serverComponentsExternalPackages: [
       'fluent-ffmpeg',
       '@ffmpeg-installer/ffmpeg',
-      'pdf-parse',
+      'unpdf',
       'mammoth',
       'xlsx',
     ],

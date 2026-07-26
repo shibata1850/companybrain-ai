@@ -65,6 +65,15 @@ describe('extractDocumentText', () => {
     expect(text).toContain('12000');
   });
 
+  it('reads CSV as UTF-8 text without garbling Japanese', async () => {
+    const buf = Buffer.from('費目,上限(円)\n宿泊費,12000\n交通費,指定席まで\n', 'utf-8');
+    const { text, kind } = await extractDocumentText(buf, 'text/csv', 'keihi.csv');
+    expect(kind).toBe('csv');
+    expect(text).toContain('宿泊費');
+    expect(text).toContain('12000');
+    expect(text).toContain('指定席まで');
+  });
+
   it('decodes plain text and strips control bytes', async () => {
     const buf = Buffer.from('第一条\u0000\u0007出張は事前申請。\r\n第二条', 'utf-8');
     const { text, kind } = await extractDocumentText(buf, 'text/plain', 'a.txt');
