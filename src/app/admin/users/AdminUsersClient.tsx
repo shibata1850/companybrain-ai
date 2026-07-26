@@ -33,31 +33,10 @@ export default function AdminUsersClient() {
   const [role, setRole] = useState<'member' | 'admin'>('member');
   const [adding, setAdding] = useState(false);
 
-  // 組織(エンタープライズ)ごとの集計: 名前・人数・会社管理者。
-  const orgInfo = useMemo(() => {
-    const m = new Map<
-      string,
-      { name: string; count: number; admins: string[] }
-    >();
-    for (const u of users) {
-      if (!u.org_id) continue;
-      const e = m.get(u.org_id) ?? {
-        name: u.org_name ?? '(名称未設定の組織)',
-        count: 0,
-        admins: [],
-      };
-      e.count += 1;
-      if (u.org_role === 'company_admin') e.admins.push(u.email);
-      m.set(u.org_id, e);
-    }
-    return m;
-  }, [users]);
-
-  // 同じ組織のアカウントを隣り合わせに並べ、つながりが一目で分かるように
-  // する。組織所属を先(組織名→会社管理者→メール順)、個人を後に置く。
-  const sorted = useMemo(() => {
+  // 組織(エンタープライズ)ごとにまとめる。並びは 組織名→会社管理者→
+  // メール順。個人アカウントは別枠(soloUsers)にする。
+  const orgGroups = useMemo(() => {
     const inOrg = users.filter((u) => u.org_id);
-    const solo = users.filter((u) => !u.org_id);
     inOrg.sort((a, b) => {
       const an = a.org_name ?? '';
       const bn = b.org_name ?? '';
@@ -67,15 +46,47 @@ export default function AdminUsersClient() {
       if (ar !== br) return ar - br;
       return a.email.localeCompare(b.email);
     });
-    solo.sort((a, b) => a.created_at.localeCompare(b.created_at));
-    return [...inOrg, ...solo];
+    const map = new Map<
+      string,
+      { id: string; name: string; admins: string[]; members: User[] }
+    >();
+    for (const u of inOrg) {
+      const id = u.org_id as string;
+      const g = map.get(id) ?? {
+        id,
+        name: u.org_name ?? '(名称未設定の組織)',
+        admins: [],
+        members: [],
+      };
+      g.members.push(u);
+      if (u.org_role === 'company_admin') g.admins.push(u.email);
+      map.set(id, g);
+    }
+    return Array.from(map.values());
   }, [users]);
 
-  const orgCount = orgInfo.size;
-  const orgMemberCount = useMemo(
-    () => users.filter((u) => u.org_id).length,
+  const soloUsers = useMemo(
+    () =>
+      users
+        .filter((u) => !u.org_id)
+        .sort((a, b) => a.created_at.localeCompare(b.created_at)),
     [users],
   );
+
+  const orgCount = orgGroups.length;
+  const orgMemberCount = orgGroups.reduce((n, g) => n + g.members.length, 0);
+
+  // 折りたたみ状態(組織ごと)。既定は閉じて一覧を短く保つ。
+  const [expandedOrgs, setExpandedOrgs] = useState<Set<string>>(new Set());
+  const toggleOrg = (id: string) =>
+    setExpandedOrgs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const allOrgsOpen =
+    orgGroups.length > 0 && orgGroups.every((g) => expandedOrgs.has(g.id));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -231,8 +242,21 @@ export default function AdminUsersClient() {
               {orgCount} 組織 / {orgMemberCount} 名が所属
             </span>
             <span className="text-neutral-400">
-              同じ会社のアカウントはまとめて表示・個人は最後にまとめています
+              各組織をタップで開閉できます
             </span>
+            <button
+              type="button"
+              onClick={() =>
+                setExpandedOrgs(
+                  allOrgsOpen
+                    ? new Set()
+                    : new Set(orgGroups.map((g) => g.id)),
+                )
+              }
+              className="ml-auto rounded-full border border-neutral-300 bg-white px-2.5 py-1 text-[11px] font-medium text-neutral-700 transition hover:border-neutral-900"
+            >
+              {allOrgsOpen ? 'すべて閉じる' : 'すべて開く'}
+            </button>
           </div>
         )}
         {loading ? (
@@ -243,148 +267,197 @@ export default function AdminUsersClient() {
           </p>
         ) : (
           <div>
-            {sorted.slice(0, visible).map((u, i, arr) => {
-              const prev = arr[i - 1];
-              const info = u.org_id ? orgInfo.get(u.org_id) : null;
-              const showOrgHeader =
-                !!u.org_id && (!prev || prev.org_id !== u.org_id);
-              const showSoloHeader = !u.org_id && (!prev || !!prev.org_id);
+            {/* エンタープライズ: 組織ごとに折りたたみ。既定は閉じて短く。 */}
+            {orgGroups.map((g) => {
+              const open = expandedOrgs.has(g.id);
+              const suspended = g.members.filter((m) => m.suspended_at).length;
               return (
-                <div key={u.email}>
-                  {/* 組織ヘッダー: 同じ会社のアカウントをひとまとまりに見せる */}
-                  {showOrgHeader && info && (
-                    <div className="flex flex-wrap items-center gap-2 border-t border-indigo-100 bg-indigo-50/60 px-4 py-2">
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 16 16"
-                        aria-hidden
-                        className="text-indigo-700"
-                      >
-                        <path
-                          d="M3 14V3.5A1.5 1.5 0 0 1 4.5 2h5A1.5 1.5 0 0 1 11 3.5V14M11 6.5h1.5A1.5 1.5 0 0 1 14 8v6M2 14h12M5.5 5h1M8 5h1M5.5 7.5h1M8 7.5h1"
-                          stroke="currentColor"
-                          strokeWidth="1.2"
-                          fill="none"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                      <span className="text-xs font-bold text-indigo-900">
-                        {info.name}
+                <div key={g.id}>
+                  <button
+                    type="button"
+                    onClick={() => toggleOrg(g.id)}
+                    aria-expanded={open}
+                    className="flex w-full flex-wrap items-center gap-2 border-t border-indigo-100 bg-indigo-50/60 px-4 py-2.5 text-left transition hover:bg-indigo-100/60"
+                  >
+                    <svg
+                      width="11"
+                      height="11"
+                      viewBox="0 0 10 10"
+                      aria-hidden
+                      className={`shrink-0 text-indigo-400 transition-transform ${
+                        open ? 'rotate-90' : ''
+                      }`}
+                    >
+                      <path
+                        d="M3 2l4 3-4 3"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 16 16"
+                      aria-hidden
+                      className="shrink-0 text-indigo-700"
+                    >
+                      <path
+                        d="M3 14V3.5A1.5 1.5 0 0 1 4.5 2h5A1.5 1.5 0 0 1 11 3.5V14M11 6.5h1.5A1.5 1.5 0 0 1 14 8v6M2 14h12M5.5 5h1M8 5h1M5.5 7.5h1M8 7.5h1"
+                        stroke="currentColor"
+                        strokeWidth="1.2"
+                        fill="none"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <span className="text-xs font-bold text-indigo-900">
+                      {g.name}
+                    </span>
+                    <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-indigo-700 ring-1 ring-indigo-200">
+                      {g.members.length} 名
+                    </span>
+                    {suspended > 0 && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+                        停止 {suspended}
                       </span>
-                      <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-indigo-700 ring-1 ring-indigo-200">
-                        {info.count} 名
+                    )}
+                    {g.admins.length > 0 && (
+                      <span className="truncate text-[10px] text-indigo-700/90">
+                        会社管理者: {g.admins.join(', ')}
                       </span>
-                      {info.admins.length > 0 && (
-                        <span className="text-[10px] text-indigo-700/90">
-                          会社管理者: {info.admins.join(', ')}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  {showSoloHeader && (
-                    <div className="border-t border-neutral-100 bg-neutral-50 px-4 py-2">
-                      <span className="text-xs font-bold text-neutral-500">
-                        個人アカウント
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex flex-col gap-3 border-t border-neutral-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className={`truncate text-sm ${
-                            u.suspended_at
-                              ? 'text-neutral-400 line-through'
-                              : 'text-neutral-900'
-                          }`}
-                        >
-                          {u.email}
-                        </span>
-                        <span
-                          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                            u.role === 'admin'
-                              ? 'bg-neutral-900 text-white'
-                              : 'bg-neutral-100 text-neutral-600'
-                          }`}
-                        >
-                          {u.role === 'admin' ? '管理者' : '一般'}
-                        </span>
-                        {u.org_id && (
-                          <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold text-indigo-700 ring-1 ring-indigo-200">
-                            {u.org_name ?? '組織'}
-                          </span>
-                        )}
-                        {u.org_role === 'company_admin' && (
-                          <span className="shrink-0 rounded bg-indigo-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                            会社管理者
-                          </span>
-                        )}
-                        {u.suspended_at && (
-                          <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
-                            一時停止中
-                          </span>
-                        )}
-                        {u.company && (
-                          <span className="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-bold text-neutral-600">
-                            {u.company}
-                          </span>
-                        )}
-                      </div>
-                      <LabelEditor
-                        email={u.email}
-                        initial={u.admin_label}
+                    )}
+                    <span className="ml-auto shrink-0 text-[10px] text-indigo-500">
+                      {open ? '閉じる' : '開く'}
+                    </span>
+                  </button>
+                  {open &&
+                    g.members.map((u) => (
+                      <UserRow
+                        key={u.email}
+                        u={u}
                         onSaved={load}
+                        onRemove={removeUser}
                       />
-                    </div>
-                    <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-t border-neutral-100 pt-2.5 sm:border-t-0 sm:pt-0">
-                      {/* 組織所属メンバーの上限はエンタープライズで決まるため、
-                          個人プランのセレクトは出さず種別だけ示す。 */}
-                      {u.role !== 'admin' &&
-                        (u.org_id ? (
-                          <span className="rounded-md bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700 ring-1 ring-indigo-200">
-                            エンタープライズ
-                          </span>
-                        ) : (
-                          <PlanSelect
-                            email={u.email}
-                            value={u.plan}
-                            onSaved={load}
-                          />
-                        ))}
-                      {u.role !== 'admin' && (
-                        <ResetQuestionsButton email={u.email} />
-                      )}
-                      <ResetPasswordButton email={u.email} />
-                      <SuspendButton
-                        email={u.email}
-                        suspended={!!u.suspended_at}
-                        onChanged={load}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeUser(u.email)}
-                        className="text-xs font-medium text-neutral-400 transition hover:text-red-600"
-                      >
-                        利用停止
-                      </button>
-                    </div>
-                  </div>
+                    ))}
                 </div>
               );
             })}
+
+            {/* 個人アカウント(件数が多いこともあるのでページング据え置き) */}
+            {soloUsers.length > 0 && (
+              <>
+                <div className="border-t border-neutral-100 bg-neutral-50 px-4 py-2">
+                  <span className="text-xs font-bold text-neutral-500">
+                    個人アカウント（{soloUsers.length}）
+                  </span>
+                </div>
+                {soloUsers.slice(0, visible).map((u) => (
+                  <UserRow
+                    key={u.email}
+                    u={u}
+                    onSaved={load}
+                    onRemove={removeUser}
+                  />
+                ))}
+              </>
+            )}
           </div>
         )}
-        {!loading && !forbidden && users.length > 0 && (
+        {!loading && !forbidden && soloUsers.length > USER_PAGE && (
           <ShowMoreButton
             className="mt-3"
             visible={visible}
-            total={users.length}
+            total={soloUsers.length}
             step={USER_PAGE}
             onMore={() => setVisible((v) => v + USER_PAGE)}
             onCollapse={() => setVisible(USER_PAGE)}
           />
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ユーザー1件の行。組織セクション・個人セクションで共通利用する。
+ * onSaved は再読込、onRemove は利用停止。
+ */
+function UserRow({
+  u,
+  onSaved,
+  onRemove,
+}: {
+  u: User;
+  onSaved: () => void;
+  onRemove: (email: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3 border-t border-neutral-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={`truncate text-sm ${
+              u.suspended_at
+                ? 'text-neutral-400 line-through'
+                : 'text-neutral-900'
+            }`}
+          >
+            {u.email}
+          </span>
+          <span
+            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+              u.role === 'admin'
+                ? 'bg-neutral-900 text-white'
+                : 'bg-neutral-100 text-neutral-600'
+            }`}
+          >
+            {u.role === 'admin' ? '管理者' : '一般'}
+          </span>
+          {u.org_role === 'company_admin' && (
+            <span className="shrink-0 rounded bg-indigo-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+              会社管理者
+            </span>
+          )}
+          {u.suspended_at && (
+            <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+              一時停止中
+            </span>
+          )}
+          {u.company && (
+            <span className="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-bold text-neutral-600">
+              {u.company}
+            </span>
+          )}
+        </div>
+        <LabelEditor email={u.email} initial={u.admin_label} onSaved={onSaved} />
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-t border-neutral-100 pt-2.5 sm:border-t-0 sm:pt-0">
+        {/* 組織所属メンバーの上限はエンタープライズで決まるため、個人プランの
+            セレクトは出さず種別だけ示す。 */}
+        {u.role !== 'admin' &&
+          (u.org_id ? (
+            <span className="rounded-md bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700 ring-1 ring-indigo-200">
+              エンタープライズ
+            </span>
+          ) : (
+            <PlanSelect email={u.email} value={u.plan} onSaved={onSaved} />
+          ))}
+        {u.role !== 'admin' && <ResetQuestionsButton email={u.email} />}
+        <ResetPasswordButton email={u.email} />
+        <SuspendButton
+          email={u.email}
+          suspended={!!u.suspended_at}
+          onChanged={onSaved}
+        />
+        <button
+          type="button"
+          onClick={() => onRemove(u.email)}
+          className="text-xs font-medium text-neutral-400 transition hover:text-red-600"
+        >
+          利用停止
+        </button>
       </div>
     </div>
   );
