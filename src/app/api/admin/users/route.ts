@@ -19,14 +19,47 @@ export async function GET() {
   const db = supabaseAdmin();
   // Admins see each user's email, role, and the admin-only label — but
   // NOT the user's own display_name, which is private to that user.
-  const { data, error } = await db
+  // org_id / org_role(0026)も返し、どのアカウントがどの組織に属すか
+  // (=つながり)を管理画面で見せる。0026 未適用の環境では従来列で
+  // 取り直す(org 情報は null 扱い)。
+  const withOrg =
+    'email, role, admin_label, created_at, suspended_at, plan, company, org_id, org_role';
+  const legacy =
+    'email, role, admin_label, created_at, suspended_at, plan, company';
+  const full = await db
     .from('app_users')
-    .select('email, role, admin_label, created_at, suspended_at, plan, company')
+    .select(withOrg)
     .order('created_at', { ascending: true });
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  const res = full.error
+    ? await db
+        .from('app_users')
+        .select(legacy)
+        .order('created_at', { ascending: true })
+    : full;
+  if (res.error) {
+    return NextResponse.json({ error: res.error.message }, { status: 500 });
   }
-  return NextResponse.json({ users: data ?? [] });
+  const rows = (res.data ?? []) as Array<Record<string, unknown>>;
+
+  // 組織名を引いて各ユーザーに付与(組織所属ユーザーがいる場合のみ)。
+  const orgIds = Array.from(
+    new Set(rows.map((u) => u.org_id).filter((v): v is string => !!v)),
+  );
+  let orgNames: Record<string, string> = {};
+  if (orgIds.length > 0) {
+    const { data: orgs } = await db
+      .from('organizations')
+      .select('id, name')
+      .in('id', orgIds);
+    orgNames = Object.fromEntries(
+      (orgs ?? []).map((o) => [o.id as string, o.name as string]),
+    );
+  }
+  const users = rows.map((u) => ({
+    ...u,
+    org_name: u.org_id ? orgNames[u.org_id as string] ?? null : null,
+  }));
+  return NextResponse.json({ users });
 }
 
 /**
