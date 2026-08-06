@@ -218,6 +218,39 @@ const EMBEDDING_FALLBACKS = [
   'text-embedding-004',
 ];
 
+/**
+ * 埋め込み生成の同時実行数。上げるほど速いが、API のレート制限に当たる
+ * リスクも上がる。6 なら 570 チャンク(20万文字)でも十数秒で終わり、
+ * train-document の実行時間上限に収まる。
+ */
+const EMBED_CONCURRENCY = 6;
+
+/**
+ * 入力の順序を保ったまま、最大 limit 本を並行して処理する。
+ * いずれかが失敗したら、その例外をそのまま投げる(呼び出し側の
+ * モデルフォールバックが働くようにするため)。
+ */
+export async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      for (;;) {
+        const i = next++;
+        if (i >= items.length) return;
+        results[i] = await fn(items[i], i);
+      }
+    },
+  );
+  await Promise.all(workers);
+  return results;
+}
+
 export async function embedTexts(texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return [];
   const preferred = env.geminiEmbeddingModel();
@@ -229,22 +262,27 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
   const attempts: Array<{ model: string; error: string }> = [];
   for (const modelName of candidates) {
     try {
-      const vectors: number[][] = [];
-      for (const text of texts) {
-        const response = await gemini().models.embedContent({
-          model: modelName,
-          contents: text,
-          config: { outputDimensionality: 768 },
-        });
-        const values = response.embeddings?.[0]?.values;
-        if (!values) throw new Error('no embedding values returned');
-        if (values.length !== 768) {
-          throw new Error(
-            `expected 768-dim vector, got ${values.length}-dim`,
-          );
-        }
-        vectors.push(values);
-      }
+      // チャンクごとに1コールする点は従来どおりだが、逐次実行だと
+      // 200,000文字の文書(約570チャンク)で2分近くかかり、
+      // train-document の実行時間上限を超えて素材が processing のまま
+      // 残っていた。順序を保ったまま数本ずつ並行して実行する。
+      const vectors = await mapWithConcurrency(
+        texts,
+        EMBED_CONCURRENCY,
+        async (text) => {
+          const response = await gemini().models.embedContent({
+            model: modelName,
+            contents: text,
+            config: { outputDimensionality: 768 },
+          });
+          const values = response.embeddings?.[0]?.values;
+          if (!values) throw new Error('no embedding values returned');
+          if (values.length !== 768) {
+            throw new Error(`expected 768-dim vector, got ${values.length}-dim`);
+          }
+          return values;
+        },
+      );
       return vectors;
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);

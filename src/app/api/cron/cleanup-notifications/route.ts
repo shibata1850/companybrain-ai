@@ -72,25 +72,47 @@ export async function GET(req: NextRequest) {
     //    まだ参照している media_path を集め、それ以外の古い
     //    notifications/ オブジェクトを削除する。
     try {
-      const { data: refs } = await db
-        .from('notifications')
-        .select('media_path')
-        .not('media_path', 'is', null)
-        .limit(10000);
-      const referenced = new Set(
-        (refs ?? [])
-          .map((r) => (r as { media_path?: string }).media_path)
-          .filter(Boolean) as string[],
-      );
-      const { data: files } = await db.storage
-        .from(storageBucket())
-        .list('notifications', { limit: 1000 });
-      const orphans = (files ?? [])
-        .filter((f) => f.name)
-        .map((f) => `notifications/${f.name}`)
-        .filter((p) => !referenced.has(p));
-      if (orphans.length > 0) {
-        await db.storage.from(storageBucket()).remove(orphans);
+      // 参照中の media_path は「必ず全件」集める。以前は 10,000 件で
+      // 打ち切っていたため、それを超えると使用中の添付を孤児と誤判定して
+      // Storage から削除していた(データ損失)。
+      // 全件を集めきれない場合は削除自体を行わない(安全側に倒す)。
+      const REF_PAGE = 1000;
+      const REF_HARD_CAP = 100_000; // これを超えたら判定を諦める
+      const referenced = new Set<string>();
+      let complete = false;
+      for (let from = 0; from < REF_HARD_CAP; from += REF_PAGE) {
+        const { data: refs, error: refErr } = await db
+          .from('notifications')
+          .select('media_path')
+          .not('media_path', 'is', null)
+          .order('id', { ascending: true })
+          .range(from, from + REF_PAGE - 1);
+        if (refErr) throw refErr;
+        for (const r of refs ?? []) {
+          const p = (r as { media_path?: string }).media_path;
+          if (p) referenced.add(p);
+        }
+        if (!refs || refs.length < REF_PAGE) {
+          complete = true;
+          break;
+        }
+      }
+      if (!complete) {
+        // 参照一覧を取り切れていない状態で削除すると使用中の添付を消す。
+        console.warn(
+          '[cleanup-notifications] media sweep skipped: referenced set incomplete',
+        );
+      } else {
+        const { data: files } = await db.storage
+          .from(storageBucket())
+          .list('notifications', { limit: 1000 });
+        const orphans = (files ?? [])
+          .filter((f) => f.name)
+          .map((f) => `notifications/${f.name}`)
+          .filter((p) => !referenced.has(p));
+        if (orphans.length > 0) {
+          await db.storage.from(storageBucket()).remove(orphans);
+        }
       }
     } catch (mediaErr) {
       // 添付掃除の失敗は本処理を止めない(media 列未適用の環境含む)。

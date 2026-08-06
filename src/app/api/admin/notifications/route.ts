@@ -56,10 +56,25 @@ export async function POST(req: NextRequest) {
   // 会社管理者は自社メンバーのみが対象。運営者は全ユーザーが対象。
   let recipients: string[] = [];
   if (target === 'all') {
-    let q = db.from('app_users').select('email');
-    if (!isSuperAdmin) q = q.eq('org_id', me.org_id!);
-    const { data } = await q;
-    recipients = (data ?? []).map((u) => u.email as string);
+    // 配信先は明示ページングで全件取得する。limit なしだと PostgREST の
+    // 行上限(既定1000)で黙って打ち切られ、1,000人を超える組織では
+    // 「送ったのに届いていない人がいる」状態になる。
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+      let q = db
+        .from('app_users')
+        .select('email')
+        .order('email', { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (!isSuperAdmin) q = q.eq('org_id', me.org_id!);
+      const { data, error } = await q;
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      if (!data || data.length === 0) break;
+      recipients.push(...data.map((u) => u.email as string));
+      if (data.length < PAGE) break;
+    }
   } else {
     const email = target.trim().toLowerCase();
     let q = db.from('app_users').select('email, org_id').eq('email', email);
@@ -98,9 +113,25 @@ export async function POST(req: NextRequest) {
     link: link?.trim()?.slice(0, 300) || null,
     ...media,
   }));
-  const { error } = await db.from('notifications').insert(rows);
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  // 受信者ごとに1行なので、大規模組織では数千行になる。一度に INSERT すると
+  // リクエストが大きくなりすぎるためバッチに分ける。途中で失敗した場合は
+  // 何件まで配信できたかを返す(黙って成功を返さない)。
+  const INSERT_BATCH = 500;
+  let sent = 0;
+  for (let i = 0; i < rows.length; i += INSERT_BATCH) {
+    const { error } = await db
+      .from('notifications')
+      .insert(rows.slice(i, i + INSERT_BATCH));
+    if (error) {
+      return NextResponse.json(
+        {
+          error: `配信中にエラーが発生しました(${sent}/${rows.length}件まで送信済み): ${error.message}`,
+          sent,
+        },
+        { status: 500 },
+      );
+    }
+    sent += Math.min(INSERT_BATCH, rows.length - i);
   }
-  return NextResponse.json({ ok: true, sent: rows.length });
+  return NextResponse.json({ ok: true, sent });
 }
