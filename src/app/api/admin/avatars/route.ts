@@ -17,12 +17,15 @@ export async function GET() {
   }
   const db = supabaseAdmin();
 
-  // 一覧はページングする。全件取得はブレインが増えるとタイムアウトと
+  // 一覧は上限を設ける。全件取得はブレインが増えるとタイムアウトと
   // PostgREST の行上限(既定1000)による静かな欠落を招くため。
+  // ただし「黙って切り捨てる」ことはせず、総件数を返して UI に明示させる。
   const PAGE = 200;
-  const { data: avatars, error } = await db
+  const { data: avatars, error, count: totalCount } = await db
     .from('avatars')
-    .select('id, name, description, owner_email, created_at')
+    .select('id, name, description, owner_email, created_at', {
+      count: 'exact',
+    })
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .range(0, PAGE - 1);
@@ -97,5 +100,11 @@ export async function GET() {
     last_activity: lastActivity.get(a.id as string) ?? null,
   }));
 
-  return NextResponse.json({ avatars: rows });
+  // total は削除済みを除く全ブレイン数。rows.length より大きい場合は
+  // 表示が上限で打ち切られていることを UI 側で明示する。
+  return NextResponse.json({
+    avatars: rows,
+    total: totalCount ?? rows.length,
+    limit: PAGE,
+  });
 }

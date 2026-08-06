@@ -22,6 +22,8 @@ export default function AdminAvatarsClient() {
   const [forbidden, setForbidden] = useState(false);
   const [q, setQ] = useState('');
   const [owner, setOwner] = useState('');
+  // 表示上限で打ち切られた場合に知らせるための総件数。
+  const [total, setTotal] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -31,9 +33,14 @@ export default function AdminAvatarsClient() {
         setForbidden(true);
         return;
       }
-      const json = (await res.json()) as { avatars?: Row[]; error?: string };
+      const json = (await res.json()) as {
+        avatars?: Row[];
+        total?: number;
+        error?: string;
+      };
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
       setRows(json.avatars ?? []);
+      setTotal(json.total ?? json.avatars?.length ?? 0);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -158,6 +165,14 @@ export default function AdminAvatarsClient() {
         </select>
         <span className="text-xs text-neutral-400">{filtered.length} 件</span>
       </div>
+
+      {/* 表示上限で打ち切られている場合は黙って隠さず明示する。 */}
+      {total > rows.length && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+          全 {total} 件のうち、新しい {rows.length} 件を表示しています。
+          古いブレインは表示されていません。
+        </div>
+      )}
 
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
