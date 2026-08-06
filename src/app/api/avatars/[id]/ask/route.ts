@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase';
-import { answerAsPersona, embedTexts, type AnswerLength } from '@/lib/gemini';
+import { answerAsPersona, type AnswerLength } from '@/lib/gemini';
 import { authorizeAvatar } from '@/lib/authServer';
 import { collectMaterialRules } from '@/lib/materialRules';
+import { searchKnowledge } from '@/lib/retrieval';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { reportError } from '@/lib/errorReport';
 import {
@@ -87,15 +88,10 @@ export async function POST(
   const generationId = gen.id as string;
 
   try {
-    const [queryEmbedding] = await embedTexts([question]);
-    const { data: matches } = await db.rpc('match_knowledge_chunks', {
-      query_embedding: queryEmbedding,
-      target_avatar_id: avatarId,
-      match_count: 6,
-    });
-    const knowledge =
-      (matches as Array<{ content: string }> | null)?.map((m) => m.content) ??
-      [];
+    // ハイブリッド検索(キーワード + 意味)。音声側の knowledge ルートと
+    // 同じ検索を使い、テキスト回答でも同じ精度にする。
+    const hits = await searchKnowledge(avatarId, question, 8);
+    const knowledge = hits.map((h) => h.content);
 
     // 学習素材から抽出した振る舞いルール(毎回適用)。
     const rules = await collectMaterialRules(avatarId);

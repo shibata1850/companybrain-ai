@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizeAvatar } from '@/lib/authServer';
-import { supabaseAdmin } from '@/lib/supabase';
-import { embedTexts } from '@/lib/gemini';
+import { searchKnowledge } from '@/lib/retrieval';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -26,20 +25,12 @@ export async function POST(
     return NextResponse.json({ results: [] });
   }
 
-  const db = supabaseAdmin();
   try {
-    const [queryEmbedding] = await embedTexts([query]);
-    const { data: matches, error } = await db.rpc('match_knowledge_chunks', {
-      query_embedding: queryEmbedding,
-      target_avatar_id: params.id,
-      match_count: 6,
-    });
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-    const results = (matches as Array<{ content: string }> | null) ?? [];
+    // ハイブリッド検索(キーワード + 意味)。定型文の多い規程で、固有語を
+    // 含むチャンクが意味検索だけでは上位に入らない事象への対応。
+    const hits = await searchKnowledge(params.id, query, 8);
     return NextResponse.json({
-      results: results.map((r) => r.content),
+      results: hits.map((h) => h.content),
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
