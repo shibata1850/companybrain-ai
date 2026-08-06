@@ -83,11 +83,15 @@ export async function getPlanUsage(user: AppUser): Promise<PlanUsage> {
   // getPlanUsage 自体が失敗する(=質問も会話も作成もできなくなる)。
   // 依頼ブレインは依頼者本人に譲渡されるので、この絞り込みで免除の意図は
   // 満たせる(通常 0〜数件)。
+  // 依頼ブレインはプラン上限の対象外なので理論上いくつでも溜められる。
+  // 件数を絞らないと同じ 414 が再発するため、上限を設ける。
+  const REQUEST_BRAIN_CAP = 50;
   const { data: requestBrains } = await db
     .from('avatars')
     .select('id')
     .eq('owner_email', user.email)
-    .not('request_id', 'is', null);
+    .not('request_id', 'is', null)
+    .limit(REQUEST_BRAIN_CAP);
   const requestBrainIds = (requestBrains ?? []).map((b) => b.id as string);
 
   let questionsQuery = db
