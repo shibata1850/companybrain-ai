@@ -17,46 +17,74 @@ export async function GET() {
   }
   const db = supabaseAdmin();
 
+  // 一覧はページングする。全件取得はブレインが増えるとタイムアウトと
+  // PostgREST の行上限(既定1000)による静かな欠落を招くため。
+  const PAGE = 200;
   const { data: avatars, error } = await db
     .from('avatars')
     .select('id, name, description, owner_email, created_at')
     .is('deleted_at', null)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .range(0, PAGE - 1);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  const avatarIds = (avatars ?? []).map((a) => a.id as string);
 
-  // Material counts per brain (one grouped query, then map).
+  // 素材件数。以前はブレイン1件につき COUNT を1回ずつ逐次実行していて、
+  // 300件で10秒を超えて管理画面が開けなくなっていた。対象ブレインの
+  // training_videos の avatar_id だけを1クエリで取り、JS で数える。
   const counts = new Map<string, number>();
-  for (const a of avatars ?? []) {
-    const { count } = await db
-      .from('training_videos')
-      .select('id', { count: 'exact', head: true })
-      .eq('avatar_id', a.id);
-    counts.set(a.id as string, count ?? 0);
+  if (avatarIds.length > 0) {
+    const MATERIAL_PAGE = 1000;
+    for (let from = 0; ; from += MATERIAL_PAGE) {
+      const { data: rows, error: mErr } = await db
+        .from('training_videos')
+        .select('avatar_id')
+        .in('avatar_id', avatarIds)
+        .range(from, from + MATERIAL_PAGE - 1);
+      if (mErr || !rows || rows.length === 0) break;
+      for (const r of rows) {
+        const id = r.avatar_id as string;
+        counts.set(id, (counts.get(id) ?? 0) + 1);
+      }
+      if (rows.length < MATERIAL_PAGE) break;
+    }
   }
 
-  // Last audit activity per brain.
+  // 最終活動。全体の直近2000行から拾うと、会話の活発な数ブレインで枠が
+  // 埋まり他が null になっていた。表示対象のブレインに絞って取得する。
   const lastActivity = new Map<string, string>();
-  const { data: recent } = await db
-    .from('audit_logs')
-    .select('avatar_id, created_at')
-    .order('created_at', { ascending: false })
-    .limit(2000);
-  for (const r of recent ?? []) {
-    const id = r.avatar_id as string | null;
-    if (id && !lastActivity.has(id)) {
-      lastActivity.set(id, r.created_at as string);
+  if (avatarIds.length > 0) {
+    const { data: recent } = await db
+      .from('audit_logs')
+      .select('avatar_id, created_at')
+      .in('avatar_id', avatarIds)
+      .order('created_at', { ascending: false })
+      .limit(5000);
+    for (const r of recent ?? []) {
+      const id = r.avatar_id as string | null;
+      if (id && !lastActivity.has(id)) {
+        lastActivity.set(id, r.created_at as string);
+      }
     }
   }
 
   // Admin's labels for the owners (never their private display_name).
-  const { data: labels } = await db
-    .from('app_users')
-    .select('email, admin_label');
-  const labelByEmail = new Map(
-    (labels ?? []).map((l) => [l.email as string, l.admin_label as string | null]),
+  // 表示対象の所有者だけに絞る(app_users 全件取得はユーザー増で欠落する)。
+  const ownerEmails = Array.from(
+    new Set((avatars ?? []).map((a) => a.owner_email as string).filter(Boolean)),
   );
+  const labelByEmail = new Map<string, string | null>();
+  if (ownerEmails.length > 0) {
+    const { data: labels } = await db
+      .from('app_users')
+      .select('email, admin_label')
+      .in('email', ownerEmails);
+    for (const l of labels ?? []) {
+      labelByEmail.set(l.email as string, (l.admin_label as string | null) ?? null);
+    }
+  }
 
   const rows = (avatars ?? []).map((a) => ({
     id: a.id,

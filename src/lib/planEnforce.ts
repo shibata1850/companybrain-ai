@@ -76,10 +76,17 @@ export async function getPlanUsage(user: AppUser): Promise<PlanUsage> {
   const since =
     resetAt && resetAt.getTime() > monthStart.getTime() ? resetAt : monthStart;
 
-  // 免除対象(依頼ブレイン)の id を集め、集計から除外する。
+  // 免除対象(依頼で贈与されたブレイン)の id を集め、集計から除外する。
+  // 必ず「自分が所有する」依頼ブレインに絞ること。所有者で絞らないと全
+  // テナントの依頼ブレインを毎回取得したうえ、その UUID を PostgREST の
+  // URL に連結するため、件数が増えると URI が長くなりすぎて 414 で
+  // getPlanUsage 自体が失敗する(=質問も会話も作成もできなくなる)。
+  // 依頼ブレインは依頼者本人に譲渡されるので、この絞り込みで免除の意図は
+  // 満たせる(通常 0〜数件)。
   const { data: requestBrains } = await db
     .from('avatars')
     .select('id')
+    .eq('owner_email', user.email)
     .not('request_id', 'is', null);
   const requestBrainIds = (requestBrains ?? []).map((b) => b.id as string);
 

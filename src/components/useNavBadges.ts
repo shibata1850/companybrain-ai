@@ -14,8 +14,12 @@ export function useNavBadges(show: boolean) {
 
   const loadBadges = useCallback(async () => {
     try {
+      // バッジに必要なのは件数だけ。/api/notifications は本文100件と
+      // 添付ごとの署名URL発行を伴うため、軽量な count エンドポイントを使う。
       const [n, r] = await Promise.all([
-        fetch('/api/notifications', { cache: 'no-store' }).then((x) => x.json()),
+        fetch('/api/notifications/count', { cache: 'no-store' }).then((x) =>
+          x.json(),
+        ),
         fetch('/api/requests/count', { cache: 'no-store' }).then((x) => x.json()),
       ]);
       setUnread(n?.unread_count ?? 0);
