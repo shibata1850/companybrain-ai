@@ -33,33 +33,6 @@ function redact(value: string): string {
     .replace(/eyJ[\w\-]+\.[\w\-]+\.[\w\-]+/g, '[redacted-jwt]');
 }
 
-/**
- * 同一エラーの連投を抑える。障害時は同じ例外が毎リクエスト発生するため、
- * 素通しにすると Slack/Discord が埋まり、レート制限にも当たって肝心の
- * 通知が届かなくなる。同じ内容は既定10分に1回だけ送り、その間に何回
- * 起きたかは次回の通知に添える。
- */
-const WEBHOOK_WINDOW_MS = 10 * 60 * 1000;
-const MAX_TRACKED_KEYS = 200;
-const notified = new Map<string, { at: number; suppressed: number }>();
-
-function shouldNotify(key: string): { send: boolean; suppressed: number } {
-  const now = Date.now();
-  const prev = notified.get(key);
-  if (prev && now - prev.at < WEBHOOK_WINDOW_MS) {
-    prev.suppressed += 1;
-    return { send: false, suppressed: prev.suppressed };
-  }
-  // メモリが無限に増えないよう、古い記録から捨てる。
-  if (notified.size >= MAX_TRACKED_KEYS) {
-    const oldest = [...notified.entries()].sort((a, b) => a[1].at - b[1].at)[0];
-    if (oldest) notified.delete(oldest[0]);
-  }
-  const suppressed = prev?.suppressed ?? 0;
-  notified.set(key, { at: now, suppressed: 0 });
-  return { send: true, suppressed };
-}
-
 export function reportError(error: unknown, context: ErrorContext = {}): void {
   const message = redact(
     error instanceof Error ? error.message : String(error),
@@ -84,15 +57,9 @@ export function reportError(error: unknown, context: ErrorContext = {}): void {
   // (2) Optional webhook fan-out — best effort, never awaited by callers.
   const url = process.env.ERROR_WEBHOOK_URL;
   if (!url) return;
-
-  // 同一エラーの連投を抑制(障害時のスパムとレート制限を防ぐ)。
-  const { send, suppressed } = shouldNotify(`${context.route ?? 'app'}|${message}`);
-  if (!send) return;
-
   const summary =
     `:rotating_light: ${context.route ?? 'app'} — ${message}` +
-    (context.actor ? ` (actor: ${context.actor})` : '') +
-    (suppressed > 0 ? `\n(直前の10分間に同じエラーが ${suppressed} 件発生)` : '');
+    (context.actor ? ` (actor: ${context.actor})` : '');
   void fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

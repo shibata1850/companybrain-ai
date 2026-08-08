@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAppUser } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabase';
 import { fetchAllPages } from '@/lib/pageAll';
-import { reportError } from '@/lib/errorReport';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -47,7 +46,6 @@ export async function GET() {
     try {
       rows = (await listUsers(legacy)).rows;
     } catch (e) {
-      reportError(e, { route: 'GET /api/admin/users' });
       const message = e instanceof Error ? e.message : String(e);
       return NextResponse.json({ error: message }, { status: 500 });
     }

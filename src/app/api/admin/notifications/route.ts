@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAppUser } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabase';
-import { reportError } from '@/lib/errorReport';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -124,13 +123,6 @@ export async function POST(req: NextRequest) {
       .from('notifications')
       .insert(rows.slice(i, i + INSERT_BATCH));
     if (error) {
-      // 一部だけ届いた状態は運用上の事故につながるため必ず記録する。
-      reportError(error, {
-        route: 'POST /api/admin/notifications',
-        actor: me.email,
-        sent,
-        total: rows.length,
-      });
       return NextResponse.json(
         {
           error: `配信中にエラーが発生しました(${sent}/${rows.length}件まで送信済み): ${error.message}`,

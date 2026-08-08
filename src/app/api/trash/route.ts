@@ -4,7 +4,6 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { permanentlyDeleteAvatars } from '@/lib/avatars';
 import { getAppUser } from '@/lib/authServer';
 import { fetchAllPages } from '@/lib/pageAll';
-import { reportError } from '@/lib/errorReport';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -33,7 +32,6 @@ export async function GET() {
     );
     return NextResponse.json({ avatars: rows, truncated });
   } catch (e) {
-    reportError(e, { route: 'GET /api/trash', actor: me.email });
     const message = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ error: message }, { status: 500 });
   }

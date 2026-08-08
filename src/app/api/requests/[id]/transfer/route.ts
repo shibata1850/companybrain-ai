@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { getAppUser } from '@/lib/authServer';
 import { storageBucket, supabaseAdmin } from '@/lib/supabase';
-import { reportError } from '@/lib/errorReport';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -116,12 +115,7 @@ export async function POST(
       updated_at: now,
     })
     .eq('id', params.id);
-  if (e2) {
-    // ブレインのコピーは作成済みで依頼だけ未完了、という中途半端な状態に
-    // なるため記録する(手当てが必要な事象)。
-    reportError(e2, { route: 'POST /api/requests/[id]/transfer' });
-    return NextResponse.json({ error: e2.message }, { status: 500 });
-  }
+  if (e2) return NextResponse.json({ error: e2.message }, { status: 500 });
 
   // 3. notify the requester (link to their copy)
   await db.from('notifications').insert({
