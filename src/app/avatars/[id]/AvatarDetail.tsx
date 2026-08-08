@@ -93,7 +93,8 @@ type TrainingVideo = {
   mime_type: string | null;
   status: string;
   summary: string | null;
-  transcript: string | null;
+  /** 会話画面では使わない。素材管理画面(?materials=full)でのみ返る。 */
+  transcript?: string | null;
   folder: string | null;
   created_at: string;
 };

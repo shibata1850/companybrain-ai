@@ -210,7 +210,11 @@ export default function TrainingClient({ avatarId }: { avatarId: string }) {
   const [folderDrafts, setFolderDrafts] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/avatars/${avatarId}`, { cache: 'no-store' });
+    // 素材管理画面は本文(transcript)を検索・編集に使うため明示的に要求する。
+    // 会話画面は本文を使わないので既定では返らない(レスポンス肥大の回避)。
+    const res = await fetch(`/api/avatars/${avatarId}?materials=full`, {
+      cache: 'no-store',
+    });
     const json = (await res.json()) as DetailResponse & { error?: string };
     if (!res.ok) {
       setError(json.error || `HTTP ${res.status}`);

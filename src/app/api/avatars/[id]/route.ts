@@ -9,13 +9,20 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } },
 ) {
   const auth = await authorizeAvatar(params.id);
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }
+  // 素材の本文(transcript)は 1 件で最大 20 万文字あり、素材が増えると
+  // レスポンスが数十 MB に膨らむ。本文を実際に使うのは素材管理画面だけで、
+  // 会話画面はフォルダ名と件数しか見ていないため、明示的に要求されたとき
+  // だけ返す(?materials=full)。
+  const withTranscript =
+    new URL(req.url).searchParams.get('materials') === 'full';
+
   const db = supabaseAdmin();
   const { data: avatar, error } = await db
     .from('avatars')
@@ -30,14 +37,18 @@ export async function GET(
   // an explicit .range() ceiling, so a brain loaded with several full
   // law dumps loses its oldest entries from the management UI. Page
   // through in 1000-row chunks and concatenate to get the full set.
+  const baseCols = 'id, file_name, mime_type, status, summary, folder, created_at';
+  const cols = withTranscript
+    ? `${baseCols}, transcript, extracted_rules`
+    : `${baseCols}, extracted_rules`;
+  const legacyCols = withTranscript ? `${baseCols}, transcript` : baseCols;
+
   const videos: Array<Record<string, unknown>> = [];
   const PAGE = 1000;
   for (let from = 0; ; from += PAGE) {
     const first = await db
       .from('training_videos')
-      .select(
-        'id, file_name, mime_type, status, summary, transcript, folder, created_at, extracted_rules',
-      )
+      .select(cols)
       .eq('avatar_id', params.id)
       .order('created_at', { ascending: false })
       .range(from, from + PAGE - 1);
@@ -48,9 +59,7 @@ export async function GET(
       // 取り直す(列の露出は増やさず、後方互換だけ確保する)。
       const legacy = await db
         .from('training_videos')
-        .select(
-          'id, file_name, mime_type, status, summary, transcript, folder, created_at',
-        )
+        .select(legacyCols)
         .eq('avatar_id', params.id)
         .order('created_at', { ascending: false })
         .range(from, from + PAGE - 1);
