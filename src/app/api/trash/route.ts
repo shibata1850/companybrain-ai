@@ -3,6 +3,8 @@ import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase';
 import { permanentlyDeleteAvatars } from '@/lib/avatars';
 import { getAppUser } from '@/lib/authServer';
+import { fetchAllPages } from '@/lib/pageAll';
+import { reportError } from '@/lib/errorReport';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,16 +18,25 @@ export async function GET() {
   // Trash is fully per-user. Admins also see only their own — they
   // never see or touch another user's trashed brains.
   const db = supabaseAdmin();
-  const { data, error } = await db
-    .from('avatars')
-    .select('id, name, description, cover_image_path, deleted_at, created_at')
-    .not('deleted_at', 'is', null)
-    .eq('owner_email', me.email)
-    .order('deleted_at', { ascending: false });
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  // limit を付けないと PostgREST の行上限(既定1000)で黙って欠落するため、
+  // 明示ページングで全件取得する。
+  try {
+    const { rows, truncated } = await fetchAllPages((from, to) =>
+      db
+        .from('avatars')
+        .select('id, name, description, cover_image_path, deleted_at, created_at')
+        .not('deleted_at', 'is', null)
+        .eq('owner_email', me.email)
+        .order('deleted_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(from, to),
+    );
+    return NextResponse.json({ avatars: rows, truncated });
+  } catch (e) {
+    reportError(e, { route: 'GET /api/trash', actor: me.email });
+    const message = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-  return NextResponse.json({ avatars: data ?? [] });
 }
 
 /**

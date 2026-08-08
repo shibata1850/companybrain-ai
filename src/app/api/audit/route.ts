@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getAppUser } from '@/lib/authServer';
 import { getPlanUsage } from '@/lib/planEnforce';
+import { fetchAllPages } from '@/lib/pageAll';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -100,11 +101,20 @@ export async function GET(req: NextRequest) {
     if (me.role !== 'admin') {
       return NextResponse.json({ error: 'forbidden' }, { status: 403 });
     }
-    const { data } = await db
-      .from('avatars')
-      .select('owner_email')
-      .not('owner_email', 'is', null)
-      .is('deleted_at', null);
+    // 全件取得だと PostgREST の行上限(既定1000)で黙って欠落し、ブレインが
+    // 1,000件を超えると監査対象から消えるユーザーが出る。管理者の統制手段が
+    // 届かなくなるため、明示ページングで取得する。
+    const { rows: ownerRows } = await fetchAllPages<{ owner_email: string }>(
+      (from, to) =>
+        db
+          .from('avatars')
+          .select('owner_email')
+          .not('owner_email', 'is', null)
+          .is('deleted_at', null)
+          .order('owner_email', { ascending: true })
+          .range(from, to),
+    );
+    const data = ownerRows;
     const emails = Array.from(
       new Set(
         (data ?? [])
@@ -114,11 +124,18 @@ export async function GET(req: NextRequest) {
     ).sort();
     // Decorate with the admin's own label for each user (never the
     // user's private display_name).
-    const { data: labels } = await db
-      .from('app_users')
-      .select('email, admin_label');
+    const { rows: labels } = await fetchAllPages<{
+      email: string;
+      admin_label: string | null;
+    }>((from, to) =>
+      db
+        .from('app_users')
+        .select('email, admin_label')
+        .order('email', { ascending: true })
+        .range(from, to),
+    );
     const labelByEmail = new Map(
-      (labels ?? []).map((l) => [l.email as string, l.admin_label as string | null]),
+      labels.map((l) => [l.email, l.admin_label ?? null]),
     );
     const users = emails.map((email) => ({
       email,

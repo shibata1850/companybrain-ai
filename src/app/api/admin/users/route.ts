@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAppUser } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabase';
+import { fetchAllPages } from '@/lib/pageAll';
+import { reportError } from '@/lib/errorReport';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -26,20 +28,30 @@ export async function GET() {
     'email, role, admin_label, created_at, suspended_at, plan, company, org_id, org_role';
   const legacy =
     'email, role, admin_label, created_at, suspended_at, plan, company';
-  const full = await db
-    .from('app_users')
-    .select(withOrg)
-    .order('created_at', { ascending: true });
-  const res = full.error
-    ? await db
+  // limit なしだと PostgREST の行上限(既定1000)で黙って欠落し、ユーザーが
+  // 1,000人を超えると管理画面から見えない人が出る。明示ページングで取得する。
+  const listUsers = (cols: string) =>
+    fetchAllPages<Record<string, unknown>>((from, to) =>
+      db
         .from('app_users')
-        .select(legacy)
+        .select(cols)
         .order('created_at', { ascending: true })
-    : full;
-  if (res.error) {
-    return NextResponse.json({ error: res.error.message }, { status: 500 });
+        .order('email', { ascending: true })
+        .range(from, to),
+    );
+  let rows: Array<Record<string, unknown>>;
+  try {
+    // org_id / org_role(0026)が未適用の環境では従来列で取り直す。
+    rows = (await listUsers(withOrg)).rows;
+  } catch {
+    try {
+      rows = (await listUsers(legacy)).rows;
+    } catch (e) {
+      reportError(e, { route: 'GET /api/admin/users' });
+      const message = e instanceof Error ? e.message : String(e);
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
   }
-  const rows = (res.data ?? []) as Array<Record<string, unknown>>;
 
   // 組織名を引いて各ユーザーに付与(組織所属ユーザーがいる場合のみ)。
   const orgIds = Array.from(
