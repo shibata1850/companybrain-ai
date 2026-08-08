@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAppUser } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabase';
+import { reportError } from '@/lib/errorReport';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -35,6 +36,8 @@ export async function POST(req: NextRequest) {
     seconds: s,
   });
   if (error) {
+    // 音声利用分の記録失敗はプラン集計(=課金根拠)に直結するため記録する。
+    reportError(error, { route: 'POST /api/streaming/end' });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json({ ok: true, recorded: s });

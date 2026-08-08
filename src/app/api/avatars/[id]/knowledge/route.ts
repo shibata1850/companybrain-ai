@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizeAvatar } from '@/lib/authServer';
 import { searchKnowledge } from '@/lib/retrieval';
+import { reportError } from '@/lib/errorReport';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -42,6 +43,9 @@ export async function POST(
       })),
     });
   } catch (e) {
+    // 検索は質問のたびに通る中核経路。失敗が見えないと「answers が出ない」
+    // という報告だけが残り原因を追えないため、必ず記録する。
+    reportError(e, { route: 'POST /api/avatars/[id]/knowledge' });
     const message = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ error: message }, { status: 500 });
   }

@@ -52,3 +52,50 @@ describe('reportError', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe('通知の連投抑制', () => {
+  /**
+   * 障害時は同じ例外が毎リクエスト発生する。素通しにすると通知先が
+   * 埋まりレート制限にも当たるため、同一内容は一定時間に1回だけ送る。
+   * ただし抑制しすぎると監視が意味を失うので、別内容は必ず届くこと、
+   * stderr には毎回出ることをテストで固定する。
+   */
+  it('同じエラーの webhook は1回だけ送る(stderr は毎回出す)', () => {
+    process.env.ERROR_WEBHOOK_URL = 'https://example.test/hook';
+    const logSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('ok'));
+
+    const key = `dup-${Math.random()}`;
+    for (let i = 0; i < 5; i++) {
+      reportError(new Error(key), { route: 'POST /same' });
+    }
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1); // webhook は1回
+    expect(logSpy).toHaveBeenCalledTimes(5); // ログは毎回
+  });
+
+  it('内容が違うエラーはそれぞれ通知する(取りこぼさない)', () => {
+    process.env.ERROR_WEBHOOK_URL = 'https://example.test/hook';
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('ok'));
+
+    const seed = Math.random();
+    reportError(new Error(`a-${seed}`), { route: 'POST /a' });
+    reportError(new Error(`b-${seed}`), { route: 'POST /b' });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('ERROR_WEBHOOK_URL が未設定なら webhook を呼ばない', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('ok'));
+    reportError(new Error(`nohook-${Math.random()}`));
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
