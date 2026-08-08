@@ -91,7 +91,10 @@ export async function POST(
     // ハイブリッド検索(キーワード + 意味)。音声側の knowledge ルートと
     // 同じ検索を使い、テキスト回答でも同じ精度にする。
     const hits = await searchKnowledge(avatarId, question, 8);
-    const knowledge = hits.map((h) => h.content);
+    // 素材名を添えて渡し、どの資料に基づく回答かを示せるようにする。
+    const knowledge = hits.map((h) =>
+      h.materialName ? `【${h.materialName}】 ${h.content}` : h.content,
+    );
 
     // 学習素材から抽出した振る舞いルール(毎回適用)。
     const rules = await collectMaterialRules(avatarId);

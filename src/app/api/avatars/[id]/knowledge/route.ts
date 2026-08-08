@@ -30,7 +30,16 @@ export async function POST(
     // 含むチャンクが意味検索だけでは上位に入らない事象への対応。
     const hits = await searchKnowledge(params.id, query, 8);
     return NextResponse.json({
-      results: hits.map((h) => h.content),
+      // モデルには素材名を添えて渡す。どの資料に基づくかを回答内で示せる。
+      results: hits.map((h) =>
+        h.materialName ? `【${h.materialName}】 ${h.content}` : h.content,
+      ),
+      // UI の「根拠」表示用。本文と引用元を分けて返す。
+      hits: hits.map((h) => ({
+        content: h.content,
+        material_name: h.materialName ?? null,
+        material_id: h.materialId ?? null,
+      })),
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

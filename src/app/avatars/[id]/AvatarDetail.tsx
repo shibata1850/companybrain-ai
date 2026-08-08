@@ -450,7 +450,11 @@ export default function AvatarDetail({ id }: { id: string }) {
         for (const s of m.sources) {
           lines.push(`- **${s.query}**`);
           for (const c of s.chunks) {
-            lines.push(`  - ${c.replace(/\n+/g, ' ').slice(0, 200)}`);
+            // 旧形式(文字列)と新形式(引用元つき)の両対応。
+            const text = typeof c === 'string' ? c : c.text;
+            const name = typeof c === 'string' ? null : c.materialName;
+            const body = text.replace(/\n+/g, ' ').slice(0, 200);
+            lines.push(`  - ${name ? `**${name}**: ` : ''}${body}`);
           }
         }
         lines.push('', '</details>', '');
@@ -967,6 +971,7 @@ export default function AvatarDetail({ id }: { id: string }) {
           </p>
 
           <TranscriptPanel
+            avatarId={avatar.id}
             avatarName={avatar.name}
             threads={chatStore.threads}
             currentThreadId={chatStore.currentId}
@@ -1453,6 +1458,7 @@ function FolderPickerInline({
  * =========================================================== */
 
 function TranscriptPanel({
+  avatarId,
   avatarName,
   threads,
   currentThreadId,
@@ -1469,6 +1475,7 @@ function TranscriptPanel({
   onUpdateMessage,
   onExport,
 }: {
+  avatarId: string;
   avatarName: string;
   threads: ChatThread[];
   currentThreadId: string | null;
@@ -1789,6 +1796,7 @@ function TranscriptPanel({
                       <MessageRow
                         key={m.id}
                         m={m}
+                        avatarId={avatarId}
                         avatarName={avatarName}
                         search={search}
                         onUpdate={(patch) => onUpdateMessage(m.id, patch)}
@@ -1994,11 +2002,13 @@ function ThreadRow({
 
 function MessageRow({
   m,
+  avatarId,
   avatarName,
   search,
   onUpdate,
 }: {
   m: TranscriptMessage;
+  avatarId: string;
   avatarName: string;
   search: string;
   onUpdate: (patch: Partial<TranscriptMessage>) => void;
@@ -2172,19 +2182,40 @@ function MessageRow({
             </p>
           )}
           {hasSources && sourcesOpen && (
-            <div className="mt-2 space-y-2 rounded-lg bg-white p-2.5 text-[11px] leading-relaxed ring-1 ring-neutral-200">
+            <div className="mt-2 space-y-2.5 rounded-lg bg-white p-2.5 text-[11px] leading-relaxed ring-1 ring-neutral-200">
               {m.sources!.map((s, si) => (
                 <div key={si}>
                   <p className="font-medium text-neutral-500">{s.query}</p>
-                  <ul className="ml-3 mt-0.5 list-disc space-y-0.5 text-neutral-700">
-                    {s.chunks.slice(0, 4).map((c, ci) => (
-                      <li key={ci}>
-                        {c.length > 180 ? c.slice(0, 180) + '…' : c}
-                      </li>
-                    ))}
+                  <ul className="mt-1 space-y-1.5">
+                    {s.chunks.slice(0, 4).map((c, ci) => {
+                      // 旧形式(文字列)と新形式(引用元つき)の両対応。
+                      const text = typeof c === 'string' ? c : c.text;
+                      const name = typeof c === 'string' ? null : c.materialName;
+                      return (
+                        <li
+                          key={ci}
+                          className="border-l-2 border-neutral-200 pl-2"
+                        >
+                          {name && (
+                            <p className="mb-0.5 truncate font-bold text-neutral-600">
+                              {name}
+                            </p>
+                          )}
+                          <p className="text-neutral-700">
+                            {text.length > 180 ? text.slice(0, 180) + '…' : text}
+                          </p>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               ))}
+              <Link
+                href={`/avatars/${avatarId}/training`}
+                className="inline-block pt-0.5 text-[10px] font-medium text-neutral-500 underline underline-offset-2 transition hover:text-neutral-900"
+              >
+                学習素材を開く
+              </Link>
             </div>
           )}
 

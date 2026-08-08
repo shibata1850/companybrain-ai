@@ -63,9 +63,18 @@ const OUTPUT_SAMPLE_RATE = 24000;
  * /api/avatars/[id]/knowledge so Gemini can ground its answers in the
  * persona's training material.
  */
+/** 回答の根拠として引用した素材の断片。 */
+export type SourceChunk = {
+  text: string;
+  /** 引用元の学習素材名(判明した場合)。 */
+  materialName?: string | null;
+  materialId?: string | null;
+};
+
 export type TranscriptSource = {
   query: string;
-  chunks: string[];
+  /** 旧形式(文字列配列)で保存された会話との後方互換のため union にする。 */
+  chunks: Array<string | SourceChunk>;
 };
 
 export type TranscriptEscalation = {
@@ -724,11 +733,25 @@ export default function StreamingStage({
           });
           const json = (await res.json()) as {
             results?: string[];
+            hits?: Array<{
+              content: string;
+              material_name?: string | null;
+              material_id?: string | null;
+            }>;
             error?: string;
           };
           const results = json.results || [];
           if (results.length > 0) {
-            turnSourcesRef.current.push({ query, chunks: results });
+            // 根拠表示には引用元付きの hits を使う。旧デプロイのレスポンス
+            // (hits なし)でも壊れないよう results にフォールバックする。
+            const chunks: Array<string | SourceChunk> = json.hits
+              ? json.hits.map((h) => ({
+                  text: h.content,
+                  materialName: h.material_name ?? null,
+                  materialId: h.material_id ?? null,
+                }))
+              : results;
+            turnSourcesRef.current.push({ query, chunks });
           }
           responses.push({
             id: call.id,

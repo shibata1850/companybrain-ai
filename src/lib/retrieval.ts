@@ -50,7 +50,13 @@ export function extractKeywords(query: string, max = 4): string[] {
   return out.sort((a, b) => b.length - a.length).slice(0, max);
 }
 
-export type KnowledgeHit = { content: string; source: 'keyword' | 'vector' };
+export type KnowledgeHit = {
+  content: string;
+  source: 'keyword' | 'vector';
+  /** 引用元の学習素材(判明した場合)。回答の根拠表示に使う。 */
+  materialId?: string | null;
+  materialName?: string | null;
+};
 
 /**
  * ブレインの知識から、質問に関連するチャンクを取得する。
@@ -64,11 +70,19 @@ export async function searchKnowledge(
   const db = supabaseAdmin();
   const picked: KnowledgeHit[] = [];
   const seen = new Set<string>();
-  const take = (content: string, source: KnowledgeHit['source']) => {
+  /** チャンクID → 引用元素材。あとでまとめて解決する。 */
+  const chunkIds: string[] = [];
+  const take = (
+    content: string,
+    source: KnowledgeHit['source'],
+    chunkId?: string | null,
+    materialId?: string | null,
+  ) => {
     const key = content.slice(0, 120);
     if (seen.has(key)) return;
     seen.add(key);
-    picked.push({ content, source });
+    picked.push({ content, source, materialId: materialId ?? null });
+    if (!materialId && chunkId) chunkIds.push(chunkId);
   };
 
   // 1) キーワード完全一致。定型文に埋もれた固有語を確実に拾う。
@@ -82,12 +96,17 @@ export async function searchKnowledge(
     const safe = kw.replace(/[%_\\]/g, (m) => `\\${m}`);
     const { data } = await db
       .from('knowledge_chunks')
-      .select('content')
+      .select('id, content, video_id')
       .eq('avatar_id', avatarId)
       .ilike('content', `%${safe}%`)
       .limit(2);
     for (const row of data ?? []) {
-      take(row.content as string, 'keyword');
+      take(
+        row.content as string,
+        'keyword',
+        row.id as string,
+        row.video_id as string | null,
+      );
     }
   }
 
@@ -99,9 +118,11 @@ export async function searchKnowledge(
       target_avatar_id: avatarId,
       match_count: limit,
     });
-    for (const m of (matches as Array<{ content: string }> | null) ?? []) {
+    for (const m of (matches as Array<{ id?: string; content: string }> | null) ??
+      []) {
       if (picked.length >= limit) break;
-      take(m.content, 'vector');
+      // RPC は引用元(video_id)を返さないので、チャンクIDから後で解決する。
+      take(m.content, 'vector', m.id ?? null);
     }
   } catch (e) {
     // 意味検索が失敗しても、キーワード検索の結果は返す(全滅させない)。
@@ -112,5 +133,68 @@ export async function searchKnowledge(
     );
   }
 
-  return picked.slice(0, limit);
+  const result = picked.slice(0, limit);
+  await attachMaterialNames(db, result, chunkIds);
+  return result;
+}
+
+/**
+ * 各ヒットに引用元の素材名を付ける。回答の「根拠」表示で、どの資料から
+ * 答えたのかを利用者に示すために使う。
+ *
+ * 意味検索(RPC)は video_id を返さないため、チャンクIDから引き直す。
+ * 素材名が取れない場合(copy_brain 由来のチャンクは video_id が NULL)は
+ * 名前なしのまま返し、UI 側では本文だけを表示する。
+ */
+async function attachMaterialNames(
+  db: ReturnType<typeof supabaseAdmin>,
+  hits: KnowledgeHit[],
+  unresolvedChunkIds: string[],
+): Promise<void> {
+  try {
+    // 意味検索ぶんの video_id をチャンクIDから解決する。
+    if (unresolvedChunkIds.length > 0) {
+      const { data: rows } = await db
+        .from('knowledge_chunks')
+        .select('content, video_id')
+        .in('id', unresolvedChunkIds.slice(0, 50));
+      const byContent = new Map<string, string | null>();
+      for (const r of rows ?? []) {
+        byContent.set(
+          (r.content as string).slice(0, 120),
+          (r.video_id as string | null) ?? null,
+        );
+      }
+      for (const h of hits) {
+        if (!h.materialId) {
+          h.materialId = byContent.get(h.content.slice(0, 120)) ?? null;
+        }
+      }
+    }
+
+    const materialIds = Array.from(
+      new Set(hits.map((h) => h.materialId).filter((v): v is string => !!v)),
+    );
+    if (materialIds.length === 0) return;
+
+    const { data: materials } = await db
+      .from('training_videos')
+      .select('id, file_name')
+      .in('id', materialIds.slice(0, 50));
+    const nameById = new Map(
+      (materials ?? []).map((m) => [
+        m.id as string,
+        (m.file_name as string | null) ?? null,
+      ]),
+    );
+    for (const h of hits) {
+      if (h.materialId) h.materialName = nameById.get(h.materialId) ?? null;
+    }
+  } catch (e) {
+    // 素材名は表示上の補助情報。取得に失敗しても回答自体は返す。
+    console.warn(
+      '[retrieval] failed to resolve material names:',
+      e instanceof Error ? e.message : String(e),
+    );
+  }
 }
