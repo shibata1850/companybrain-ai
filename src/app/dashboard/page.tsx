@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import PlanBanner from '@/components/PlanBanner';
 import SortableGrid from '@/components/SortableGrid';
+import { useNavBadges } from '@/components/useNavBadges';
 
 type Avatar = {
   id: string;
@@ -26,6 +27,26 @@ export default function HomePage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
+
+  // 「質問する」大ボタンの行き先。ブレイン画面が端末に記録した
+  // 最近使ったブレイン(cb-recent-brains)を読み、無ければ先頭を使う。
+  const [recentId, setRecentId] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      const rec = JSON.parse(
+        localStorage.getItem('cb-recent-brains') || '[]',
+      ) as Array<{ id?: string }>;
+      setRecentId(rec.find((r) => r && typeof r.id === 'string')?.id ?? null);
+    } catch {
+      setRecentId(null);
+    }
+  }, []);
+  const primaryBrain = useMemo(() => {
+    if (avatars.length === 0) return null;
+    return avatars.find((a) => a.id === recentId) ?? avatars[0];
+  }, [avatars, recentId]);
+  // タイルのバッジ(お知らせ未読・依頼対応中)。下部ナビと同じ集計を使う。
+  const { unread, requestCount } = useNavBadges(true);
 
   const filteredAvatars = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -134,6 +155,79 @@ export default function HomePage() {
         </svg>
       </Link>
 
+      {/* 迷わないホーム: 開いたら押す場所が1つ(質問する)。タイルは
+          スマホのみ(PC は上部ヘッダーに同じ導線があるため重複させない)。 */}
+      {!loading && primaryBrain && (
+        <section className="space-y-3 anim-fade-in">
+          <Link
+            href={`/avatars/${primaryBrain.id}`}
+            className="flex items-center gap-4 rounded-2xl bg-neutral-900 p-4 text-white shadow-sm transition hover:bg-neutral-800 active:scale-[0.99] sm:max-w-md"
+          >
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-white/10">
+              <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden>
+                <rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" />
+                <path
+                  d="M5 11a7 7 0 0 0 14 0M12 18v3"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  fill="none"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </span>
+            <span className="min-w-0">
+              <span className="block text-lg font-bold tracking-tight">
+                質問する
+              </span>
+              <span className="block truncate text-xs text-neutral-300">
+                {primaryBrain.id === recentId ? '前回: ' : ''}
+                {primaryBrain.name}
+              </span>
+            </span>
+          </Link>
+
+          <div className="grid grid-cols-2 gap-3 sm:hidden">
+            <a
+              href="#brain-list"
+              className="relative rounded-2xl border border-neutral-200 bg-white p-3.5 shadow-sm transition active:scale-[0.98]"
+            >
+              <span className="block text-sm font-bold">ブレイン一覧</span>
+              <span className="block text-xs text-neutral-500">
+                {avatars.length}件
+              </span>
+            </a>
+            <Link
+              href="/notifications"
+              className="relative rounded-2xl border border-neutral-200 bg-white p-3.5 shadow-sm transition active:scale-[0.98]"
+            >
+              <span className="block text-sm font-bold">お知らせ</span>
+              <span className="block text-xs text-neutral-500">
+                {unread > 0 ? `新着 ${unread}件` : '新着なし'}
+              </span>
+              {unread > 0 && (
+                <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-red-500" />
+              )}
+            </Link>
+            <Link
+              href="/requests"
+              className="relative rounded-2xl border border-neutral-200 bg-white p-3.5 shadow-sm transition active:scale-[0.98]"
+            >
+              <span className="block text-sm font-bold">作成を依頼</span>
+              <span className="block text-xs text-neutral-500">
+                {requestCount > 0 ? `対応中 ${requestCount}件` : 'ブレインを頼む'}
+              </span>
+            </Link>
+            <Link
+              href="/mypage"
+              className="relative rounded-2xl border border-neutral-200 bg-white p-3.5 shadow-sm transition active:scale-[0.98]"
+            >
+              <span className="block text-sm font-bold">マイページ</span>
+              <span className="block text-xs text-neutral-500">設定・プラン</span>
+            </Link>
+          </div>
+        </section>
+      )}
+
       <PlanBanner />
 
       {error && (
@@ -194,7 +288,10 @@ export default function HomePage() {
 
       {!loading && avatars.length > 0 && (
         <>
-          <div className="flex items-center gap-2 rounded-full border border-neutral-300 bg-white px-3 py-1.5">
+          <div
+            id="brain-list"
+            className="flex scroll-mt-4 items-center gap-2 rounded-full border border-neutral-300 bg-white px-3 py-1.5"
+          >
             <svg
               width="13"
               height="13"

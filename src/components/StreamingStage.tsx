@@ -115,6 +115,7 @@ export default function StreamingStage({
   onEditStage,
   minimized = false,
   onToggleMinimized,
+  onVoiceLiveChange,
 }: {
   avatarId: string;
   coverUrl: string | null;
@@ -138,6 +139,12 @@ export default function StreamingStage({
   minimized?: boolean;
   /** Fires when the user toggles the minimise button on the stage. */
   onToggleMinimized?: () => void;
+  /**
+   * 音声セッションの開始・終了の「変化」を親へ通知する。LINE 型 UI では
+   * 開始で通話画面(全面)へ、終了で下部バーへ自動で切り替えるため。
+   * テキストのみのセッション(textOnly)は通話画面にしないので通知しない。
+   */
+  onVoiceLiveChange?: (live: boolean) => void;
 }) {
   // タッチ端末(coarse ポインタ)は、押している間だけ話す方式ではなく
   // 「1回タップで開始→もう一度タップで停止」にする。画面幅ではなく
@@ -1328,6 +1335,18 @@ export default function StreamingStage({
     status === 'thinking' ||
     status === 'searching' ||
     status === 'speaking';
+
+  // 音声ライブ状態の遷移だけを親へ通知する。値の比較を挟まないと、親が
+  // インライン関数を渡した場合に毎レンダー発火し、ユーザーが手動で開いた
+  // ステージが即座に畳まれてしまう。
+  const prevVoiceLiveRef = useRef(false);
+  useEffect(() => {
+    const voiceLive = isLive && !textOnly;
+    if (voiceLive !== prevVoiceLiveRef.current) {
+      prevVoiceLiveRef.current = voiceLive;
+      onVoiceLiveChange?.(voiceLive);
+    }
+  });
 
   // Keyboard shortcuts. Skip when the user is typing in an input.
   useEffect(() => {

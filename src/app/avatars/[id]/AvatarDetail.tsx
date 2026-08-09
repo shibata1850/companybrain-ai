@@ -473,10 +473,32 @@ export default function AvatarDetail({ id }: { id: string }) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  // Collapsible streaming stage. 既定は最小化。スマホでは大きな写真領域が
-  // 画面の大半を占め、会話履歴まで届かないため。最小化中も CompactBar に
-  // 開始・停止・テキスト送信が残るので、会話はそのまま始められる。
+  // Collapsible streaming stage. 既定は最小化(下部の操作バー)。
+  // 音声セッション開始で通話画面(全面)に切り替わり、終了で戻る。
   const [stageMinimized, setStageMinimized] = useState(true);
+
+  // ブレイン情報・設定・素材は右上メニューに集約(LINE 型)。既定は閉じる。
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // ホームの「質問する」大ボタン・最近使った一覧のために、開いたブレインを
+  // 端末に記録する(会話スレッドと同じく端末ローカルで良い情報)。
+  useEffect(() => {
+    const a = data?.avatar;
+    if (!a) return;
+    try {
+      const KEY = 'cb-recent-brains';
+      const prev: Array<{ id: string; name: string; at: number }> = JSON.parse(
+        localStorage.getItem(KEY) || '[]',
+      );
+      const next = [
+        { id: a.id, name: a.name, at: Date.now() },
+        ...prev.filter((r) => r && typeof r.id === 'string' && r.id !== a.id),
+      ].slice(0, 5);
+      localStorage.setItem(KEY, JSON.stringify(next));
+    } catch {
+      // 記録できなくても本体機能には影響しない。
+    }
+  }, [data]);
 
   // Photo cropping flow — supports both the round avatar thumbnail
   // and the landscape streaming-stage backdrop.
@@ -731,72 +753,75 @@ export default function AvatarDetail({ id }: { id: string }) {
   const showVoiceOption = planVoiceAllowed || avatar.request_id != null;
 
   return (
-    <div className="space-y-4">
-      {/* Top: back link only. Brain switcher / trash removed per UX
-          decision (trash is reachable from the dashboard kebab menu). */}
-      <Link
-        href="/dashboard"
-        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
-      >
-        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
-          <path
-            d="M7.5 2.5L4 6l3.5 3.5"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            fill="none"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        一覧へ
-      </Link>
-
-      {/* ブレインの情報(写真・説明・編集)は既定で畳む。スマホでは主機能の
-          会話が先に見えることを優先する。ただし「どのブレインを開いているか」
-          が分からなくなると困るので、名前だけは畳んだ状態でも常に見せる。 */}
-      <details className="group overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
-        <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3 py-2.5 transition hover:bg-neutral-50">
-          <div className="h-7 w-7 shrink-0 overflow-hidden rounded-full bg-neutral-100">
-            {avatar.cover_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={avatar.cover_url}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            ) : null}
-          </div>
-          <span className="min-w-0 flex-1 truncate text-sm font-bold tracking-tight">
-            {avatar.name}
-          </span>
-          {avatar.request_id && (
-            <span className="shrink-0 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
-              依頼で作成
-            </span>
-          )}
-          {!canEdit && (
-            <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
-              共有
-            </span>
-          )}
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 16 16"
-            aria-hidden
-            className="shrink-0 text-neutral-400 transition-transform group-open:rotate-180"
-          >
+    <div className="mx-auto w-full max-w-2xl space-y-3">
+      {/* LINE 型チャットヘッダー: 戻る / 相手(ブレイン)/ メニュー。
+          情報・設定・素材は右上メニューに集約し、画面は会話を主役にする。 */}
+      <div className="flex items-center gap-2 rounded-2xl border border-neutral-200 bg-white px-2.5 py-2 shadow-sm">
+        <Link
+          href="/dashboard"
+          aria-label="ブレイン一覧へ戻る"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
+        >
+          <svg width="16" height="16" viewBox="0 0 12 12" aria-hidden>
             <path
-              d="M4 6l4 4 4-4"
+              d="M7.5 2.5L4 6l3.5 3.5"
               stroke="currentColor"
-              strokeWidth="1.6"
+              strokeWidth="1.5"
               fill="none"
               strokeLinecap="round"
               strokeLinejoin="round"
             />
           </svg>
-        </summary>
-        <div className="flex items-center gap-4 border-t border-neutral-100 p-4">
+        </Link>
+        <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-neutral-100">
+          {avatar.cover_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={avatar.cover_url}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+          ) : null}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <h1 className="truncate text-sm font-bold tracking-tight">
+              {avatar.name}
+            </h1>
+            {avatar.request_id && (
+              <span className="shrink-0 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                依頼で作成
+              </span>
+            )}
+            {!canEdit && (
+              <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                共有
+              </span>
+            )}
+          </div>
+          <p className="truncate text-xs text-neutral-500">
+            {canEdit ? `学習素材 ${training_videos.length}件` : '閲覧・会話のみ'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setMenuOpen((v) => !v)}
+          aria-expanded={menuOpen}
+          className={`shrink-0 rounded-full px-3 py-2 text-xs font-bold transition ${
+            menuOpen
+              ? 'bg-neutral-900 text-white'
+              : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+          }`}
+        >
+          {menuOpen ? '閉じる' : 'メニュー'}
+        </button>
+      </div>
+
+      {/* メニュー: ブレイン情報 / 詳細設定 / 共有 / 学習素材。
+          たまにしか使わないものをここへ集約し、普段の画面は会話だけにする。 */}
+      {menuOpen && (
+        <div className="space-y-3 anim-fade-in">
+          <div className="flex items-center gap-4 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
           <div className="relative shrink-0">
             <div className="h-14 w-14 overflow-hidden rounded-full bg-neutral-100 ring-2 ring-white shadow sm:h-16 sm:w-16">
             {avatar.cover_url ? (
@@ -917,129 +942,7 @@ export default function AvatarDetail({ id }: { id: string }) {
           )}
         </div>
         </div>
-        <input
-          ref={coverFileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={onFilePicked}
-          className="hidden"
-        />
-        <input
-          ref={stageFileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={onFilePicked}
-          className="hidden"
-        />
-      </details>
-
-      {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 anim-fade-in">
-          {error}
-        </div>
-      )}
-
-      {/* Main two-column area: stage on the left, training panel on the right. */}
-      <div className="grid gap-6 md:grid-cols-3">
-        <div className="space-y-5 md:col-span-2">
-          <StreamingStage
-            avatarId={avatar.id}
-            coverUrl={avatar.cover_url}
-            stageUrl={avatar.stage_url}
-            avatarName={avatar.name}
-            onMessage={handleTranscriptMessage}
-            onPartial={handlePartial}
-            onEditStage={canEdit ? () => openFilePicker('stage') : undefined}
-            minimized={stageMinimized}
-            onToggleMinimized={() => setStageMinimized((v) => !v)}
-          />
-
-          {/* 主機能の使い方を示す一文。高齢層でも迷わないよう本文相当まで
-              大きくし、薄すぎるグレーは避けてコントラストを確保する。 */}
-          <p className="text-center text-sm font-medium text-neutral-600">
-            マイクで {avatar.name} に話しかけてください。
-          </p>
-
-          <TranscriptPanel
-            avatarId={avatar.id}
-            avatarName={avatar.name}
-            threads={chatStore.threads}
-            currentThreadId={chatStore.currentId}
-            messages={transcript}
-            partialUser={partialUser}
-            partialAgent={partialAgent}
-            open={transcriptOpen}
-            onToggle={() => setTranscriptOpen((v) => !v)}
-            onNewThread={newThread}
-            onSwitchThread={switchThread}
-            onRenameThread={renameThread}
-            onDeleteThread={deleteThread}
-            onClearCurrent={clearCurrentThread}
-            onUpdateMessage={updateMessage}
-            onExport={exportTranscript}
-          />
-        </div>
-
-        <div className="md:col-span-1">
-          {!canEdit ? (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-5">
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-neutral-900">共有されたブレイン</h2>
-                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                  閲覧・会話のみ
-                </span>
-              </div>
-              <p className="mt-3 text-xs leading-relaxed text-neutral-600">
-                このブレインは同じ会社のメンバーから共有されています。
-                会話はできますが、素材の追加・編集・削除、声や回答ルールの
-                変更はできません。変更が必要な場合は作成者にご相談ください。
-              </p>
-            </div>
-          ) : avatar.request_id ? (
-            <div className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-5">
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-neutral-900">学習させる</h2>
-                <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
-                  依頼で作成
-                </span>
-              </div>
-              <p className="mt-3 text-xs leading-relaxed text-neutral-600">
-                このブレインは管理者が依頼を受けて作成したものです。
-                内容を保つため、素材の追加・学習はできません。
-                変更が必要な場合は管理者にご相談ください。
-              </p>
-            </div>
-          ) : (
-            <TrainingPanel
-              avatarId={avatar.id}
-              avatarName={avatar.name}
-              videos={training_videos}
-              trainFile={trainFile}
-              onPickFile={setTrainFile}
-              onSubmitVideo={addTrainingVideo}
-              submittingVideo={training}
-              trainText={trainText}
-              onChangeText={setTrainText}
-              trainTextTitle={trainTextTitle}
-              onChangeTextTitle={setTrainTextTitle}
-              onSubmitText={addTrainingText}
-              submittingText={trainingText}
-              docFile={docFile}
-              onPickDoc={setDocFile}
-              onSubmitDoc={addTrainingDocument}
-              submittingDoc={trainingDoc}
-              trainFolder={trainFolder}
-              onChangeFolder={setTrainFolder}
-              learnedNote={learnedNote}
-              fileResetKey={fileResetKey}
-            />
-          )}
-        </div>
-      </div>
-
-      {/* 設定類は主機能(会話)より下に置く。毎回使うのは会話で、声や共有の
-          設定はたまにしか触らない。上に置くと主動線を圧迫するため。 */}
-      {/* 共有相手(閲覧・会話のみ)には声・言語・回答ルールの変更を出さない。 */}
+          {/* 共有相手(閲覧・会話のみ)には声・言語・回答ルールの変更を出さない。 */}
       {canEdit && (
       /* Collapsible settings: 声 / 言語 / 回答ルール. Closed by default
           to keep the top of the page compact. A vertical settings list
@@ -1095,6 +998,132 @@ export default function AvatarDetail({ id }: { id: string }) {
 
       {/* 所有者のみ・エンタープライズ限定の共有パネル。 */}
       {canEdit && <SharePanel avatarId={avatar.id} />}
+          {!canEdit ? (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-5">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-neutral-900">共有されたブレイン</h2>
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                  閲覧・会話のみ
+                </span>
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-neutral-600">
+                このブレインは同じ会社のメンバーから共有されています。
+                会話はできますが、素材の追加・編集・削除、声や回答ルールの
+                変更はできません。変更が必要な場合は作成者にご相談ください。
+              </p>
+            </div>
+          ) : avatar.request_id ? (
+            <div className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-5">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-neutral-900">学習させる</h2>
+                <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                  依頼で作成
+                </span>
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-neutral-600">
+                このブレインは管理者が依頼を受けて作成したものです。
+                内容を保つため、素材の追加・学習はできません。
+                変更が必要な場合は管理者にご相談ください。
+              </p>
+            </div>
+          ) : (
+            <TrainingPanel
+              avatarId={avatar.id}
+              avatarName={avatar.name}
+              videos={training_videos}
+              trainFile={trainFile}
+              onPickFile={setTrainFile}
+              onSubmitVideo={addTrainingVideo}
+              submittingVideo={training}
+              trainText={trainText}
+              onChangeText={setTrainText}
+              trainTextTitle={trainTextTitle}
+              onChangeTextTitle={setTrainTextTitle}
+              onSubmitText={addTrainingText}
+              submittingText={trainingText}
+              docFile={docFile}
+              onPickDoc={setDocFile}
+              onSubmitDoc={addTrainingDocument}
+              submittingDoc={trainingDoc}
+              trainFolder={trainFolder}
+              onChangeFolder={setTrainFolder}
+              learnedNote={learnedNote}
+              fileResetKey={fileResetKey}
+            />
+          )}
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 anim-fade-in">
+          {error}
+        </div>
+      )}
+
+      {/* 会話が画面の主役(LINE 型)。履歴 → 入力バーの順に縦一列。 */}
+      <TranscriptPanel
+        avatarId={avatar.id}
+        avatarName={avatar.name}
+        threads={chatStore.threads}
+        currentThreadId={chatStore.currentId}
+        messages={transcript}
+        partialUser={partialUser}
+        partialAgent={partialAgent}
+        open={transcriptOpen}
+        onToggle={() => setTranscriptOpen((v) => !v)}
+        onNewThread={newThread}
+        onSwitchThread={switchThread}
+        onRenameThread={renameThread}
+        onDeleteThread={deleteThread}
+        onClearCurrent={clearCurrentThread}
+        onUpdateMessage={updateMessage}
+        onExport={exportTranscript}
+      />
+
+      {/* 下部固定バーの高さぶんの余白(スマホのみ)。 */}
+      <div className="h-24 sm:hidden" aria-hidden />
+
+      {/* 音声・入力バー。スマホでは LINE と同じく画面下に固定する。
+          音声セッション中は通話画面として全面に切り替える。 */}
+      <div
+        className={
+          stageMinimized
+            ? 'fixed inset-x-0 bottom-0 z-30 border-t border-neutral-200 bg-white/95 px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:p-0'
+            : 'fixed inset-0 z-50 overflow-y-auto bg-white p-4 sm:static sm:overflow-visible sm:p-0'
+        }
+      >
+        <div className="mx-auto w-full max-w-2xl">
+          <StreamingStage
+            avatarId={avatar.id}
+            coverUrl={avatar.cover_url}
+            stageUrl={avatar.stage_url}
+            avatarName={avatar.name}
+            onMessage={handleTranscriptMessage}
+            onPartial={handlePartial}
+            onEditStage={canEdit ? () => openFilePicker('stage') : undefined}
+            minimized={stageMinimized}
+            onToggleMinimized={() => setStageMinimized((v) => !v)}
+            onVoiceLiveChange={(live) => setStageMinimized(!live)}
+          />
+        </div>
+      </div>
+
+      {/* 写真変更用の hidden input。メニュー開閉と無関係に参照できるよう
+          ルート直下に置く(通話画面のステージ写真変更からも使う)。 */}
+        <input
+          ref={coverFileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={onFilePicked}
+          className="hidden"
+        />
+        <input
+          ref={stageFileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={onFilePicked}
+          className="hidden"
+        />
 
       <PhotoCropper
         src={cropperSrc ?? ''}

@@ -17,7 +17,13 @@ export default function BottomNav({ show }: { show: boolean }) {
   const pathname = usePathname() || '';
   const { unread, requestCount } = useNavBadges(show);
 
-  if (!show) return null;
+  // ブレインのチャット画面ではナビを隠す(LINE の会話画面と同じ)。入力バー
+  // を画面最下部に置くためで、誤タップ防止も兼ねる。新規作成(/avatars/new)
+  // や素材管理(/avatars/[id]/training)では従来どおり表示する。
+  const isChatScreen =
+    /^\/avatars\/[^/]+$/.test(pathname) && pathname !== '/avatars/new';
+
+  if (!show || isChatScreen) return null;
 
   const items = navItems(pathname, unread, requestCount);
 
