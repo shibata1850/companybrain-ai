@@ -186,7 +186,7 @@ export default function HomePage() {
             </span>
           </Link>
 
-          <div className="grid grid-cols-2 gap-3 sm:hidden">
+          <div className="anim-stagger grid grid-cols-2 gap-3 sm:hidden">
             <a
               href="#brain-list"
               className="relative rounded-2xl border border-neutral-200 bg-white p-3.5 shadow-sm transition active:scale-[0.98]"

@@ -78,7 +78,7 @@ export default async function RootLayout({
           </div>
         </header>
         <main
-          className={`mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 ${
+          className={`relative mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 ${
             loggedIn
               ? 'pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-8'
               : ''

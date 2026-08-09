@@ -238,6 +238,17 @@ body {
   }
 }
 
+@keyframes cb-call-in {
+  from {
+    opacity: 0;
+    transform: translateY(4%) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @keyframes cb-shimmer {
   0%,
   100% {
@@ -273,6 +284,10 @@ body {
   }
   .anim-shimmer {
     animation: cb-shimmer 1.4s ease-in-out infinite;
+  }
+  /* 通話画面(全面)の入場。FaceTime 風にわずかに拡大しながら現れる。 */
+  .anim-call-in {
+    animation: cb-call-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   .anim-stagger > * {
@@ -366,5 +381,16 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-fade-in,
+  .anim-fade-in-up,
+  .anim-fade-out,
+  .anim-call-in,
+  .anim-stagger > * {
+    animation: none !important;
+    opacity: 1 !important;
   }
 }

@@ -820,7 +820,7 @@ export default function AvatarDetail({ id }: { id: string }) {
       {/* メニュー: ブレイン情報 / 詳細設定 / 共有 / 学習素材。
           たまにしか使わないものをここへ集約し、普段の画面は会話だけにする。 */}
       {menuOpen && (
-        <div className="space-y-3 anim-fade-in">
+        <div className="space-y-3 anim-fade-in-up">
           <div className="flex items-center gap-4 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
           <div className="relative shrink-0">
             <div className="h-14 w-14 overflow-hidden rounded-full bg-neutral-100 ring-2 ring-white shadow sm:h-16 sm:w-16">
@@ -1089,7 +1089,7 @@ export default function AvatarDetail({ id }: { id: string }) {
         className={
           stageMinimized
             ? 'fixed inset-x-0 bottom-0 z-30 border-t border-neutral-200 bg-white/95 px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:p-0'
-            : 'fixed inset-0 z-50 overflow-y-auto bg-white p-4 sm:static sm:overflow-visible sm:p-0'
+            : 'anim-call-in fixed inset-0 z-50 overflow-y-auto bg-white p-4 sm:static sm:overflow-visible sm:p-0'
         }
       >
         <div className="mx-auto w-full max-w-2xl">

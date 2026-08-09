@@ -57,3 +57,53 @@ export const staggerContainer = (stagger = 0.05): Variants => ({
   show: { transition: { staggerChildren: stagger, delayChildren: 0.02 } },
   exit: {},
 });
+
+/* ===== ページ遷移(iOS push/pop + Material 3 Shared Axis) ===== */
+
+/**
+ * ルートの「深さ」。数字が大きいほどドリルダウンした画面。
+ * 下部ナビ直結のタブ(ホーム/お知らせ/マイページ)は同格の 1 とし、
+ * タブ間の移動は方向を付けず交差フェードにする(iOS のタブ切替と同じ)。
+ */
+export function routeRank(path: string): number {
+  if (path === '/') return 0;
+  if (
+    path === '/dashboard' ||
+    path === '/notifications' ||
+    path === '/mypage'
+  ) {
+    return 1;
+  }
+  return path.split('/').filter(Boolean).length + 1;
+}
+
+/**
+ * ページ遷移のバリアント。dir > 0 = 深い画面へ(右から押し込む)、
+ * dir < 0 = 戻る(左から戻す)、0 = 同格(フェードスルー)。
+ * 入場はスプリングで最後にぬるっと減速し、退場は短く消えて
+ * 入場と重なる(mode="popLayout")。待ち時間の空白を作らない。
+ */
+export const pageVariants: Variants = {
+  enter: (dir: number) => ({
+    opacity: 0,
+    x: dir > 0 ? 28 : dir < 0 ? -28 : 0,
+    scale: dir === 0 ? 0.992 : 1,
+  }),
+  center: {
+    opacity: 1,
+    x: 0,
+    scale: 1,
+    transition: {
+      type: 'spring',
+      stiffness: 260,
+      damping: 30,
+      mass: 0.9,
+      opacity: { duration: 0.2, ease: 'linear' },
+    },
+  },
+  exit: (dir: number) => ({
+    opacity: 0,
+    x: dir > 0 ? -18 : dir < 0 ? 18 : 0,
+    transition: { duration: 0.15, ease: [0.4, 0, 1, 1] },
+  }),
+};
