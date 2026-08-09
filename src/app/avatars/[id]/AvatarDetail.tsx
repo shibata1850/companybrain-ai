@@ -474,7 +474,7 @@ export default function AvatarDetail({ id }: { id: string }) {
   }
 
   // Collapsible streaming stage. 既定は最小化(下部の操作バー)。
-  // 音声セッション開始で通話画面(全面)に切り替わり、終了で戻る。
+  // 音声中もチャットに留まり、「広げる」での手動展開のみ全面にする。
   const [stageMinimized, setStageMinimized] = useState(true);
 
   // ブレイン情報・設定・素材は右上メニューに集約(LINE 型)。既定は閉じる。
@@ -1064,6 +1064,7 @@ export default function AvatarDetail({ id }: { id: string }) {
       <TranscriptPanel
         avatarId={avatar.id}
         avatarName={avatar.name}
+        avatarUrl={avatar.cover_url}
         threads={chatStore.threads}
         currentThreadId={chatStore.currentId}
         messages={transcript}
@@ -1084,7 +1085,8 @@ export default function AvatarDetail({ id }: { id: string }) {
       <div className="h-24 sm:hidden" aria-hidden />
 
       {/* 音声・入力バー。スマホでは LINE と同じく画面下に固定する。
-          音声セッション中は通話画面として全面に切り替える。 */}
+          マイクを ON にしてもこの画面に留まり、会話はチャットに流れる。
+          通話画面(全面)は「広げる」を押したときだけ出す。 */}
       <div
         className={
           stageMinimized
@@ -1103,7 +1105,11 @@ export default function AvatarDetail({ id }: { id: string }) {
             onEditStage={canEdit ? () => openFilePicker('stage') : undefined}
             minimized={stageMinimized}
             onToggleMinimized={() => setStageMinimized((v) => !v)}
-            onVoiceLiveChange={(live) => setStageMinimized(!live)}
+            onVoiceLiveChange={(live) => {
+              // 開始時は画面を切り替えず、チャットに留まる(LINE と同じ)。
+              // 通話画面は「広げる」を押したときだけ。終話時は自動で畳む。
+              if (!live) setStageMinimized(true);
+            }}
           />
         </div>
       </div>
@@ -1538,6 +1544,7 @@ function FolderPickerInline({
 function TranscriptPanel({
   avatarId,
   avatarName,
+  avatarUrl,
   threads,
   currentThreadId,
   messages,
@@ -1555,6 +1562,8 @@ function TranscriptPanel({
 }: {
   avatarId: string;
   avatarName: string;
+  /** 相手(ブレイン)のアイコン。LINE 風にバブルの横へ出す。 */
+  avatarUrl: string | null;
   threads: ChatThread[];
   currentThreadId: string | null;
   messages: TranscriptMessage[];
@@ -1744,7 +1753,7 @@ function TranscriptPanel({
       </div>
 
       {open && (
-        <div className="mt-3 overflow-hidden rounded-2xl border border-neutral-200 bg-white anim-fade-in">
+        <div className="-mx-4 mt-3 overflow-hidden border-y border-neutral-200 bg-white anim-fade-in sm:mx-0 sm:rounded-2xl sm:border-x">
           {searchOpen && (
             <div className="flex items-center gap-2 border-b border-neutral-100 px-4 py-2">
               <svg
@@ -1802,7 +1811,7 @@ function TranscriptPanel({
             </div>
           )}
 
-          <div className="flex h-[30rem]">
+          <div className="flex h-[calc(100dvh-16rem)] min-h-[22rem] sm:h-[30rem]">
             {/* Thread sidebar — always visible on sm+ so switching
                 conversations is one click, not buried in a menu. */}
             <aside className="hidden w-56 shrink-0 flex-col border-r border-neutral-100 bg-neutral-50/70 sm:flex">
@@ -1854,7 +1863,7 @@ function TranscriptPanel({
                 </select>
               </div>
 
-              <div ref={scrollerRef} className="flex-1 overflow-y-auto p-4">
+              <div ref={scrollerRef} className="flex-1 overflow-y-auto bg-slate-100 p-4">
                 {messages.length === 0 && !partialUser && !partialAgent ? (
                   <div className="flex h-full items-center justify-center">
                     <p className="text-center text-xs leading-relaxed text-neutral-400">
@@ -1876,6 +1885,7 @@ function TranscriptPanel({
                         m={m}
                         avatarId={avatarId}
                         avatarName={avatarName}
+                        avatarUrl={avatarUrl}
                         search={search}
                         onUpdate={(patch) => onUpdateMessage(m.id, patch)}
                       />
@@ -1884,7 +1894,7 @@ function TranscriptPanel({
                       <li className="flex justify-end">
                         <div className="max-w-[85%] rounded-2xl rounded-br-md bg-neutral-900 px-3.5 py-2.5 text-sm text-white opacity-80">
                           <p className="text-xs uppercase tracking-wider opacity-60">
-                            あなた(入力中)
+                            入力中
                           </p>
                           <p className="mt-1 whitespace-pre-wrap leading-relaxed">
                             {partialUser}
@@ -1895,7 +1905,17 @@ function TranscriptPanel({
                     )}
                     {partialAgent && (
                       <li className="flex justify-start">
-                        <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-neutral-100 px-3.5 py-2.5 text-sm text-neutral-900 opacity-80">
+                        <span className="mr-1.5 mt-0.5 h-7 w-7 shrink-0 overflow-hidden rounded-full bg-neutral-200">
+                          {avatarUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={avatarUrl}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          ) : null}
+                        </span>
+                        <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-white px-3.5 py-2.5 text-sm text-neutral-900 opacity-90 shadow-sm">
                           <p className="text-xs uppercase tracking-wider opacity-60">
                             {avatarName}(話し中)
                           </p>
@@ -2082,12 +2102,15 @@ function MessageRow({
   m,
   avatarId,
   avatarName,
+  avatarUrl,
   search,
   onUpdate,
 }: {
   m: TranscriptMessage;
   avatarId: string;
   avatarName: string;
+  /** 相手(ブレイン)のアイコン。LINE 風にバブルの左へ出す。 */
+  avatarUrl: string | null;
   search: string;
   onUpdate: (patch: Partial<TranscriptMessage>) => void;
 }) {
@@ -2102,6 +2125,14 @@ function MessageRow({
 
   return (
     <li className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+      {!isUser && (
+        <span className="mr-1.5 mt-0.5 h-7 w-7 shrink-0 overflow-hidden rounded-full bg-neutral-200">
+          {avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+          ) : null}
+        </span>
+      )}
       <div className="group relative max-w-[85%]">
         {/* Floating action toolbar — appears on hover above the bubble
             so it never shifts the message layout. */}
@@ -2173,13 +2204,15 @@ function MessageRow({
           className={`rounded-2xl px-3.5 py-2.5 text-sm ${
             isUser
               ? 'rounded-br-md bg-neutral-900 text-white'
-              : 'rounded-bl-md bg-neutral-100 text-neutral-900'
+              : 'rounded-bl-md bg-white text-neutral-900 shadow-sm'
           }`}
         >
           <div className="flex items-center gap-2 text-xs opacity-60">
-            <span className="font-medium uppercase tracking-wider">
-              {isUser ? 'あなた' : avatarName}
-            </span>
+            {!isUser && (
+              <span className="font-medium uppercase tracking-wider">
+                {avatarName}
+              </span>
+            )}
             <span>
               {new Date(m.at).toLocaleTimeString('ja-JP', {
                 hour: '2-digit',
