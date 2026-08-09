@@ -1428,19 +1428,19 @@ export default function StreamingStage({
               value={textDraft}
               onChange={(e) => setTextDraft(e.target.value)}
               placeholder={`${avatarName} にテキストで質問…`}
-              className="flex-1 bg-transparent px-2 py-1 text-base outline-none placeholder:text-neutral-400"
+              className="flex-1 bg-transparent px-2 py-1 text-sm outline-none placeholder:text-neutral-400"
             />
             <button
               type="submit"
               disabled={!textDraft.trim()}
-              className="rounded-full bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:opacity-40"
+              className="rounded-full bg-neutral-900 px-4 py-1.5 text-xs font-medium text-white transition hover:bg-neutral-700 disabled:opacity-40"
             >
               送信
             </button>
           </form>
         )}
         {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
             {error}
           </div>
         )}
@@ -1474,7 +1474,7 @@ export default function StreamingStage({
               <button
                 type="button"
                 onClick={onEditStage}
-                className="inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1 text-[13px] font-medium text-neutral-700 shadow-sm backdrop-blur transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-white"
+                className="inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-neutral-700 shadow-sm backdrop-blur transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-white"
               >
                 <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden>
                   <path
@@ -1494,7 +1494,7 @@ export default function StreamingStage({
                 type="button"
                 onClick={onToggleMinimized}
                 aria-label="ステージを隠す"
-                className="inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1 text-[13px] font-medium text-neutral-700 shadow-sm backdrop-blur transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-white"
+                className="inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-neutral-700 shadow-sm backdrop-blur transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-white"
               >
                 <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
                   <path
@@ -1570,7 +1570,7 @@ export default function StreamingStage({
                 style={{ animationDelay: '240ms' }}
               />
             </div>
-            <p className="text-sm font-medium tracking-wide">
+            <p className="text-xs font-medium tracking-wide">
               {status === 'searching'
                 ? '🔎 資料を検索中… 少しお待ちください'
                 : '考えています…'}
@@ -1580,7 +1580,7 @@ export default function StreamingStage({
 
         {/* Status pill */}
         {isLive && (
-          <div className="absolute right-3 top-3 flex items-center gap-2 rounded-full bg-black/60 px-3 py-1 text-[13px] text-white backdrop-blur">
+          <div className="absolute right-3 top-3 flex items-center gap-2 rounded-full bg-black/60 px-3 py-1 text-xs text-white backdrop-blur">
             <span
               className={`inline-block h-2 w-2 rounded-full ${
                 status === 'speaking'
@@ -1615,10 +1615,10 @@ export default function StreamingStage({
         {(status === 'idle' || status === 'ended') && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-neutral-900/60 px-5 pb-5 pt-14 text-center text-white backdrop-blur-sm">
             <div>
-              <p className="text-base font-semibold sm:text-base">
+              <p className="text-sm font-semibold sm:text-sm">
                 {avatarName} と会話する
               </p>
-              <p className="mt-1 text-sm text-white/70">
+              <p className="mt-1 text-xs text-white/70">
                 「始める」を押して会話を開始してください。
               </p>
               {/* Keyboard shortcuts are desktop-only; hide on touch. */}
@@ -1629,7 +1629,7 @@ export default function StreamingStage({
             <button
               type="button"
               onClick={start}
-              className="rounded-full bg-white px-8 py-3 text-base font-bold text-neutral-900 shadow-lg transition active:scale-95 hover:bg-white/90"
+              className="rounded-full bg-white px-8 py-3 text-sm font-bold text-neutral-900 shadow-lg transition active:scale-95 hover:bg-white/90"
             >
               始める
             </button>
@@ -1639,14 +1639,14 @@ export default function StreamingStage({
         {status === 'connecting' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-neutral-900/70 text-white">
             <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-white" />
-            <p className="text-base">接続中…</p>
+            <p className="text-sm">接続中…</p>
           </div>
         )}
 
         {status === 'reconnecting' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-neutral-900/80 text-white">
             <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-amber-300" />
-            <p className="text-base">回線が一瞬切れました…再接続しています</p>
+            <p className="text-sm">回線が一瞬切れました…再接続しています</p>
           </div>
         )}
 
@@ -1656,7 +1656,7 @@ export default function StreamingStage({
             {textOnly ? (
               // 音声なしセッション: マイクの代わりに理由を示す。
               // テキスト入力欄(下)はそのまま使える。
-              <div className="flex-1 select-none rounded-full bg-white/15 px-4 py-3 text-center text-[13px] font-medium leading-tight text-white backdrop-blur">
+              <div className="flex-1 select-none rounded-full bg-white/15 px-4 py-3 text-center text-xs font-medium leading-tight text-white backdrop-blur">
                 {voiceDisabledReason === 'quota'
                   ? '今月の音声会話上限に達しました(毎月1日リセット)。テキストで質問できます。'
                   : '音声会話はスターター以上のプランで利用できます。テキストで質問できます。'}
@@ -1671,7 +1671,7 @@ export default function StreamingStage({
                 }}
                 onContextMenu={(e) => e.preventDefault()}
                 disabled={muted}
-                className={`flex-1 select-none rounded-full px-4 py-3 text-base font-bold shadow-md backdrop-blur transition active:scale-[0.98] disabled:opacity-50 ${
+                className={`flex-1 select-none rounded-full px-4 py-3 text-sm font-bold shadow-md backdrop-blur transition active:scale-[0.98] disabled:opacity-50 ${
                   isTalking
                     ? 'animate-pulse bg-red-500 text-white ring-4 ring-red-300/60'
                     : 'bg-white/95 text-neutral-900 hover:bg-white'
@@ -1691,7 +1691,7 @@ export default function StreamingStage({
                 }}
                 onContextMenu={(e) => e.preventDefault()}
                 disabled={muted}
-                className={`flex-1 select-none rounded-full px-4 py-2 text-base font-bold shadow-md backdrop-blur transition active:scale-[0.98] disabled:opacity-50 ${
+                className={`flex-1 select-none rounded-full px-4 py-2 text-sm font-bold shadow-md backdrop-blur transition active:scale-[0.98] disabled:opacity-50 ${
                   isTalking
                     ? 'animate-pulse bg-red-500 text-white ring-4 ring-red-300/60'
                     : 'bg-white/95 text-neutral-900 hover:bg-white'
@@ -1706,7 +1706,7 @@ export default function StreamingStage({
             <button
               type="button"
               onClick={stop}
-              className="shrink-0 rounded-full bg-white/90 px-3 py-2 text-[13px] font-medium text-neutral-800 backdrop-blur transition hover:bg-white"
+              className="shrink-0 rounded-full bg-white/90 px-3 py-2 text-xs font-medium text-neutral-800 backdrop-blur transition hover:bg-white"
             >
               終了
             </button>
@@ -1723,12 +1723,12 @@ export default function StreamingStage({
             value={textDraft}
             onChange={(e) => setTextDraft(e.target.value)}
             placeholder={`${avatarName} にテキストで質問…`}
-            className="flex-1 bg-transparent px-2 py-1 text-base outline-none placeholder:text-neutral-400"
+            className="flex-1 bg-transparent px-2 py-1 text-sm outline-none placeholder:text-neutral-400"
           />
           <button
             type="submit"
             disabled={!textDraft.trim()}
-            className="rounded-full bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:opacity-40"
+            className="rounded-full bg-neutral-900 px-4 py-1.5 text-xs font-medium text-white transition hover:bg-neutral-700 disabled:opacity-40"
           >
             送信
           </button>
@@ -1736,7 +1736,7 @@ export default function StreamingStage({
       )}
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
           {error}
         </div>
       )}
@@ -1787,7 +1787,7 @@ function CompactBar({
         <span className="h-8 w-8 shrink-0 rounded-full bg-white/10" />
       )}
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 text-[13px]">
+        <div className="flex items-center gap-2 text-xs">
           <span
             className={`inline-block h-2 w-2 rounded-full ${
               status === 'speaking'

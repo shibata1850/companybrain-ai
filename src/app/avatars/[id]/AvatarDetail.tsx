@@ -473,8 +473,10 @@ export default function AvatarDetail({ id }: { id: string }) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  // Collapsible streaming stage.
-  const [stageMinimized, setStageMinimized] = useState(false);
+  // Collapsible streaming stage. 既定は最小化。スマホでは大きな写真領域が
+  // 画面の大半を占め、会話履歴まで届かないため。最小化中も CompactBar に
+  // 開始・停止・テキスト送信が残るので、会話はそのまま始められる。
+  const [stageMinimized, setStageMinimized] = useState(true);
 
   // Photo cropping flow — supports both the round avatar thumbnail
   // and the landscape streaming-stage backdrop.
@@ -710,7 +712,7 @@ export default function AvatarDetail({ id }: { id: string }) {
 
   if (error && !data) {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-base text-red-700 anim-fade-in">
+      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 anim-fade-in">
         エラー: {error}
       </div>
     );
@@ -734,7 +736,7 @@ export default function AvatarDetail({ id }: { id: string }) {
           decision (trash is reachable from the dashboard kebab menu). */}
       <Link
         href="/dashboard"
-        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
+        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
       >
         <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
           <path
@@ -749,12 +751,54 @@ export default function AvatarDetail({ id }: { id: string }) {
         一覧へ
       </Link>
 
-      {/* Compact identity card (~half the previous height). The voice /
-          language / answer-rule controls live in their own slim row
-          below so this card stays focused on identity. */}
-      <header className="flex items-center gap-4 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
-        <div className="relative shrink-0">
-          <div className="h-16 w-16 overflow-hidden rounded-full bg-neutral-100 ring-2 ring-white shadow">
+      {/* ブレインの情報(写真・説明・編集)は既定で畳む。スマホでは主機能の
+          会話が先に見えることを優先する。ただし「どのブレインを開いているか」
+          が分からなくなると困るので、名前だけは畳んだ状態でも常に見せる。 */}
+      <details className="group overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3 py-2.5 transition hover:bg-neutral-50">
+          <div className="h-7 w-7 shrink-0 overflow-hidden rounded-full bg-neutral-100">
+            {avatar.cover_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={avatar.cover_url}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : null}
+          </div>
+          <span className="min-w-0 flex-1 truncate text-sm font-bold tracking-tight">
+            {avatar.name}
+          </span>
+          {avatar.request_id && (
+            <span className="shrink-0 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
+              依頼で作成
+            </span>
+          )}
+          {!canEdit && (
+            <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+              共有
+            </span>
+          )}
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 16 16"
+            aria-hidden
+            className="shrink-0 text-neutral-400 transition-transform group-open:rotate-180"
+          >
+            <path
+              d="M4 6l4 4 4-4"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </summary>
+        <div className="flex items-center gap-4 border-t border-neutral-100 p-4">
+          <div className="relative shrink-0">
+            <div className="h-14 w-14 overflow-hidden rounded-full bg-neutral-100 ring-2 ring-white shadow sm:h-16 sm:w-16">
             {avatar.cover_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -800,7 +844,7 @@ export default function AvatarDetail({ id }: { id: string }) {
                 }
               }}
               disabled={savingMeta}
-              className="w-full rounded-md border border-neutral-300 bg-white px-2 py-1 text-2xl font-bold tracking-tight focus:border-neutral-900 focus:outline-none"
+              className="w-full rounded-md border border-neutral-300 bg-white px-2 py-1 text-xl sm:text-2xl font-bold tracking-tight focus:border-neutral-900 focus:outline-none"
             />
           ) : (
             <div className="flex items-center gap-2">
@@ -811,13 +855,13 @@ export default function AvatarDetail({ id }: { id: string }) {
                     setNameDraft(avatar.name);
                     setEditingName(true);
                   }}
-                  className="block max-w-full truncate rounded-md text-left text-2xl font-bold tracking-tight transition hover:bg-neutral-100"
+                  className="block max-w-full truncate rounded-md text-left text-xl sm:text-2xl font-bold tracking-tight transition hover:bg-neutral-100"
                   title="クリックで編集"
                 >
                   {avatar.name}
                 </button>
               ) : (
-                <h1 className="block max-w-full truncate text-2xl font-bold tracking-tight">
+                <h1 className="block max-w-full truncate text-xl sm:text-2xl font-bold tracking-tight">
                   {avatar.name}
                 </h1>
               )}
@@ -850,7 +894,7 @@ export default function AvatarDetail({ id }: { id: string }) {
               }}
               disabled={savingMeta}
               placeholder="説明(任意)"
-              className="mt-0.5 w-full rounded-md border border-neutral-300 bg-white px-2 py-0.5 text-sm focus:border-neutral-900 focus:outline-none"
+              className="mt-0.5 w-full rounded-md border border-neutral-300 bg-white px-2 py-0.5 text-xs focus:border-neutral-900 focus:outline-none"
             />
           ) : canEdit ? (
             <button
@@ -859,18 +903,19 @@ export default function AvatarDetail({ id }: { id: string }) {
                 setDescDraft(avatar.description ?? '');
                 setEditingDesc(true);
               }}
-              className="block max-w-full truncate rounded-md text-left text-sm text-neutral-500 transition hover:bg-neutral-100"
+              className="block max-w-full truncate rounded-md text-left text-xs text-neutral-500 transition hover:bg-neutral-100"
               title="クリックで編集"
             >
               {avatar.description || '+ 説明を追加'}
             </button>
           ) : (
             avatar.description && (
-              <p className="mt-0.5 block max-w-full truncate text-sm text-neutral-500">
+              <p className="mt-0.5 block max-w-full truncate text-xs text-neutral-500">
                 {avatar.description}
               </p>
             )
           )}
+        </div>
         </div>
         <input
           ref={coverFileInputRef}
@@ -886,10 +931,10 @@ export default function AvatarDetail({ id }: { id: string }) {
           onChange={onFilePicked}
           className="hidden"
         />
-      </header>
+      </details>
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-base text-red-700 anim-fade-in">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 anim-fade-in">
           {error}
         </div>
       )}
@@ -911,7 +956,7 @@ export default function AvatarDetail({ id }: { id: string }) {
 
           {/* 主機能の使い方を示す一文。高齢層でも迷わないよう本文相当まで
               大きくし、薄すぎるグレーは避けてコントラストを確保する。 */}
-          <p className="text-center text-base font-medium text-neutral-600">
+          <p className="text-center text-sm font-medium text-neutral-600">
             マイクで {avatar.name} に話しかけてください。
           </p>
 
@@ -939,12 +984,12 @@ export default function AvatarDetail({ id }: { id: string }) {
           {!canEdit ? (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-5">
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-semibold text-neutral-900">共有されたブレイン</h2>
+                <h2 className="text-sm font-semibold text-neutral-900">共有されたブレイン</h2>
                 <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
                   閲覧・会話のみ
                 </span>
               </div>
-              <p className="mt-3 text-sm leading-relaxed text-neutral-600">
+              <p className="mt-3 text-xs leading-relaxed text-neutral-600">
                 このブレインは同じ会社のメンバーから共有されています。
                 会話はできますが、素材の追加・編集・削除、声や回答ルールの
                 変更はできません。変更が必要な場合は作成者にご相談ください。
@@ -953,12 +998,12 @@ export default function AvatarDetail({ id }: { id: string }) {
           ) : avatar.request_id ? (
             <div className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-5">
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-semibold text-neutral-900">学習させる</h2>
+                <h2 className="text-sm font-semibold text-neutral-900">学習させる</h2>
                 <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
                   依頼で作成
                 </span>
               </div>
-              <p className="mt-3 text-sm leading-relaxed text-neutral-600">
+              <p className="mt-3 text-xs leading-relaxed text-neutral-600">
                 このブレインは管理者が依頼を受けて作成したものです。
                 内容を保つため、素材の追加・学習はできません。
                 変更が必要な場合は管理者にご相談ください。
@@ -1001,7 +1046,7 @@ export default function AvatarDetail({ id }: { id: string }) {
           (iOS/Linear 風)で、各行に現在値を出す。小さなピルより読みやすく
           タップ範囲も広い。 */
       <details className="group overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
-        <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-base font-bold text-neutral-700 transition hover:bg-neutral-50">
+        <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-bold text-neutral-700 transition hover:bg-neutral-50">
           <span>詳細設定</span>
           <svg
             width="14"
@@ -1150,14 +1195,14 @@ function TrainingPanel({
     <aside className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-5">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h2 className="text-base font-semibold text-neutral-900">学習させる</h2>
-          <p className="mt-1 text-[13px] leading-relaxed text-neutral-500">
+          <h2 className="text-sm font-semibold text-neutral-900">学習させる</h2>
+          <p className="mt-1 text-xs leading-relaxed text-neutral-500">
             {avatarName} の発言や考え方を追加するほど、会話が本人らしくなります。
           </p>
         </div>
       </div>
 
-      <div className="flex rounded-full bg-neutral-100 p-0.5 text-sm">
+      <div className="flex rounded-full bg-neutral-100 p-0.5 text-xs">
         <button
           type="button"
           onClick={() => setMode('text')}
@@ -1203,7 +1248,7 @@ function TrainingPanel({
       {learnedNote && (
         <div
           role="status"
-          className="flex items-center gap-1.5 text-[13px] font-medium text-emerald-600 anim-fade-in"
+          className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 anim-fade-in"
         >
           <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden>
             <path
@@ -1226,12 +1271,12 @@ function TrainingPanel({
             type="file"
             accept="video/*"
             onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
-            className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-neutral-900 file:px-3 file:py-1 file:text-white"
+            className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs file:mr-3 file:rounded-md file:border-0 file:bg-neutral-900 file:px-3 file:py-1 file:text-white"
           />
           <button
             type="submit"
             disabled={!trainFile || submittingVideo}
-            className="w-full rounded-full bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-700 active:scale-[0.99] disabled:opacity-40"
+            className="w-full rounded-full bg-neutral-900 px-4 py-2 text-xs font-medium text-white transition hover:bg-neutral-700 active:scale-[0.99] disabled:opacity-40"
           >
             {submittingVideo ? '学習中…' : '動画から学習'}
           </button>
@@ -1243,21 +1288,21 @@ function TrainingPanel({
             type="file"
             accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.md,application/pdf"
             onChange={(e) => onPickDoc(e.target.files?.[0] ?? null)}
-            className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-neutral-900 file:px-3 file:py-1 file:text-white"
+            className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs file:mr-3 file:rounded-md file:border-0 file:bg-neutral-900 file:px-3 file:py-1 file:text-white"
           />
           <p className="text-xs leading-relaxed text-neutral-400">
             PDF・Word(.docx)・Excel(.xlsx)・CSV・テキストに対応。文書内の
             文字を読み取って学習します(画像だけの PDF は読み取れません)。
           </p>
           {docFile && (
-            <p className="truncate text-[13px] text-neutral-600">
+            <p className="truncate text-xs text-neutral-600">
               選択中: {docFile.name}
             </p>
           )}
           <button
             type="submit"
             disabled={!docFile || submittingDoc}
-            className="w-full rounded-full bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-700 active:scale-[0.99] disabled:opacity-40"
+            className="w-full rounded-full bg-neutral-900 px-4 py-2 text-xs font-medium text-white transition hover:bg-neutral-700 active:scale-[0.99] disabled:opacity-40"
           >
             {submittingDoc ? '学習中…' : '文書から学習'}
           </button>
@@ -1269,14 +1314,14 @@ function TrainingPanel({
             value={trainTextTitle}
             onChange={(e) => onChangeTextTitle(e.target.value)}
             placeholder="タイトル(任意)"
-            className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+            className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs focus:border-neutral-900 focus:outline-none"
           />
           <textarea
             value={trainText}
             onChange={(e) => onChangeText(e.target.value)}
             rows={5}
             placeholder={`${avatarName} の考え方や知識を貼り付け…`}
-            className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm leading-relaxed focus:border-neutral-900 focus:outline-none"
+            className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs leading-relaxed focus:border-neutral-900 focus:outline-none"
           />
           <div className="flex items-center justify-between">
             <span className="text-xs text-neutral-400">
@@ -1285,7 +1330,7 @@ function TrainingPanel({
             <button
               type="submit"
               disabled={!trainText.trim() || submittingText}
-              className="rounded-full bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-700 active:scale-[0.99] disabled:opacity-40"
+              className="rounded-full bg-neutral-900 px-4 py-2 text-xs font-medium text-white transition hover:bg-neutral-700 active:scale-[0.99] disabled:opacity-40"
             >
               {submittingText ? '学習中…' : 'テキストから学習'}
             </button>
@@ -1300,7 +1345,7 @@ function TrainingPanel({
           </p>
           <Link
             href={`/avatars/${avatarId}/training`}
-            className="inline-flex items-center gap-0.5 text-[13px] font-medium text-neutral-700 transition hover:text-neutral-900"
+            className="inline-flex items-center gap-0.5 text-xs font-medium text-neutral-700 transition hover:text-neutral-900"
           >
             管理画面を開く
             <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
@@ -1316,7 +1361,7 @@ function TrainingPanel({
           </Link>
         </div>
         {folders.length === 0 ? (
-          <p className="mt-2 text-sm text-neutral-400">
+          <p className="mt-2 text-xs text-neutral-400">
             まだ学習素材がありません。
           </p>
         ) : (
@@ -1324,7 +1369,7 @@ function TrainingPanel({
             {folders.slice(0, 6).map(([name, count]) => (
               <li
                 key={name}
-                className="flex items-center justify-between rounded-md px-2 py-1.5 text-[13px] text-neutral-700 hover:bg-neutral-50"
+                className="flex items-center justify-between rounded-md px-2 py-1.5 text-xs text-neutral-700 hover:bg-neutral-50"
               >
                 <span className="truncate">{name}</span>
                 <span className="ml-2 shrink-0 rounded-full bg-neutral-100 px-1.5 text-xs text-neutral-500">
@@ -1393,7 +1438,7 @@ function FolderPickerInline({
         <button
           type="button"
           onClick={() => onChange(null)}
-          className={`rounded-full border px-2 py-0.5 text-[13px] transition ${
+          className={`rounded-full border px-2 py-0.5 text-xs transition ${
             current === null
               ? 'border-neutral-900 bg-neutral-900 text-white'
               : 'border-neutral-300 bg-white text-neutral-600 hover:border-neutral-900'
@@ -1406,7 +1451,7 @@ function FolderPickerInline({
             key={name}
             type="button"
             onClick={() => onChange(name)}
-            className={`max-w-[10rem] truncate rounded-full border px-2 py-0.5 text-[13px] transition ${
+            className={`max-w-[10rem] truncate rounded-full border px-2 py-0.5 text-xs transition ${
               current === name
                 ? 'border-neutral-900 bg-neutral-900 text-white'
                 : 'border-neutral-300 bg-white text-neutral-600 hover:border-neutral-900'
@@ -1433,14 +1478,14 @@ function FolderPickerInline({
               }}
               onBlur={commit}
               placeholder="フォルダ名"
-              className="w-24 bg-transparent text-[13px] outline-none"
+              className="w-24 bg-transparent text-xs outline-none"
             />
           </span>
         ) : (
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="rounded-full border border-dashed border-neutral-300 px-2 py-0.5 text-[13px] text-neutral-500 transition hover:border-neutral-900 hover:text-neutral-900"
+            className="rounded-full border border-dashed border-neutral-300 px-2 py-0.5 text-xs text-neutral-500 transition hover:border-neutral-900 hover:text-neutral-900"
           >
             ＋ 新規
           </button>
@@ -1563,7 +1608,7 @@ function TranscriptPanel({
         <button
           type="button"
           onClick={onToggle}
-          className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-sm text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900"
+          className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900"
         >
           <svg
             width="10"
@@ -1592,7 +1637,7 @@ function TranscriptPanel({
         <div className="flex items-center gap-1">
           {escalationCount > 0 && (
             <span
-              className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-[13px] font-medium text-amber-800"
+              className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800"
               title="上長確認推奨と判定された質問・回答の件数"
             >
               要確認 {escalationCount}
@@ -1602,7 +1647,7 @@ function TranscriptPanel({
             <button
               type="button"
               onClick={() => setShowPinnedOnly((v) => !v)}
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[13px] transition ${
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs transition ${
                 showPinnedOnly
                   ? 'bg-amber-100 text-amber-800'
                   : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900'
@@ -1619,7 +1664,7 @@ function TranscriptPanel({
                 setSearchOpen((v) => !v);
                 if (searchOpen) setSearch('');
               }}
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[13px] transition ${
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs transition ${
                 searchOpen
                   ? 'bg-neutral-200 text-neutral-900'
                   : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900'
@@ -1650,7 +1695,7 @@ function TranscriptPanel({
             <button
               type="button"
               onClick={onExport}
-              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[13px] text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
+              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
               title="Markdown としてダウンロード"
             >
               <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden>
@@ -1708,7 +1753,7 @@ function TranscriptPanel({
                   }
                 }}
                 placeholder={isMobile ? '会話を検索…' : '会話を検索…(Esc で閉じる)'}
-                className="flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-400"
+                className="flex-1 bg-transparent text-xs outline-none placeholder:text-neutral-400"
               />
               {search && (
                 <span className="shrink-0 text-xs text-neutral-500">
@@ -1721,7 +1766,7 @@ function TranscriptPanel({
                   setSearch('');
                   setSearchOpen(false);
                 }}
-                className="shrink-0 text-[13px] text-neutral-400 hover:text-neutral-900"
+                className="shrink-0 text-xs text-neutral-400 hover:text-neutral-900"
               >
                 閉じる
               </button>
@@ -1736,7 +1781,7 @@ function TranscriptPanel({
                 <button
                   type="button"
                   onClick={onNewThread}
-                  className="w-full rounded-lg bg-neutral-900 py-1.5 text-sm font-medium text-white transition hover:bg-neutral-700"
+                  className="w-full rounded-lg bg-neutral-900 py-1.5 text-xs font-medium text-white transition hover:bg-neutral-700"
                 >
                   ＋ 新しい会話
                 </button>
@@ -1769,7 +1814,7 @@ function TranscriptPanel({
                     if (e.target.value === '__new__') onNewThread();
                     else if (e.target.value) onSwitchThread(e.target.value);
                   }}
-                  className="w-full rounded-lg border border-neutral-300 bg-white px-2 py-1.5 text-sm"
+                  className="w-full rounded-lg border border-neutral-300 bg-white px-2 py-1.5 text-xs"
                 >
                   {sortedThreads.map((t) => (
                     <option key={t.id} value={t.id}>
@@ -1783,7 +1828,7 @@ function TranscriptPanel({
               <div ref={scrollerRef} className="flex-1 overflow-y-auto p-4">
                 {messages.length === 0 && !partialUser && !partialAgent ? (
                   <div className="flex h-full items-center justify-center">
-                    <p className="text-center text-sm leading-relaxed text-neutral-400">
+                    <p className="text-center text-xs leading-relaxed text-neutral-400">
                       セッションを開始して話しかけると、
                       <br />
                       ここに会話が記録されます。
@@ -1808,7 +1853,7 @@ function TranscriptPanel({
                     ))}
                     {partialUser && (
                       <li className="flex justify-end">
-                        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-neutral-900 px-3.5 py-2.5 text-base text-white opacity-80">
+                        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-neutral-900 px-3.5 py-2.5 text-sm text-white opacity-80">
                           <p className="text-xs uppercase tracking-wider opacity-60">
                             あなた(入力中)
                           </p>
@@ -1821,7 +1866,7 @@ function TranscriptPanel({
                     )}
                     {partialAgent && (
                       <li className="flex justify-start">
-                        <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-neutral-100 px-3.5 py-2.5 text-base text-neutral-900 opacity-80">
+                        <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-neutral-100 px-3.5 py-2.5 text-sm text-neutral-900 opacity-80">
                           <p className="text-xs uppercase tracking-wider opacity-60">
                             {avatarName}(話し中)
                           </p>
@@ -1892,7 +1937,7 @@ function ThreadRow({
               setRenaming(false);
             }
           }}
-          className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-base focus:border-neutral-900 focus:outline-none"
+          className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm focus:border-neutral-900 focus:outline-none"
           placeholder="会話の名前"
         />
         <p className="mt-1 text-xs text-neutral-400">
@@ -1917,7 +1962,7 @@ function ThreadRow({
         className="block w-full px-2 py-2 text-left"
       >
         <span
-          className={`block truncate text-sm ${
+          className={`block truncate text-xs ${
             current ? 'font-medium text-neutral-900' : 'text-neutral-600'
           }`}
         >
@@ -1933,12 +1978,12 @@ function ThreadRow({
       </button>
       {confirming ? (
         <div className="mt-1 flex items-center justify-between gap-2 rounded-md border border-red-200 bg-red-50 px-2 py-1.5">
-          <span className="text-[13px] text-red-800">削除しますか?</span>
+          <span className="text-xs text-red-800">削除しますか?</span>
           <div className="flex items-center gap-1">
             <button
               type="button"
               onClick={() => setConfirming(false)}
-              className="rounded-full bg-white px-2 py-1 text-[13px] font-medium text-neutral-700 hover:bg-neutral-100"
+              className="rounded-full bg-white px-2 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-100"
             >
               取消
             </button>
@@ -1948,7 +1993,7 @@ function ThreadRow({
                 onDelete();
                 setConfirming(false);
               }}
-              className="rounded-full bg-red-600 px-2 py-1 text-[13px] font-medium text-white hover:bg-red-500"
+              className="rounded-full bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-500"
             >
               削除する
             </button>
@@ -1965,7 +2010,7 @@ function ThreadRow({
               setDraft(thread.title ?? threadTitle(thread));
               setRenaming(true);
             }}
-            className="inline-flex items-center gap-1 rounded-md bg-white/80 px-2 py-1 text-[13px] font-medium text-neutral-600 ring-1 ring-neutral-200 transition hover:bg-white hover:text-neutral-900"
+            className="inline-flex items-center gap-1 rounded-md bg-white/80 px-2 py-1 text-xs font-medium text-neutral-600 ring-1 ring-neutral-200 transition hover:bg-white hover:text-neutral-900"
             title="名前を変更"
           >
             <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden>
@@ -1983,7 +2028,7 @@ function ThreadRow({
           <button
             type="button"
             onClick={() => setConfirming(true)}
-            className="inline-flex items-center gap-1 rounded-md bg-white/80 px-2 py-1 text-[13px] font-medium text-neutral-600 ring-1 ring-neutral-200 transition hover:bg-red-50 hover:text-red-600 hover:ring-red-200"
+            className="inline-flex items-center gap-1 rounded-md bg-white/80 px-2 py-1 text-xs font-medium text-neutral-600 ring-1 ring-neutral-200 transition hover:bg-red-50 hover:text-red-600 hover:ring-red-200"
             title="この会話を削除"
           >
             <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden>
@@ -2039,7 +2084,7 @@ function MessageRow({
           <button
             type="button"
             onClick={() => onUpdate({ pinned: !m.pinned })}
-            className={`rounded-full px-1.5 text-[13px] font-bold leading-none transition ${
+            className={`rounded-full px-1.5 text-xs font-bold leading-none transition ${
               m.pinned
                 ? 'text-neutral-900'
                 : 'text-neutral-400 hover:text-neutral-900'
@@ -2054,7 +2099,7 @@ function MessageRow({
               setNoteDraft(m.note ?? '');
               setNoteOpen((v) => !v);
             }}
-            className={`rounded-full px-1.5 text-[13px] font-bold leading-none transition ${
+            className={`rounded-full px-1.5 text-xs font-bold leading-none transition ${
               m.note ? 'text-neutral-900' : 'text-neutral-400 hover:text-neutral-900'
             }`}
             title="メモを追加"
@@ -2068,7 +2113,7 @@ function MessageRow({
                 onClick={() =>
                   onUpdate({ rating: m.rating === 'up' ? null : 'up' })
                 }
-                className={`rounded-full px-1.5 text-[13px] font-bold leading-none transition ${
+                className={`rounded-full px-1.5 text-xs font-bold leading-none transition ${
                   m.rating === 'up'
                     ? 'text-emerald-600'
                     : 'text-neutral-400 hover:text-neutral-900'
@@ -2082,7 +2127,7 @@ function MessageRow({
                 onClick={() =>
                   onUpdate({ rating: m.rating === 'down' ? null : 'down' })
                 }
-                className={`rounded-full px-1.5 text-[13px] font-bold leading-none transition ${
+                className={`rounded-full px-1.5 text-xs font-bold leading-none transition ${
                   m.rating === 'down'
                     ? 'text-neutral-900'
                     : 'text-neutral-400 hover:text-neutral-900'
@@ -2096,7 +2141,7 @@ function MessageRow({
         </div>
 
         <div
-          className={`rounded-2xl px-3.5 py-2.5 text-base ${
+          className={`rounded-2xl px-3.5 py-2.5 text-sm ${
             isUser
               ? 'rounded-br-md bg-neutral-900 text-white'
               : 'rounded-bl-md bg-neutral-100 text-neutral-900'
@@ -2135,7 +2180,7 @@ function MessageRow({
 
           {m.escalation && (
             <div
-              className={`mt-2 rounded-lg border px-2.5 py-2 text-[13px] leading-relaxed ${
+              className={`mt-2 rounded-lg border px-2.5 py-2 text-xs leading-relaxed ${
                 isUser
                   ? 'border-amber-300/60 bg-amber-100/15 text-amber-100'
                   : 'border-amber-400 bg-amber-50 text-amber-900'
@@ -2186,7 +2231,7 @@ function MessageRow({
             </p>
           )}
           {hasSources && sourcesOpen && (
-            <div className="mt-2 space-y-2.5 rounded-lg bg-white p-2.5 text-[13px] leading-relaxed ring-1 ring-neutral-200">
+            <div className="mt-2 space-y-2.5 rounded-lg bg-white p-2.5 text-xs leading-relaxed ring-1 ring-neutral-200">
               {m.sources!.map((s, si) => (
                 <div key={si}>
                   <p className="font-medium text-neutral-500">{s.query}</p>
@@ -2225,7 +2270,7 @@ function MessageRow({
 
           {m.note && !noteOpen && (
             <div
-              className={`mt-2 rounded-md px-2 py-1 text-[13px] ${
+              className={`mt-2 rounded-md px-2 py-1 text-xs ${
                 isUser
                   ? 'bg-white/10 text-white/80'
                   : 'bg-amber-50 text-amber-900'
@@ -2240,7 +2285,7 @@ function MessageRow({
                 value={noteDraft}
                 onChange={(e) => setNoteDraft(e.target.value)}
                 placeholder="このメッセージへのメモ"
-                className={`w-full rounded-md border px-2 py-1 text-[13px] focus:outline-none ${
+                className={`w-full rounded-md border px-2 py-1 text-xs focus:outline-none ${
                   isUser
                     ? 'border-white/20 bg-white/10 text-white placeholder:text-white/40'
                     : 'border-neutral-300 bg-white text-neutral-900 placeholder:text-neutral-400'
@@ -2352,7 +2397,7 @@ const SettingRow = forwardRef<
           {subtitle}
         </span>
       </span>
-      <span className="flex shrink-0 items-center gap-1.5 text-[13px] font-medium text-neutral-500">
+      <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-neutral-500">
         {value}
         <svg width="8" height="13" viewBox="0 0 8 14" aria-hidden className="text-neutral-400">
           <path
@@ -2417,7 +2462,7 @@ function PersonaPromptButton({
         subtitle="口調・答え方の決まりごと"
         value={
           current ? (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[13px] font-bold text-amber-800">
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
               設定済み
             </span>
           ) : (
@@ -2433,10 +2478,10 @@ function PersonaPromptButton({
           }}
         >
           <div className="w-full max-w-xl rounded-2xl bg-white p-5 shadow-xl">
-            <h3 className="text-base font-bold text-neutral-900">
+            <h3 className="text-sm font-bold text-neutral-900">
               回答ルールの設定
             </h3>
-            <p className="mt-1 text-[13px] leading-relaxed text-neutral-500">
+            <p className="mt-1 text-xs leading-relaxed text-neutral-500">
               このブレインの「話し方」と「答え方のルール」をここに書きます。
               口調(です・ます調/くだけた話し方)、得意分野、答えてはいけない
               話題、答えるときの決まりごと(例:必ず根拠を示す)などを自由な
@@ -2449,7 +2494,7 @@ function PersonaPromptButton({
                 '例: 一人称は「俺」。新人社員に話しかけるような口調で、専門用語には必ず短い注釈を添えること。社外秘の話題は答えず「上長に確認してください」と返す。'
               }
               rows={10}
-              className="mt-3 w-full rounded-lg border border-neutral-300 px-3 py-2 text-base focus:border-neutral-900 focus:outline-none"
+              className="mt-3 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
             />
             <div className="mt-3 flex items-center justify-between">
               <p className="text-xs text-neutral-400">
@@ -2459,7 +2504,7 @@ function PersonaPromptButton({
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="rounded-full bg-neutral-100 px-3 py-1 text-sm text-neutral-700 hover:bg-neutral-200"
+                  className="rounded-full bg-neutral-100 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-200"
                 >
                   キャンセル
                 </button>
@@ -2467,7 +2512,7 @@ function PersonaPromptButton({
                   type="button"
                   onClick={() => void commit()}
                   disabled={saving}
-                  className="rounded-full bg-neutral-900 px-3 py-1 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:opacity-50"
+                  className="rounded-full bg-neutral-900 px-3 py-1 text-xs font-medium text-white transition hover:bg-neutral-700 disabled:opacity-50"
                 >
                   {saving ? '保存中…' : '保存'}
                 </button>
@@ -2527,7 +2572,7 @@ function VoicePicker({
             void onChange(null);
             setOpen(false);
           }}
-          className={`block w-full px-3 py-2 text-left text-sm transition hover:bg-neutral-50 ${
+          className={`block w-full px-3 py-2 text-left text-xs transition hover:bg-neutral-50 ${
             !current ? 'font-medium text-neutral-900' : 'text-neutral-700'
           }`}
         >
@@ -2542,7 +2587,7 @@ function VoicePicker({
                 void onChange(v.id);
                 setOpen(false);
               }}
-              className={`flex w-full items-baseline justify-between gap-3 px-3 py-2 text-left text-sm transition hover:bg-neutral-50 ${
+              className={`flex w-full items-baseline justify-between gap-3 px-3 py-2 text-left text-xs transition hover:bg-neutral-50 ${
                 current === v.id
                   ? 'bg-neutral-50 font-medium text-neutral-900'
                   : 'text-neutral-700'
@@ -2620,7 +2665,7 @@ function LanguagePicker({
                   void onChange(l.id === 'auto' ? null : l.id);
                   setOpen(false);
                 }}
-                className={`flex w-full items-baseline justify-between gap-3 px-3 py-2 text-left text-sm transition hover:bg-neutral-50 ${
+                className={`flex w-full items-baseline justify-between gap-3 px-3 py-2 text-left text-xs transition hover:bg-neutral-50 ${
                   isCurrent
                     ? 'bg-neutral-50 font-medium text-neutral-900'
                     : 'text-neutral-700'
@@ -2745,7 +2790,7 @@ function SharePanel({ avatarId }: { avatarId: string }) {
 
   return (
     <details className="group overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
-      <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-2.5 text-base font-bold text-neutral-700 transition hover:bg-neutral-50">
+      <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-2.5 text-sm font-bold text-neutral-700 transition hover:bg-neutral-50">
         <span className="flex items-center gap-2">
           社員に共有
           {sharedCount > 0 && (
@@ -2772,7 +2817,7 @@ function SharePanel({ avatarId }: { avatarId: string }) {
         </svg>
       </summary>
       <div className="space-y-3 border-t border-neutral-100 p-4">
-        <p className="text-[13px] leading-relaxed text-neutral-500">
+        <p className="text-xs leading-relaxed text-neutral-500">
           同じ会社のメンバーに、このブレインを共有できます。共有された相手は
           <span className="font-medium text-neutral-700">閲覧・会話のみ</span>
           可能で、素材の追加・編集・削除、声や回答ルールの変更はできません。
@@ -2789,10 +2834,10 @@ function SharePanel({ avatarId }: { avatarId: string }) {
             className="mt-0.5 h-4 w-4 shrink-0 accent-neutral-900"
           />
           <span>
-            <span className="block text-sm font-medium text-neutral-900">
+            <span className="block text-xs font-medium text-neutral-900">
               会社全体に共有する
             </span>
-            <span className="block text-[13px] text-neutral-500">
+            <span className="block text-xs text-neutral-500">
               自社の全メンバーが閲覧・会話できます。
             </span>
           </span>
@@ -2804,7 +2849,7 @@ function SharePanel({ avatarId }: { avatarId: string }) {
               共有するメンバーを選ぶ
             </p>
             {members.length === 0 ? (
-              <p className="text-sm text-neutral-400">
+              <p className="text-xs text-neutral-400">
                 共有できるメンバーがいません。
               </p>
             ) : (
@@ -2813,7 +2858,7 @@ function SharePanel({ avatarId }: { avatarId: string }) {
                   const checked = selected.has(email.toLowerCase());
                   return (
                     <li key={email}>
-                      <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-neutral-700 transition hover:bg-neutral-50">
+                      <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs text-neutral-700 transition hover:bg-neutral-50">
                         <input
                           type="checkbox"
                           checked={checked}
@@ -2831,20 +2876,20 @@ function SharePanel({ avatarId }: { avatarId: string }) {
         )}
 
         {err && (
-          <p className="rounded-md bg-red-50 px-2 py-1.5 text-[13px] text-red-700">
+          <p className="rounded-md bg-red-50 px-2 py-1.5 text-xs text-red-700">
             {err}
           </p>
         )}
 
         <div className="flex items-center justify-end gap-2">
           {saved && (
-            <span className="text-[13px] text-emerald-600">保存しました</span>
+            <span className="text-xs text-emerald-600">保存しました</span>
           )}
           <button
             type="button"
             onClick={save}
             disabled={saving}
-            className="rounded-full bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-700 active:scale-[0.99] disabled:opacity-40"
+            className="rounded-full bg-neutral-900 px-4 py-2 text-xs font-medium text-white transition hover:bg-neutral-700 active:scale-[0.99] disabled:opacity-40"
           >
             {saving ? '保存中…' : '共有設定を保存'}
           </button>
