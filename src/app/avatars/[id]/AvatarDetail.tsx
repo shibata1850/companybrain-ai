@@ -484,6 +484,17 @@ export default function AvatarDetail({ id }: { id: string }) {
   // 初回描画は false(モバイル扱い)で、マウント後に確定する。
   const isWideDesktop = useIsMobile('(min-width: 1280px)');
 
+  // 通話画面(全面)の表示中は背面のページスクロールを止める。スマホの
+  // ブラウザで背面が動くと、閉じたときに位置が飛んで不具合に見える。
+  useEffect(() => {
+    if (stageMinimized) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [stageMinimized]);
+
   // ホームの「質問する」大ボタン・最近使った一覧のために、開いたブレインを
   // 端末に記録する(会話スレッドと同じく端末ローカルで良い情報)。
   useEffect(() => {
@@ -994,9 +1005,13 @@ export default function AvatarDetail({ id }: { id: string }) {
   );
 
   return (
-    <div className="mx-auto w-full max-w-2xl xl:max-w-5xl">
-      <div className="xl:flex xl:items-start xl:gap-6">
-        <div className="min-w-0 space-y-3 xl:flex-1">
+    /* スマホはアプリ型シェル: 高さを画面に固定し、スクロールは会話だけに
+       する(ページと会話の二重スクロールが操作感を悪くしていた)。
+       上の 5rem = ヘッダー3.5rem + main 上余白1.5rem。下の負マージンは
+       layout が下部ナビ用に入れる余白の打ち消し(この画面はナビ非表示)。 */
+    <div className="mx-auto flex h-[calc(100dvh-5rem)] w-full max-w-2xl flex-col -mb-[calc(6rem+env(safe-area-inset-bottom))] sm:mb-0 sm:block sm:h-auto xl:max-w-5xl">
+      <div className="flex min-h-0 flex-1 flex-col sm:block xl:flex xl:flex-row xl:items-start xl:gap-6">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col space-y-3 sm:block xl:flex-1">
       {/* LINE 型チャットヘッダー: 戻る / 相手(ブレイン)/ メニュー。
           情報・設定・素材は右上メニューに集約し、画面は会話を主役にする。 */}
       <div className="flex items-center gap-2 rounded-2xl border border-neutral-200 bg-white px-2.5 py-2 shadow-sm">
@@ -1063,7 +1078,9 @@ export default function AvatarDetail({ id }: { id: string }) {
       {/* メニュー: ブレイン情報 / 詳細設定 / 共有 / 学習素材。
           xl 以上では右レールに常時表示するため、ここでは出さない。 */}
       {!isWideDesktop && menuOpen && (
-        <div className="space-y-3 anim-fade-in-up">{settingsStack}</div>
+        <div className="max-h-[55dvh] space-y-3 overflow-y-auto anim-fade-in-up sm:max-h-none sm:overflow-visible">
+          {settingsStack}
+        </div>
       )}
 
       {error && (
@@ -1093,17 +1110,14 @@ export default function AvatarDetail({ id }: { id: string }) {
         onExport={exportTranscript}
       />
 
-      {/* 下部固定バーの高さぶんの余白(スマホのみ)。 */}
-      <div className="h-24 sm:hidden" aria-hidden />
-
       {/* 音声・入力バー。スマホでは LINE と同じく画面下に固定する。
           マイクを ON にしてもこの画面に留まり、会話はチャットに流れる。
           通話画面(全面)は「広げる」を押したときだけ出す。 */}
       <div
         className={
           stageMinimized
-            ? 'fixed inset-x-0 bottom-0 z-30 border-t border-neutral-200 bg-white/95 px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:p-0'
-            : 'anim-call-in fixed inset-0 z-50 overflow-y-auto bg-white p-4 sm:static sm:overflow-visible sm:p-0'
+            ? '-mx-4 border-t border-neutral-200 bg-white px-4 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0'
+            : 'anim-call-in fixed inset-0 z-50 overflow-y-auto bg-white p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:static sm:overflow-visible sm:p-0'
         }
       >
         <div className="mx-auto w-full max-w-2xl">
@@ -1661,7 +1675,7 @@ function TranscriptPanel({
   );
 
   return (
-    <section>
+    <section className="flex min-h-0 flex-1 flex-col sm:block">
       {/* Header: collapse toggle on the left, view tools on the right. */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <button
@@ -1774,7 +1788,7 @@ function TranscriptPanel({
       </div>
 
       {open && (
-        <div className="-mx-4 mt-3 overflow-hidden border-y border-neutral-200 bg-white anim-fade-in sm:mx-0 sm:rounded-2xl sm:border-x">
+        <div className="-mx-4 mt-3 flex min-h-0 flex-1 flex-col overflow-hidden border-y border-neutral-200 bg-white anim-fade-in sm:mx-0 sm:block sm:rounded-2xl sm:border-x">
           {searchOpen && (
             <div className="flex items-center gap-2 border-b border-neutral-100 px-4 py-2">
               <svg
@@ -1832,7 +1846,7 @@ function TranscriptPanel({
             </div>
           )}
 
-          <div className="flex h-[calc(100dvh-16rem)] min-h-[22rem] sm:h-[calc(100vh-24rem)] sm:min-h-[26rem]">
+          <div className="flex min-h-0 flex-1 sm:min-h-[26rem] sm:flex-none sm:h-[calc(100vh-24rem)]">
             {/* Thread sidebar — always visible on sm+ so switching
                 conversations is one click, not buried in a menu. */}
             <aside className="hidden w-56 shrink-0 flex-col border-r border-neutral-100 bg-neutral-50/70 sm:flex">

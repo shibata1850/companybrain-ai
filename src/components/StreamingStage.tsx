@@ -1448,7 +1448,7 @@ export default function StreamingStage({
             {textDraft.trim() ? (
               <button
                 type="submit"
-                className="shrink-0 rounded-full bg-neutral-900 px-4 py-2 text-sm font-bold text-white transition hover:bg-neutral-700"
+                className="shrink-0 rounded-full bg-neutral-900 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-neutral-700"
               >
                 送信
               </button>
@@ -1456,7 +1456,7 @@ export default function StreamingStage({
               <button
                 type="button"
                 onClick={() => void start()}
-                className="flex shrink-0 items-center gap-1.5 rounded-full bg-neutral-900 px-4 py-2 text-sm font-bold text-white transition hover:bg-neutral-700"
+                className="flex shrink-0 items-center gap-1.5 rounded-full bg-neutral-900 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-neutral-700"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden>
                   <rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" />

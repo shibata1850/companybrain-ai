@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import Link from 'next/link';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
@@ -9,6 +9,17 @@ import AppSidebar from '@/components/AppSidebar';
 import HeaderNav from '@/components/HeaderNav';
 import LoginAnnouncements from '@/components/LoginAnnouncements';
 import './globals.css';
+
+// スマホのブラウザで使う前提の viewport 設定。viewportFit: 'cover' が無いと
+// iPhone では env(safe-area-inset-*) がすべて 0 になり、下部バー・全画面
+// オーバーレイの下端保護が効かない(実機で操作不良の報告があった根本原因)。
+// interactiveWidget はキーボード表示時に画面を縮めて入力欄を見せる(Android)。
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  interactiveWidget: 'resizes-content',
+};
 
 export const metadata: Metadata = {
   title: 'CompanyBrain AI',

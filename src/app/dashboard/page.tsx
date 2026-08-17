@@ -138,22 +138,6 @@ export default function HomePage() {
         </Link>
       </section>
 
-      {/* Mobile floating action button: primary "create" action sits in
-          the bottom-right thumb zone, clear of the bottom nav + home bar. */}
-      <Link
-        href="/avatars/new"
-        aria-label="新しいブレインを作成"
-        className="fixed right-4 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-40 grid h-14 w-14 place-items-center rounded-full bg-neutral-900 text-white shadow-lg shadow-neutral-900/25 transition active:scale-95 sm:hidden"
-      >
-        <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden>
-          <path
-            d="M12 5v14M5 12h14"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-          />
-        </svg>
-      </Link>
 
       {/* 迷わないホーム: 開いたら押す場所が1つ(質問する)。タイルは
           スマホのみ(PC は上部ヘッダーに同じ導線があるため重複させない)。 */}
@@ -402,6 +386,15 @@ export default function HomePage() {
                   </div>
                 ))}
               </SortableGrid>
+
+              {/* スマホの作成導線。浮いたボタン(FAB)は最終行のカードに
+                  被るため廃止し、一覧の末尾にラベル付きで置く。 */}
+              <Link
+                href="/avatars/new"
+                className="flex items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-neutral-300 py-3.5 text-sm font-bold text-neutral-600 transition active:scale-[0.99] sm:hidden"
+              >
+                ＋ 新しいブレイン
+              </Link>
             </>
           )}
         </>
