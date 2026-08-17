@@ -344,7 +344,7 @@ export default function HomePage() {
             </div>
           ) : search ? (
             // Search active: drag-and-drop disabled (visual order is filtered).
-            <div className="grid grid-cols-2 gap-3 anim-stagger sm:grid-cols-4 lg:grid-cols-6">
+            <div className="grid grid-cols-2 gap-3 anim-stagger sm:grid-cols-4 lg:grid-cols-4">
               {filteredAvatars.map((a) => (
                 <BrainCard
                   key={a.id}
@@ -389,7 +389,7 @@ export default function HomePage() {
                       setError('並び替えの保存に失敗しました');
                     });
                 }}
-                className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6"
+                className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-4"
               >
                 {avatars.map((a) => (
                   <div key={a.id} data-sort-id={a.id}>
@@ -412,7 +412,7 @@ export default function HomePage() {
 
 function SkeletonGrid() {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-4">
       {Array.from({ length: 6 }).map((_, i) => (
         <div
           key={i}

@@ -43,7 +43,7 @@ export default function PlanBanner() {
   const brainsLimit = u.plan.limits.brains;
   const qLimit = u.plan.limits.monthlyQuestions;
   return (
-    <section className="rounded-2xl border border-neutral-200 bg-gradient-to-br from-white to-neutral-50 px-4 py-3 text-xs">
+    <section className="rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-xs">
       {/* Top row: plan name + change button always on one line. */}
       <div className="flex items-center justify-between gap-2">
         <span className="rounded-full bg-neutral-900 px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide text-white">
