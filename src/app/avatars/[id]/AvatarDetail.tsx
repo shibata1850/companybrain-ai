@@ -480,6 +480,10 @@ export default function AvatarDetail({ id }: { id: string }) {
   // ブレイン情報・設定・素材は右上メニューに集約(LINE 型)。既定は閉じる。
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // xl(1280px)以上では、メニューの中身を右レールに常時表示する。
+  // 初回描画は false(モバイル扱い)で、マウント後に確定する。
+  const isWideDesktop = useIsMobile('(min-width: 1280px)');
+
   // ホームの「質問する」大ボタン・最近使った一覧のために、開いたブレインを
   // 端末に記録する(会話スレッドと同じく端末ローカルで良い情報)。
   useEffect(() => {
@@ -752,75 +756,10 @@ export default function AvatarDetail({ id }: { id: string }) {
   // 作成されたブレイン(プラン制限外で音声可)のときだけ。
   const showVoiceOption = planVoiceAllowed || avatar.request_id != null;
 
-  return (
-    <div className="mx-auto w-full max-w-2xl space-y-3">
-      {/* LINE 型チャットヘッダー: 戻る / 相手(ブレイン)/ メニュー。
-          情報・設定・素材は右上メニューに集約し、画面は会話を主役にする。 */}
-      <div className="flex items-center gap-2 rounded-2xl border border-neutral-200 bg-white px-2.5 py-2 shadow-sm">
-        <Link
-          href="/dashboard"
-          aria-label="ブレイン一覧へ戻る"
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
-        >
-          <svg width="16" height="16" viewBox="0 0 12 12" aria-hidden>
-            <path
-              d="M7.5 2.5L4 6l3.5 3.5"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </Link>
-        <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-neutral-100">
-          {avatar.cover_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={avatar.cover_url}
-              alt=""
-              className="h-full w-full object-cover"
-            />
-          ) : null}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <h1 className="truncate text-sm font-bold tracking-tight">
-              {avatar.name}
-            </h1>
-            {avatar.request_id && (
-              <span className="shrink-0 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
-                依頼で作成
-              </span>
-            )}
-            {!canEdit && (
-              <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                共有
-              </span>
-            )}
-          </div>
-          <p className="truncate text-xs text-neutral-500">
-            {canEdit ? `学習素材 ${training_videos.length}件` : '閲覧・会話のみ'}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setMenuOpen((v) => !v)}
-          aria-expanded={menuOpen}
-          className={`shrink-0 rounded-full px-3 py-2 text-xs font-bold transition ${
-            menuOpen
-              ? 'bg-neutral-900 text-white'
-              : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
-          }`}
-        >
-          {menuOpen ? '閉じる' : 'メニュー'}
-        </button>
-      </div>
-
-      {/* メニュー: ブレイン情報 / 詳細設定 / 共有 / 学習素材。
-          たまにしか使わないものをここへ集約し、普段の画面は会話だけにする。 */}
-      {menuOpen && (
-        <div className="space-y-3 anim-fade-in-up">
+  // ブレイン情報 / 詳細設定 / 共有 / 学習素材のまとまり。スマホ〜lg では
+  // 右上メニューの中に、xl 以上では右レールに常時表示する(定義は1箇所)。
+  const settingsStack = (
+    <>
           <div className="flex items-center gap-4 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
           <div className="relative shrink-0">
             <div className="h-14 w-14 overflow-hidden rounded-full bg-neutral-100 ring-2 ring-white shadow sm:h-16 sm:w-16">
@@ -1051,7 +990,80 @@ export default function AvatarDetail({ id }: { id: string }) {
               fileResetKey={fileResetKey}
             />
           )}
+    </>
+  );
+
+  return (
+    <div className="mx-auto w-full max-w-2xl xl:max-w-5xl">
+      <div className="xl:flex xl:items-start xl:gap-6">
+        <div className="min-w-0 space-y-3 xl:flex-1">
+      {/* LINE 型チャットヘッダー: 戻る / 相手(ブレイン)/ メニュー。
+          情報・設定・素材は右上メニューに集約し、画面は会話を主役にする。 */}
+      <div className="flex items-center gap-2 rounded-2xl border border-neutral-200 bg-white px-2.5 py-2 shadow-sm">
+        <Link
+          href="/dashboard"
+          aria-label="ブレイン一覧へ戻る"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
+        >
+          <svg width="16" height="16" viewBox="0 0 12 12" aria-hidden>
+            <path
+              d="M7.5 2.5L4 6l3.5 3.5"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </Link>
+        <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-neutral-100">
+          {avatar.cover_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={avatar.cover_url}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+          ) : null}
         </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <h1 className="truncate text-sm font-bold tracking-tight">
+              {avatar.name}
+            </h1>
+            {avatar.request_id && (
+              <span className="shrink-0 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                依頼で作成
+              </span>
+            )}
+            {!canEdit && (
+              <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                共有
+              </span>
+            )}
+          </div>
+          <p className="truncate text-xs text-neutral-500">
+            {canEdit ? `学習素材 ${training_videos.length}件` : '閲覧・会話のみ'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setMenuOpen((v) => !v)}
+          aria-expanded={menuOpen}
+          className={`shrink-0 rounded-full px-3 py-2 text-xs font-bold transition xl:hidden ${
+            menuOpen
+              ? 'bg-neutral-900 text-white'
+              : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+          }`}
+        >
+          {menuOpen ? '閉じる' : 'メニュー'}
+        </button>
+      </div>
+
+      {/* メニュー: ブレイン情報 / 詳細設定 / 共有 / 学習素材。
+          xl 以上では右レールに常時表示するため、ここでは出さない。 */}
+      {!isWideDesktop && menuOpen && (
+        <div className="space-y-3 anim-fade-in-up">{settingsStack}</div>
       )}
 
       {error && (
@@ -1112,6 +1124,15 @@ export default function AvatarDetail({ id }: { id: string }) {
             }}
           />
         </div>
+      </div>
+
+        </div>
+
+        {/* xl 以上の右レール: メニューの中身を常時表示する。PC の広さを
+            使い、素材追加・設定・共有を会話と並べて見えるようにする。 */}
+        {isWideDesktop && (
+          <aside className="w-80 shrink-0 space-y-3">{settingsStack}</aside>
+        )}
       </div>
 
       {/* 写真変更用の hidden input。メニュー開閉と無関係に参照できるよう
@@ -1811,7 +1832,7 @@ function TranscriptPanel({
             </div>
           )}
 
-          <div className="flex h-[calc(100dvh-16rem)] min-h-[22rem] sm:h-[30rem]">
+          <div className="flex h-[calc(100dvh-16rem)] min-h-[22rem] sm:h-[calc(100vh-24rem)] sm:min-h-[26rem]">
             {/* Thread sidebar — always visible on sm+ so switching
                 conversations is one click, not buried in a menu. */}
             <aside className="hidden w-56 shrink-0 flex-col border-r border-neutral-100 bg-neutral-50/70 sm:flex">
