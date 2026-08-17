@@ -44,6 +44,14 @@ export function useNavBadges(show: boolean) {
   return { unread, requestCount };
 }
 
+/**
+ * ログイン後のアプリ画面かどうか。マーケ用ランディングと認証画面では
+ * サイドバーを出さず、ヘッダーナビを従来どおり使う。
+ */
+export function isAppRoute(pathname: string): boolean {
+  return !['/', '/login', '/signup', '/login/forgot'].includes(pathname);
+}
+
 /** Shared destination list + active-route matching for both nav bars. */
 export function navItems(pathname: string, unread: number, requestCount: number) {
   return [

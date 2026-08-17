@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { useNavBadges, navItems } from './useNavBadges';
+import { useNavBadges, navItems, isAppRoute } from './useNavBadges';
 
 /**
  * Desktop navigation (sm+ only — phones use the fixed BottomNav). Sits
@@ -19,8 +19,16 @@ export default function HeaderNav({ show }: { show: boolean }) {
 
   const items = navItems(pathname, unread, requestCount);
 
+  // アプリ画面の lg 以上ではサイドバーが同じ行き先を持つため隠す
+  // (二重動線を作らない)。タブレット(sm〜lg)とマーケ画面では従来どおり。
+  const hideOnDesktop = isAppRoute(pathname);
+
   return (
-    <nav className="hidden items-center gap-1 sm:flex">
+    <nav
+      className={`hidden items-center gap-1 sm:flex ${
+        hideOnDesktop ? 'lg:hidden' : ''
+      }`}
+    >
       {items.map((it) => (
         <Link
           key={it.href}

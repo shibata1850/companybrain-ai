@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 import NavProgress from '@/components/NavProgress';
 import PageTransition from '@/components/PageTransition';
 import BottomNav from '@/components/BottomNav';
+import AppSidebar from '@/components/AppSidebar';
 import HeaderNav from '@/components/HeaderNav';
 import LoginAnnouncements from '@/components/LoginAnnouncements';
 import './globals.css';
@@ -52,7 +53,7 @@ export default async function RootLayout({
       >
         <NavProgress />
         <header className="sticky top-0 z-30 border-b border-neutral-200/70 bg-white/70 backdrop-blur">
-          <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
+          <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
             <Link
               href={loggedIn ? '/dashboard' : '/'}
               className="group flex items-center gap-2 transition"
@@ -77,15 +78,20 @@ export default async function RootLayout({
             </nav>
           </div>
         </header>
-        <main
-          className={`relative mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 ${
-            loggedIn
-              ? 'pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-8'
-              : ''
-          }`}
-        >
-          <PageTransition>{children}</PageTransition>
-        </main>
+        {/* PC(lg+)ではサイドバー+コンテンツの2カラム。サイドバーは
+            PageTransition の外にあるため、画面遷移中も動かない。 */}
+        <div className="mx-auto flex w-full max-w-7xl">
+          <AppSidebar show={loggedIn} />
+          <main
+            className={`relative min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-8 ${
+              loggedIn
+                ? 'pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-8'
+                : ''
+            }`}
+          >
+            <PageTransition>{children}</PageTransition>
+          </main>
+        </div>
         <BottomNav show={loggedIn} />
         {loggedIn && <LoginAnnouncements />}
       </body>
