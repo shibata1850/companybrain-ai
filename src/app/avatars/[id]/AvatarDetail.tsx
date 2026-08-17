@@ -484,6 +484,26 @@ export default function AvatarDetail({ id }: { id: string }) {
   // 初回描画は false(モバイル扱い)で、マウント後に確定する。
   const isWideDesktop = useIsMobile('(min-width: 1280px)');
 
+  // スマホはブレイン画面を [学習 | 会話 | 設定] の3面スワイプにする
+  // (LINE のタブと同じ操作系。タブのタップでも切り替えられる)。
+  // CSS スクロールスナップ実装なので、慣性・追従はブラウザ任せで滑らか。
+  const isPhone = useIsMobile();
+  const paneScrollerRef = useRef<HTMLDivElement | null>(null);
+  const [activePane, setActivePane] = useState(1);
+  const goToPane = useCallback((i: number) => {
+    const el = paneScrollerRef.current;
+    if (!el) return;
+    el.scrollTo({ left: el.clientWidth * i, behavior: 'smooth' });
+  }, []);
+  // 初期表示は中央の「会話」。
+  useEffect(() => {
+    if (!isPhone) return;
+    const el = paneScrollerRef.current;
+    if (!el) return;
+    el.scrollLeft = el.clientWidth;
+    setActivePane(1);
+  }, [isPhone]);
+
   // 通話画面(全面)の表示中は背面のページスクロールを止める。スマホの
   // ブラウザで背面が動くと、閉じたときに位置が飛んで不具合に見える。
   useEffect(() => {
@@ -769,7 +789,9 @@ export default function AvatarDetail({ id }: { id: string }) {
 
   // ブレイン情報 / 詳細設定 / 共有 / 学習素材のまとまり。スマホ〜lg では
   // 右上メニューの中に、xl 以上では右レールに常時表示する(定義は1箇所)。
-  const settingsStack = (
+  // ブレイン設定(情報・背景・声・共有)と学習(素材)を分けて持つ。
+  // スマホはスワイプ切替の別ページに、PC はレール/メニューで縦に並べる。
+  const brainSettingsBlock = (
     <>
           <div className="flex items-center gap-4 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
           <div className="relative shrink-0">
@@ -948,6 +970,24 @@ export default function AvatarDetail({ id }: { id: string }) {
 
       {/* 所有者のみ・エンタープライズ限定の共有パネル。 */}
       {canEdit && <SharePanel avatarId={avatar.id} />}
+      {canEdit && (
+        <button
+          type="button"
+          onClick={() => openFilePicker('stage')}
+          className="w-full rounded-2xl border border-neutral-200 bg-white px-4 py-3.5 text-left shadow-sm transition hover:bg-neutral-50"
+        >
+          <span className="block text-sm font-bold text-neutral-800">
+            背景写真を変更
+          </span>
+          <span className="mt-0.5 block text-xs text-neutral-500">
+            音声会話の画面(広げたとき)の背景になります
+          </span>
+        </button>
+      )}
+    </>
+  );
+  const trainingBlock = (
+    <>
           {!canEdit ? (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-5">
               <div className="flex items-center gap-2">
@@ -1001,6 +1041,69 @@ export default function AvatarDetail({ id }: { id: string }) {
               fileResetKey={fileResetKey}
             />
           )}
+    </>
+  );
+  const settingsStack = (
+    <>
+      {brainSettingsBlock}
+      {trainingBlock}
+    </>
+  );
+
+  // 会話ビューと入力バー。スマホ(スワイプ面の中)と PC(縦一列)の両方で
+  // 使うため一度だけ定義する(描画されるのは常にどちらか一方)。
+  const transcriptView = (
+      <TranscriptPanel
+        avatarId={avatar.id}
+        avatarName={avatar.name}
+        avatarUrl={avatar.cover_url}
+        threads={chatStore.threads}
+        currentThreadId={chatStore.currentId}
+        messages={transcript}
+        partialUser={partialUser}
+        partialAgent={partialAgent}
+        open={transcriptOpen}
+        onToggle={() => setTranscriptOpen((v) => !v)}
+        onNewThread={newThread}
+        onSwitchThread={switchThread}
+        onRenameThread={renameThread}
+        onDeleteThread={deleteThread}
+        onClearCurrent={clearCurrentThread}
+        onUpdateMessage={updateMessage}
+        onExport={exportTranscript}
+      />
+  );
+  const inputBar = (
+    <>
+      {/* 音声・入力バー。スマホでは LINE と同じく画面下に固定する。
+          マイクを ON にしてもこの画面に留まり、会話はチャットに流れる。
+          通話画面(全面)は「広げる」を押したときだけ出す。 */}
+      <div
+        className={
+          stageMinimized
+            ? 'border-t border-neutral-200 bg-white pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] sm:border-0 sm:bg-transparent sm:p-0'
+            : 'anim-call-in fixed inset-0 z-50 overflow-y-auto bg-white p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:static sm:overflow-visible sm:p-0'
+        }
+      >
+        <div className="mx-auto w-full max-w-2xl">
+          <StreamingStage
+            avatarId={avatar.id}
+            coverUrl={avatar.cover_url}
+            stageUrl={avatar.stage_url}
+            avatarName={avatar.name}
+            onMessage={handleTranscriptMessage}
+            onPartial={handlePartial}
+            onEditStage={canEdit ? () => openFilePicker('stage') : undefined}
+            minimized={stageMinimized}
+            onToggleMinimized={() => setStageMinimized((v) => !v)}
+            onVoiceLiveChange={(live) => {
+              // 開始時は画面を切り替えず、チャットに留まる(LINE と同じ)。
+              // 通話画面は「広げる」を押したときだけ。終話時は自動で畳む。
+              if (!live) setStageMinimized(true);
+            }}
+          />
+        </div>
+      </div>
     </>
   );
 
@@ -1065,7 +1168,7 @@ export default function AvatarDetail({ id }: { id: string }) {
           type="button"
           onClick={() => setMenuOpen((v) => !v)}
           aria-expanded={menuOpen}
-          className={`shrink-0 rounded-full px-3 py-2 text-xs font-bold transition xl:hidden ${
+          className={`hidden shrink-0 rounded-full px-3 py-2 text-xs font-bold transition sm:block xl:hidden ${
             menuOpen
               ? 'bg-neutral-900 text-white'
               : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
@@ -1075,70 +1178,72 @@ export default function AvatarDetail({ id }: { id: string }) {
         </button>
       </div>
 
-      {/* メニュー: ブレイン情報 / 詳細設定 / 共有 / 学習素材。
-          xl 以上では右レールに常時表示するため、ここでは出さない。 */}
-      {!isWideDesktop && menuOpen && (
-        <div className="max-h-[55dvh] space-y-3 overflow-y-auto anim-fade-in-up sm:max-h-none sm:overflow-visible">
-          {settingsStack}
-        </div>
-      )}
-
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 anim-fade-in">
           {error}
         </div>
       )}
 
-      {/* 会話が画面の主役(LINE 型)。履歴 → 入力バーの順に縦一列。 */}
-      <TranscriptPanel
-        avatarId={avatar.id}
-        avatarName={avatar.name}
-        avatarUrl={avatar.cover_url}
-        threads={chatStore.threads}
-        currentThreadId={chatStore.currentId}
-        messages={transcript}
-        partialUser={partialUser}
-        partialAgent={partialAgent}
-        open={transcriptOpen}
-        onToggle={() => setTranscriptOpen((v) => !v)}
-        onNewThread={newThread}
-        onSwitchThread={switchThread}
-        onRenameThread={renameThread}
-        onDeleteThread={deleteThread}
-        onClearCurrent={clearCurrentThread}
-        onUpdateMessage={updateMessage}
-        onExport={exportTranscript}
-      />
+      {isPhone ? (
+        <>
+          {/* 3面切替タブ(LINE のタブと同じ)。スワイプでもタップでも動く。 */}
+          <div
+            role="tablist"
+            aria-label="ブレイン画面の切り替え"
+            className="flex shrink-0 rounded-xl bg-neutral-100 p-1 text-sm font-bold"
+          >
+            {['学習させる', '会話', '設定'].map((label, i) => (
+              <button
+                key={label}
+                type="button"
+                role="tab"
+                aria-selected={activePane === i}
+                onClick={() => goToPane(i)}
+                className={`flex-1 rounded-lg py-2 transition ${
+                  activePane === i
+                    ? 'bg-white text-neutral-900 shadow-sm'
+                    : 'text-neutral-500'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
-      {/* 音声・入力バー。スマホでは LINE と同じく画面下に固定する。
-          マイクを ON にしてもこの画面に留まり、会話はチャットに流れる。
-          通話画面(全面)は「広げる」を押したときだけ出す。 */}
-      <div
-        className={
-          stageMinimized
-            ? '-mx-4 border-t border-neutral-200 bg-white px-4 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0'
-            : 'anim-call-in fixed inset-0 z-50 overflow-y-auto bg-white p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:static sm:overflow-visible sm:p-0'
-        }
-      >
-        <div className="mx-auto w-full max-w-2xl">
-          <StreamingStage
-            avatarId={avatar.id}
-            coverUrl={avatar.cover_url}
-            stageUrl={avatar.stage_url}
-            avatarName={avatar.name}
-            onMessage={handleTranscriptMessage}
-            onPartial={handlePartial}
-            onEditStage={canEdit ? () => openFilePicker('stage') : undefined}
-            minimized={stageMinimized}
-            onToggleMinimized={() => setStageMinimized((v) => !v)}
-            onVoiceLiveChange={(live) => {
-              // 開始時は画面を切り替えず、チャットに留まる(LINE と同じ)。
-              // 通話画面は「広げる」を押したときだけ。終話時は自動で畳む。
-              if (!live) setStageMinimized(true);
+          {/* スワイプ面。スクロールスナップで1面ずつ止まる。 */}
+          <div
+            ref={paneScrollerRef}
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              const i = Math.round(el.scrollLeft / el.clientWidth);
+              if (i !== activePane) setActivePane(i);
             }}
-          />
-        </div>
-      </div>
+            className="flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            <div className="h-full w-full shrink-0 snap-center overflow-y-auto pr-1.5">
+              <div className="space-y-3 pb-6 pt-1">{trainingBlock}</div>
+            </div>
+            <div className="flex h-full w-full shrink-0 snap-center flex-col px-0.5">
+              {transcriptView}
+              {inputBar}
+            </div>
+            <div className="h-full w-full shrink-0 snap-center overflow-y-auto pl-1.5">
+              <div className="space-y-3 pb-6 pt-1">{brainSettingsBlock}</div>
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* sm〜lg: 右上メニュー。xl: 右レール(settingsStack)。 */}
+          {!isWideDesktop && menuOpen && (
+            <div className="max-h-[55dvh] space-y-3 overflow-y-auto anim-fade-in-up sm:max-h-none sm:overflow-visible">
+              {settingsStack}
+            </div>
+          )}
+          {transcriptView}
+          {inputBar}
+        </>
+      )}
 
         </div>
 
