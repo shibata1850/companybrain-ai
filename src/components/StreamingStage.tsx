@@ -151,6 +151,9 @@ export default function StreamingStage({
   // ポインタ種別で判定するので、大きめのスマホ/タブレットでも確実に
   // タップ・トグルになる。
   const isTouch = useIsMobile('(pointer: coarse)');
+  // 電話型の通話画面を出すかどうかは「画面幅」で決める(タブレットの
+  // タッチでも広い画面なら従来のステージ表示のほうが情報量が多い)。
+  const isPhone = useIsMobile();
   const [status, setStatus] = useState<Status>('idle');
   // Mirror status in a ref so event handlers (which capture stale state)
   // can read the current value without being recreated on every change.
@@ -1510,7 +1513,7 @@ export default function StreamingStage({
             <button
               type="submit"
               disabled={!textDraft.trim()}
-              className="rounded-full bg-neutral-900 px-4 py-1.5 text-xs font-medium text-white transition hover:bg-neutral-700 disabled:opacity-40"
+              className="rounded-full bg-neutral-900 px-5 py-2 text-sm font-bold text-white transition hover:bg-neutral-700 disabled:opacity-40"
             >
               送信
             </button>
@@ -1521,6 +1524,164 @@ export default function StreamingStage({
             {error}
           </div>
         )}
+      </div>
+    );
+  }
+
+  // スマホの通話画面(全面)。写真ステージにボタンを重ねる従来の形は
+  // 狭い画面では操作が小さく散らばるため、電話アプリと同じ構成にする:
+  // 中央に相手(写真・名前・状態)、下部に大きな丸ボタン+ラベル。
+  // LINE 通話・ChatGPT 音声モードと同じ配列(戻る / 話す / 終了)。
+  if (isPhone) {
+    return (
+      <div className="flex min-h-[calc(100dvh-7rem)] w-full flex-col items-center justify-between pb-2 pt-8">
+        <div className="flex flex-1 flex-col items-center justify-center gap-4">
+          <div
+            className={`h-28 w-28 overflow-hidden rounded-full bg-neutral-200 ring-4 ${
+              status === 'speaking'
+                ? 'animate-pulse ring-emerald-300'
+                : 'ring-neutral-200'
+            }`}
+          >
+            {coverUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={coverUrl}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : null}
+          </div>
+          <div className="text-center">
+            <p className="text-xl font-bold tracking-tight">{avatarName}</p>
+            <p className="mt-1 text-sm text-neutral-500">
+              {status === 'speaking'
+                ? '話しています…'
+                : status === 'listening'
+                  ? isTalking
+                    ? '録音中…'
+                    : '聞いています'
+                  : status === 'thinking'
+                    ? '考えています…'
+                    : status === 'searching'
+                      ? '資料を確認しています…'
+                      : status === 'connecting'
+                        ? '接続中…'
+                        : status === 'reconnecting'
+                          ? '再接続中…'
+                          : '待機中'}
+              {isLive && (
+                <span className="ml-2 font-mono tabular-nums text-neutral-400">
+                  {formatElapsed(elapsedSec)}
+                </span>
+              )}
+            </p>
+          </div>
+          <div className="flex h-6 items-end gap-1" aria-hidden>
+            {Array.from({ length: 12 }).map((_, i) => {
+              const m = 1 - Math.abs(i - 5.5) * 0.12;
+              const active =
+                (status === 'listening' || status === 'thinking') && !muted;
+              const h = active ? 3 + Math.min(20, level * 44 * m) : 3;
+              return (
+                <span
+                  key={i}
+                  className="w-1 rounded-full bg-neutral-900/60 transition-[height] duration-75"
+                  style={{ height: `${h}px` }}
+                />
+              );
+            })}
+          </div>
+          {textOnly && (
+            <p className="max-w-[18rem] rounded-xl bg-neutral-100 px-4 py-2.5 text-center text-xs leading-relaxed text-neutral-600">
+              {voiceDisabledReason === 'quota'
+                ? '今月の音声会話上限に達しました。テキストで質問できます。'
+                : '音声会話はスターター以上のプランで利用できます。'}
+            </p>
+          )}
+          {error && (
+            <p className="max-w-[18rem] text-center text-xs leading-relaxed text-red-600">
+              {error}
+            </p>
+          )}
+        </div>
+
+        {/* 下部の操作。丸ボタン+下ラベル(電話アプリの並び)。 */}
+        <div className="flex w-full items-start justify-center gap-9">
+          <div className="flex w-16 flex-col items-center gap-1.5">
+            <button
+              type="button"
+              onClick={onToggleMinimized}
+              aria-label="チャット画面へ戻る"
+              className="grid h-14 w-14 place-items-center rounded-full bg-neutral-100 text-neutral-700 transition active:scale-95"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden>
+                <path
+                  d="M5 9l7 7 7-7"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+            <span className="text-xs font-bold text-neutral-600">チャットへ</span>
+          </div>
+
+          {!textOnly && (
+            <div className="flex w-20 flex-col items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  if (isTalkingRef.current) stopTalking();
+                  else startTalking();
+                }}
+                onContextMenu={(e) => e.preventDefault()}
+                disabled={muted}
+                aria-label={isTalking ? '話すのをやめる' : '話す'}
+                className={`grid h-20 w-20 place-items-center rounded-full shadow-lg transition active:scale-95 disabled:opacity-50 ${
+                  isTalking
+                    ? 'animate-pulse bg-red-500 text-white ring-4 ring-red-200'
+                    : 'bg-neutral-900 text-white'
+                }`}
+              >
+                <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden>
+                  <rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" />
+                  <path
+                    d="M5 11a7 7 0 0 0 14 0M12 18v3"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    fill="none"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </button>
+              <span className="text-xs font-bold text-neutral-700">
+                {isTalking ? 'タップで停止' : 'タップで話す'}
+              </span>
+            </div>
+          )}
+
+          <div className="flex w-16 flex-col items-center gap-1.5">
+            <button
+              type="button"
+              onClick={stop}
+              aria-label="会話を終了する"
+              className="grid h-14 w-14 place-items-center rounded-full bg-red-600 text-white transition active:scale-95"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden>
+                <path
+                  d="M6 6l12 12M18 6L6 18"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+            <span className="text-xs font-bold text-red-600">終了</span>
+          </div>
+        </div>
       </div>
     );
   }
@@ -1925,7 +2086,7 @@ function CompactBar({
               <button
                 type="button"
                 onClick={onToggleMute}
-                className={`rounded-full px-2.5 py-1 text-xs font-medium transition ${
+                className={`rounded-full px-3.5 py-2 text-sm font-bold transition ${
                   muted
                     ? 'bg-red-500 text-white hover:bg-red-400'
                     : 'bg-white/15 text-white hover:bg-white/25'
@@ -1937,7 +2098,7 @@ function CompactBar({
             <button
               type="button"
               onClick={onStop}
-              className="rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium transition hover:bg-white/25"
+              className="rounded-full bg-white/15 px-3.5 py-2 text-sm font-bold transition hover:bg-white/25"
             >
               終了
             </button>
@@ -1946,7 +2107,7 @@ function CompactBar({
           <button
             type="button"
             onClick={onStart}
-            className="rounded-full bg-white px-3 py-1 text-xs font-medium text-neutral-900 transition hover:bg-white/90"
+            className="rounded-full bg-white px-4 py-2 text-sm font-bold text-neutral-900 transition hover:bg-white/90"
           >
             始める
           </button>
@@ -1958,7 +2119,7 @@ function CompactBar({
             type="button"
             onClick={onExpand}
             aria-label="ステージを表示"
-            className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-white/25"
+            className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3.5 py-2 text-sm font-bold text-white transition hover:bg-white/25"
           >
             <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
               <path
