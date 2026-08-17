@@ -1431,56 +1431,91 @@ export default function StreamingStage({
   }, [status, avatarName, coverUrl]);
 
   if (minimized) {
-    // ライブ中(接続中・再接続中を含む)は状態バー+テキスト欄。
-    // 待機中は LINE と同じ「入力欄+マイク」を常に見せる。開いた瞬間に
-    // 何をすればよいか分かるようにするため(「始める」だけでは伝わらない)。
     const busy = isLive || status === 'connecting' || status === 'reconnecting';
-    if (!busy) {
-      return (
-        <div className="w-full space-y-3">
-          <form
-            onSubmit={onTextSubmit}
-            className="flex items-center gap-2 rounded-full border border-neutral-300 bg-white py-1.5 pl-4 pr-1.5 shadow-sm focus-within:border-neutral-900"
+
+    // 入力バー(LINE 型)。待機中と、スマホの通話中の両方で使う。
+    // マイク: 待機中は音声開始(スマホは通話画面へ直行)、通話中は
+    // 通話画面へ戻るボタンとして働く。
+    const inputForm = (
+      <form
+        onSubmit={onTextSubmit}
+        className="flex items-center gap-2 rounded-full border border-neutral-300 bg-white py-1.5 pl-4 pr-1.5 shadow-sm focus-within:border-neutral-900"
+      >
+        <input
+          value={textDraft}
+          onChange={(e) => setTextDraft(e.target.value)}
+          placeholder={busy ? 'テキストでも質問できます' : `${avatarName} に質問を入力`}
+          className="min-w-0 flex-1 bg-transparent py-1.5 text-sm outline-none placeholder:text-neutral-400"
+        />
+        {textDraft.trim() ? (
+          <button
+            type="submit"
+            className="shrink-0 rounded-full bg-neutral-900 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-neutral-700"
           >
-            <input
-              value={textDraft}
-              onChange={(e) => setTextDraft(e.target.value)}
-              placeholder={`${avatarName} に質問を入力`}
-              className="min-w-0 flex-1 bg-transparent py-1.5 text-sm outline-none placeholder:text-neutral-400"
-            />
-            {textDraft.trim() ? (
-              <button
-                type="submit"
-                className="shrink-0 rounded-full bg-neutral-900 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-neutral-700"
-              >
-                送信
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  void start();
-                  // スマホは通話画面へ直行し、接続中もその画面で待つ。
-                  // PC は従来どおりチャットに留まる。
-                  if (isPhone && minimized) onToggleMinimized?.();
-                }}
-                aria-label="マイクで話す"
-                title="マイクで話す"
-                className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-neutral-900 text-white transition hover:bg-neutral-700 active:scale-95"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
-                  <rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" />
-                  <path
-                    d="M5 11a7 7 0 0 0 14 0M12 18v3"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    fill="none"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
-            )}
-          </form>
+            送信
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              if (busy) {
+                onToggleMinimized?.();
+              } else {
+                void start();
+                // スマホは通話画面へ直行し、接続中もその画面で待つ。
+                if (isPhone) onToggleMinimized?.();
+              }
+            }}
+            aria-label={busy ? '通話画面へ戻る' : 'マイクで話す'}
+            title={busy ? '通話画面へ戻る' : 'マイクで話す'}
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-neutral-900 text-white transition hover:bg-neutral-700 active:scale-95"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
+              <rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" />
+              <path
+                d="M5 11a7 7 0 0 0 14 0M12 18v3"
+                stroke="currentColor"
+                strokeWidth="2"
+                fill="none"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+        )}
+      </form>
+    );
+
+    // スマホ: 黒い操作バー(マイクON/終了/広げる)は出さない。通話中は
+    // LINE と同じく、上に細い「通話中」バナー(タップで通話画面へ)だけを
+    // 添えて、下は普段どおりの入力バーにする。終了は通話画面側で行う。
+    if (isPhone) {
+      return (
+        <div className="w-full space-y-2">
+          {busy && !textOnly && (
+            <button
+              type="button"
+              onClick={onToggleMinimized}
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-emerald-500 py-2.5 text-sm font-bold text-white shadow-sm transition active:scale-[0.99]"
+            >
+              <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-white" />
+              {status === 'connecting'
+                ? '接続中…'
+                : status === 'reconnecting'
+                  ? '再接続中…'
+                  : (
+                    <>
+                      通話中
+                      <span className="font-mono tabular-nums">
+                        {formatElapsed(elapsedSec)}
+                      </span>
+                    </>
+                  )}
+              <span className="text-xs font-medium opacity-90">
+                タップで通話画面
+              </span>
+            </button>
+          )}
+          {inputForm}
           {error && (
             <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
               {error}
@@ -1489,6 +1524,22 @@ export default function StreamingStage({
         </div>
       );
     }
+
+    // PC / タブレットの待機中: 入力バーのみ。
+    if (!busy) {
+      return (
+        <div className="w-full space-y-3">
+          {inputForm}
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+              {error}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // PC / タブレットのライブ中: 従来どおり状態バー+テキスト欄。
     return (
       <div className="w-full space-y-3">
         <CompactBar
