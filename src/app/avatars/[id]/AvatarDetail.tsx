@@ -1887,10 +1887,10 @@ function TranscriptPanel({
               <div ref={scrollerRef} className="flex-1 overflow-y-auto bg-slate-100 p-4">
                 {messages.length === 0 && !partialUser && !partialAgent ? (
                   <div className="flex h-full items-center justify-center">
-                    <p className="text-center text-xs leading-relaxed text-neutral-400">
-                      セッションを開始して話しかけると、
+                    <p className="text-center text-sm leading-relaxed text-neutral-500">
+                      下の入力欄に質問を書いて送るか、
                       <br />
-                      ここに会話が記録されます。
+                      「マイクで話す」を押して話しかけてください。
                     </p>
                   </div>
                 ) : (

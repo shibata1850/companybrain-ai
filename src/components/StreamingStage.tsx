@@ -1255,10 +1255,12 @@ export default function StreamingStage({
     const trimmed = text.trim();
     if (!trimmed) return;
 
-    // テキスト専用モード(音声なしプラン/音声上限到達): Live セッション
-    // は無いので、通常のテキストAPI(/ask)で回答を取得する。RAG・
-    // プラン別モデル・質問数カウントはサーバー側で従来どおり効く。
-    if (textOnlyRef.current) {
+    // テキスト専用モード(音声なしプラン/音声上限到達)、またはセッション
+    // 未開始のままの送信: Live セッションは無いので、通常のテキストAPI
+    // (/ask)で回答を取得する。RAG・プラン別モデル・質問数カウントは
+    // サーバー側で従来どおり効く。マイクを押さなくても質問できるように
+    // するための経路(LINE と同じ、開いてすぐ入力)。
+    if (textOnlyRef.current || !sessionOpenRef.current) {
       onMessageRef.current?.({
         id: newMessageId(),
         role: 'user',
@@ -1290,7 +1292,11 @@ export default function StreamingStage({
           const msg = e instanceof Error ? e.message : String(e);
           setError(`回答の生成に失敗しました: ${msg}`);
         } finally {
-          setStatus((s) => (s === 'thinking' ? 'listening' : s));
+          // テキスト専用セッション中は「聞いています」に戻す。セッション
+          // 無しの単発質問なら待機(idle)に戻し、ライブ用UIを出さない。
+          setStatus((s) =>
+            s === 'thinking' ? (textOnlyRef.current ? 'listening' : 'idle') : s,
+          );
         }
       })();
       return;
@@ -1422,6 +1428,58 @@ export default function StreamingStage({
   }, [status, avatarName, coverUrl]);
 
   if (minimized) {
+    // ライブ中(接続中・再接続中を含む)は状態バー+テキスト欄。
+    // 待機中は LINE と同じ「入力欄+マイク」を常に見せる。開いた瞬間に
+    // 何をすればよいか分かるようにするため(「始める」だけでは伝わらない)。
+    const busy = isLive || status === 'connecting' || status === 'reconnecting';
+    if (!busy) {
+      return (
+        <div className="w-full space-y-3">
+          <form
+            onSubmit={onTextSubmit}
+            className="flex items-center gap-2 rounded-full border border-neutral-300 bg-white py-1.5 pl-4 pr-1.5 shadow-sm focus-within:border-neutral-900"
+          >
+            <input
+              value={textDraft}
+              onChange={(e) => setTextDraft(e.target.value)}
+              placeholder={`${avatarName} に質問を入力`}
+              className="min-w-0 flex-1 bg-transparent py-1.5 text-sm outline-none placeholder:text-neutral-400"
+            />
+            {textDraft.trim() ? (
+              <button
+                type="submit"
+                className="shrink-0 rounded-full bg-neutral-900 px-4 py-2 text-sm font-bold text-white transition hover:bg-neutral-700"
+              >
+                送信
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void start()}
+                className="flex shrink-0 items-center gap-1.5 rounded-full bg-neutral-900 px-4 py-2 text-sm font-bold text-white transition hover:bg-neutral-700"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden>
+                  <rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" />
+                  <path
+                    d="M5 11a7 7 0 0 0 14 0M12 18v3"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    fill="none"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                マイクで話す
+              </button>
+            )}
+          </form>
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+              {error}
+            </div>
+          )}
+        </div>
+      );
+    }
     return (
       <div className="w-full space-y-3">
         <CompactBar
