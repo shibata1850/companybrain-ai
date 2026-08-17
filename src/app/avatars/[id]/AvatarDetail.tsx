@@ -498,24 +498,33 @@ export default function AvatarDetail({ id }: { id: string }) {
     if (!el) return;
     el.scrollTo({ left: el.clientWidth * i, behavior: 'smooth' });
   }, []);
-  // 初期表示は中央の「会話」。レイアウト確定前だと clientWidth が未確定で
-  // 左端(学習)が見えることがあったため、描画完了後(rAF 2回)に合わせる。
+  // 初期表示は中央の「会話」。
+  // 以前は effect(isPhone 依存)で合わせていたが、データ読み込み前は
+  // スケルトン表示でスワイプ面がまだ存在せず、初期化が空振りして左端
+  // (学習)が見えるバグがあった。面の DOM が生まれた瞬間に呼ばれる
+  // callback ref にすることで、読み込みタイミングに依存しなくする。
+  const paneInitDoneRef = useRef(false);
+  const attachPaneScroller = useCallback((el: HTMLDivElement | null) => {
+    paneScrollerRef.current = el;
+    if (!el || paneInitDoneRef.current) return;
+    requestAnimationFrame(() => {
+      el.scrollLeft = el.clientWidth;
+      setActivePane(1);
+      paneInitDoneRef.current = true;
+    });
+  }, []);
+  // サイドバー等で別ブレインへ切り替えたときも「会話」から始める
+  // (コンポーネントが再マウントされない遷移への保険)。
   useEffect(() => {
-    if (!isPhone) return;
+    paneInitDoneRef.current = false;
     const el = paneScrollerRef.current;
     if (!el) return;
-    let raf2 = 0;
-    const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
-        el.scrollLeft = el.clientWidth;
-        setActivePane(1);
-      });
+    requestAnimationFrame(() => {
+      el.scrollLeft = el.clientWidth;
+      setActivePane(1);
+      paneInitDoneRef.current = true;
     });
-    return () => {
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
-    };
-  }, [isPhone]);
+  }, [id]);
 
   // 通話画面(全面)の表示中は背面のページスクロールを止める。スマホの
   // ブラウザで背面が動くと、閉じたときに位置が飛んで不具合に見える。
@@ -1247,7 +1256,7 @@ export default function AvatarDetail({ id }: { id: string }) {
 
           {/* スワイプ面。スクロールスナップで1面ずつ止まる。 */}
           <div
-            ref={paneScrollerRef}
+            ref={attachPaneScroller}
             onScroll={(e) => {
               const el = e.currentTarget;
               const i = Math.round(el.scrollLeft / el.clientWidth);
