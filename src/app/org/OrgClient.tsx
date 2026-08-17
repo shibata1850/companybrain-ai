@@ -126,7 +126,7 @@ export default function OrgClient() {
   const seatsFull = !!org && org.used >= org.seats;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5">
+    <div className="mx-auto max-w-3xl space-y-5">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
           {org ? org.name : 'メンバー管理'}
