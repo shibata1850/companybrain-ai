@@ -490,18 +490,31 @@ export default function AvatarDetail({ id }: { id: string }) {
   const isPhone = useIsMobile();
   const paneScrollerRef = useRef<HTMLDivElement | null>(null);
   const [activePane, setActivePane] = useState(1);
+  // 会話ツール(スレッド切替・検索・ピン・書き出し)の表示。スマホでは
+  // 上部を2段(名前+タブ)だけに保つため、既定では畳んでおく。
+  const [chatToolsOpen, setChatToolsOpen] = useState(false);
   const goToPane = useCallback((i: number) => {
     const el = paneScrollerRef.current;
     if (!el) return;
     el.scrollTo({ left: el.clientWidth * i, behavior: 'smooth' });
   }, []);
-  // 初期表示は中央の「会話」。
+  // 初期表示は中央の「会話」。レイアウト確定前だと clientWidth が未確定で
+  // 左端(学習)が見えることがあったため、描画完了後(rAF 2回)に合わせる。
   useEffect(() => {
     if (!isPhone) return;
     const el = paneScrollerRef.current;
     if (!el) return;
-    el.scrollLeft = el.clientWidth;
-    setActivePane(1);
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        el.scrollLeft = el.clientWidth;
+        setActivePane(1);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
   }, [isPhone]);
 
   // 通話画面(全面)の表示中は背面のページスクロールを止める。スマホの
@@ -1057,6 +1070,8 @@ export default function AvatarDetail({ id }: { id: string }) {
         avatarId={avatar.id}
         avatarName={avatar.name}
         avatarUrl={avatar.cover_url}
+        slim={isPhone}
+        toolsOpen={chatToolsOpen}
         threads={chatStore.threads}
         currentThreadId={chatStore.currentId}
         messages={transcript}
@@ -1117,7 +1132,7 @@ export default function AvatarDetail({ id }: { id: string }) {
         <div className="flex min-h-0 min-w-0 flex-1 flex-col space-y-3 sm:block xl:flex-1">
       {/* LINE 型チャットヘッダー: 戻る / 相手(ブレイン)/ メニュー。
           情報・設定・素材は右上メニューに集約し、画面は会話を主役にする。 */}
-      <div className="flex items-center gap-2 rounded-2xl border border-neutral-200 bg-white px-2.5 py-2 shadow-sm">
+      <div className="flex shrink-0 items-center gap-2 rounded-none border-b border-neutral-200/80 bg-white px-1 py-1.5 sm:rounded-2xl sm:border sm:border-neutral-200 sm:px-2.5 sm:py-2 sm:shadow-sm">
         <Link
           href="/dashboard"
           aria-label="ブレイン一覧へ戻る"
@@ -1166,6 +1181,26 @@ export default function AvatarDetail({ id }: { id: string }) {
         </div>
         <button
           type="button"
+          onClick={() => setChatToolsOpen((v) => !v)}
+          aria-expanded={chatToolsOpen}
+          aria-label="会話ツール(スレッド・検索・書き出し)"
+          className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition sm:hidden ${
+            chatToolsOpen
+              ? 'bg-neutral-900 text-white'
+              : 'bg-neutral-100 text-neutral-600'
+          }`}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden>
+            <path
+              d="M4 7h16M4 12h16M4 17h16"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+        <button
+          type="button"
           onClick={() => setMenuOpen((v) => !v)}
           aria-expanded={menuOpen}
           className={`hidden shrink-0 rounded-full px-3 py-2 text-xs font-bold transition sm:block xl:hidden ${
@@ -1190,7 +1225,7 @@ export default function AvatarDetail({ id }: { id: string }) {
           <div
             role="tablist"
             aria-label="ブレイン画面の切り替え"
-            className="flex shrink-0 rounded-xl bg-neutral-100 p-1 text-sm font-bold"
+            className="flex shrink-0 rounded-xl bg-neutral-100 p-0.5 text-sm font-bold"
           >
             {['学習させる', '会話', '設定'].map((label, i) => (
               <button
@@ -1199,7 +1234,7 @@ export default function AvatarDetail({ id }: { id: string }) {
                 role="tab"
                 aria-selected={activePane === i}
                 onClick={() => goToPane(i)}
-                className={`flex-1 rounded-lg py-2 transition ${
+                className={`flex-1 rounded-lg py-1.5 transition ${
                   activePane === i
                     ? 'bg-white text-neutral-900 shadow-sm'
                     : 'text-neutral-500'
@@ -1377,7 +1412,66 @@ function TrainingPanel({
         </div>
       </div>
 
-      <div className="flex rounded-full bg-neutral-100 p-0.5 text-xs">
+      {/* スマホ: アイコン+ラベルの3タイル。文字だけの小さなボタンは
+          押しづらく、何を選んでいるかも分かりにくかった。 */}
+      <div className="grid grid-cols-3 gap-2 sm:hidden">
+        <button
+          type="button"
+          onClick={() => setMode('text')}
+          className={`rounded-xl border-2 px-1 pb-2 pt-2.5 text-center transition active:scale-[0.98] ${
+            mode === 'text'
+              ? 'border-neutral-900 bg-neutral-900 text-white'
+              : 'border-neutral-200 bg-white text-neutral-600'
+          }`}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden className="mx-auto">
+            <path
+              d="M4 6h16M4 12h16M4 18h10"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </svg>
+          <span className="mt-1 block text-xs font-bold">テキスト</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode('document')}
+          className={`rounded-xl border-2 px-1 pb-2 pt-2.5 text-center transition active:scale-[0.98] ${
+            mode === 'document'
+              ? 'border-neutral-900 bg-neutral-900 text-white'
+              : 'border-neutral-200 bg-white text-neutral-600'
+          }`}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden className="mx-auto">
+            <path
+              d="M6 2h9l5 5v15H6z M14 2v6h6"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              fill="none"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className="mt-1 block text-xs font-bold">ファイル</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode('video')}
+          className={`rounded-xl border-2 px-1 pb-2 pt-2.5 text-center transition active:scale-[0.98] ${
+            mode === 'video'
+              ? 'border-neutral-900 bg-neutral-900 text-white'
+              : 'border-neutral-200 bg-white text-neutral-600'
+          }`}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden className="mx-auto">
+            <rect x="3" y="5" width="13" height="14" rx="2" stroke="currentColor" strokeWidth="1.8" fill="none" />
+            <path d="M16 10l5-3v10l-5-3z" fill="currentColor" />
+          </svg>
+          <span className="mt-1 block text-xs font-bold">動画</span>
+        </button>
+      </div>
+
+      <div className="hidden rounded-full bg-neutral-100 p-0.5 text-xs sm:flex">
         <button
           type="button"
           onClick={() => setMode('text')}
@@ -1685,6 +1779,8 @@ function TranscriptPanel({
   avatarId,
   avatarName,
   avatarUrl,
+  slim,
+  toolsOpen,
   threads,
   currentThreadId,
   messages,
@@ -1704,6 +1800,10 @@ function TranscriptPanel({
   avatarName: string;
   /** 相手(ブレイン)のアイコン。LINE 風にバブルの横へ出す。 */
   avatarUrl: string | null;
+  /** スマホの省スペース表示。ツール行(会話数・検索・スレッド)を隠す。 */
+  slim?: boolean;
+  /** slim のとき、ヘッダーの「≡」からツール行を開いた状態。 */
+  toolsOpen?: boolean;
   threads: ChatThread[];
   currentThreadId: string | null;
   messages: TranscriptMessage[];
@@ -1781,7 +1881,9 @@ function TranscriptPanel({
 
   return (
     <section className="flex min-h-0 flex-1 flex-col sm:block">
-      {/* Header: collapse toggle on the left, view tools on the right. */}
+      {/* Header: collapse toggle on the left, view tools on the right.
+          スマホ(slim)では既定で隠し、「≡」で開く。 */}
+      {(!slim || toolsOpen) && (
       <div className="flex flex-wrap items-center justify-between gap-2">
         <button
           type="button"
@@ -1891,9 +1993,10 @@ function TranscriptPanel({
           )}
         </div>
       </div>
+      )}
 
       {open && (
-        <div className="-mx-4 mt-3 flex min-h-0 flex-1 flex-col overflow-hidden border-y border-neutral-200 bg-white anim-fade-in sm:mx-0 sm:block sm:rounded-2xl sm:border-x">
+        <div className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white anim-fade-in sm:mt-3 sm:block">
           {searchOpen && (
             <div className="flex items-center gap-2 border-b border-neutral-100 px-4 py-2">
               <svg
@@ -1984,7 +2087,9 @@ function TranscriptPanel({
             </aside>
 
             <div className="flex min-w-0 flex-1 flex-col">
-              {/* Mobile fallback: a plain select for switching threads. */}
+              {/* Mobile fallback: a plain select for switching threads.
+                  slim では「≡」を開いたときだけ出す。 */}
+              {(!slim || toolsOpen) && (
               <div className="flex items-center gap-2 border-b border-neutral-100 px-3 py-2 sm:hidden">
                 <select
                   value={currentThreadId ?? ''}
@@ -2002,6 +2107,7 @@ function TranscriptPanel({
                   <option value="__new__">＋ 新しい会話</option>
                 </select>
               </div>
+              )}
 
               <div ref={scrollerRef} className="flex-1 overflow-y-auto bg-slate-100 p-4">
                 {messages.length === 0 && !partialUser && !partialAgent ? (

@@ -1458,10 +1458,17 @@ export default function StreamingStage({
             ) : (
               <button
                 type="button"
-                onClick={() => void start()}
-                className="flex shrink-0 items-center gap-1.5 rounded-full bg-neutral-900 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-neutral-700"
+                onClick={() => {
+                  void start();
+                  // スマホは通話画面へ直行し、接続中もその画面で待つ。
+                  // PC は従来どおりチャットに留まる。
+                  if (isPhone && minimized) onToggleMinimized?.();
+                }}
+                aria-label="マイクで話す"
+                title="マイクで話す"
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-neutral-900 text-white transition hover:bg-neutral-700 active:scale-95"
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden>
+                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
                   <rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" />
                   <path
                     d="M5 11a7 7 0 0 0 14 0M12 18v3"
@@ -1471,7 +1478,6 @@ export default function StreamingStage({
                     strokeLinecap="round"
                   />
                 </svg>
-                マイクで話す
               </button>
             )}
           </form>
