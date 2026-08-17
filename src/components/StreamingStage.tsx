@@ -1270,7 +1270,16 @@ export default function StreamingStage({
         text: trimmed,
         at: Date.now(),
       });
-      setStatus('thinking');
+      // セッション無しの単発テキスト質問は「通話」の状態機械に触れない。
+      // 以前は status を thinking にしていたため isLive 扱いになり、
+      // 通話していないのに緑の「通話中」バナーが出て、回答と同時に消える
+      // 紛らわしい挙動になっていた。待ち時間の表示は入力中バブルで行う。
+      const oneShot = !textOnlyRef.current;
+      if (oneShot) {
+        onPartialRef.current?.('agent', '考えています…');
+      } else {
+        setStatus('thinking');
+      }
       void (async () => {
         try {
           const res = await fetch(`/api/avatars/${avatarId}/ask`, {
@@ -1295,11 +1304,13 @@ export default function StreamingStage({
           const msg = e instanceof Error ? e.message : String(e);
           setError(`回答の生成に失敗しました: ${msg}`);
         } finally {
-          // テキスト専用セッション中は「聞いています」に戻す。セッション
-          // 無しの単発質問なら待機(idle)に戻し、ライブ用UIを出さない。
-          setStatus((s) =>
-            s === 'thinking' ? (textOnlyRef.current ? 'listening' : 'idle') : s,
-          );
+          if (oneShot) {
+            // 単発質問: 「考えています…」の入力中バブルを消すだけ。
+            onPartialRef.current?.('agent', null);
+          } else {
+            // テキスト専用セッション中は「聞いています」に戻す。
+            setStatus((s) => (s === 'thinking' ? 'listening' : s));
+          }
         }
       })();
       return;

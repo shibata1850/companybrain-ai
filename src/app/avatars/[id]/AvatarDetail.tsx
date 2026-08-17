@@ -2197,7 +2197,7 @@ function TranscriptPanel({
                         </span>
                         <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-white px-3.5 py-2.5 text-sm text-neutral-900 opacity-90 shadow-sm">
                           <p className="text-xs uppercase tracking-wider opacity-60">
-                            {avatarName}(話し中)
+                            {avatarName}(回答中)
                           </p>
                           <p className="mt-1 whitespace-pre-wrap leading-relaxed">
                             {partialAgent}
