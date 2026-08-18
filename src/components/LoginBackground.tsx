@@ -19,7 +19,7 @@ const CARDS: DemoCard[] = [
   { emoji: '🚀', name: '営業 トップセールス', line: '値引きには必ず条件交換をぶつけるんだ。', grad: 'from-rose-500 to-orange-500' },
   { emoji: '⚡', name: 'シニアエンジニア', line: '命名 > テスト > 構造、の順で見ることが多い。', grad: 'from-emerald-500 to-teal-500' },
   { emoji: '🏗️', name: '建築法務ブレイン', line: '建築基準法 第42条の道路の定義について…', grad: 'from-amber-500 to-yellow-500' },
-  { emoji: '⚖️', name: '顧問税理士', line: '交際費は1人5,000円以下なら会議費に…', grad: 'from-sky-500 to-cyan-500' },
+  { emoji: '⚖️', name: '顧問税理士', line: '交際費は1人10,000円以下なら会議費に…', grad: 'from-sky-500 to-cyan-500' },
   { emoji: '🏥', name: '院内ルール', line: '夜勤帯の薬剤受け渡しは二名確認が原則です。', grad: 'from-pink-500 to-fuchsia-600' },
   { emoji: '🚚', name: '配車マネージャー', line: '長距離便の休憩は4時間ごとに必須です。', grad: 'from-lime-500 to-green-600' },
   { emoji: '🛍️', name: '店舗 FAQ', line: '返品はレシートがあれば14日以内で対応可能。', grad: 'from-violet-500 to-purple-600' },
