@@ -535,18 +535,24 @@ export default function AvatarDetail({ id }: { id: string }) {
     if (!isPhone) return;
     const vv = window.visualViewport;
     if (!vv) return;
+    // 高さの追従は resize のみ。以前は scroll にも反応して毎回ページ位置を
+    // 強制的に戻していたため、iOS 自身の「入力欄を見せるための移動」と
+    // 衝突して入力中に画面がガタつく不具合になっていた。位置の管理は
+    // ブラウザに任せ、こちらは高さだけを合わせる。連続発火は rAF で
+    // 1フレームにまとめる(キーボード開閉アニメ中の段付きを抑える)。
+    let raf = 0;
     const apply = () => {
-      document.documentElement.style.setProperty('--vvh', `${vv.height}px`);
-      // iOS はフォーカス時にページ全体を上へずらすことがある。シェルは
-      // 画面ぴったりの高さなので、ずれは戻して隙間を作らない。
-      if (window.scrollY !== 0) window.scrollTo(0, 0);
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        document.documentElement.style.setProperty('--vvh', `${vv.height}px`);
+      });
     };
     apply();
     vv.addEventListener('resize', apply);
-    vv.addEventListener('scroll', apply);
     return () => {
+      if (raf) cancelAnimationFrame(raf);
       vv.removeEventListener('resize', apply);
-      vv.removeEventListener('scroll', apply);
       document.documentElement.style.removeProperty('--vvh');
     };
   }, [isPhone]);
@@ -2068,7 +2074,7 @@ function TranscriptPanel({
                   }
                 }}
                 placeholder={isMobile ? '会話を検索…' : '会話を検索…(Esc で閉じる)'}
-                className="flex-1 bg-transparent text-xs outline-none placeholder:text-neutral-400"
+                className="flex-1 bg-transparent text-base outline-none placeholder:text-neutral-400 sm:text-xs"
               />
               {search && (
                 <span className="shrink-0 text-xs text-neutral-500">
@@ -2131,7 +2137,7 @@ function TranscriptPanel({
                     if (e.target.value === '__new__') onNewThread();
                     else if (e.target.value) onSwitchThread(e.target.value);
                   }}
-                  className="w-full rounded-lg border border-neutral-300 bg-white px-2 py-1.5 text-xs"
+                  className="w-full rounded-lg border border-neutral-300 bg-white px-2 py-1.5 text-base"
                 >
                   {sortedThreads.map((t) => (
                     <option key={t.id} value={t.id}>

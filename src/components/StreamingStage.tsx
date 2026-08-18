@@ -1456,7 +1456,7 @@ export default function StreamingStage({
           value={textDraft}
           onChange={(e) => setTextDraft(e.target.value)}
           placeholder={busy ? 'テキストでも質問できます' : `${avatarName} に質問を入力`}
-          className="min-w-0 flex-1 bg-transparent py-1.5 text-sm outline-none placeholder:text-neutral-400"
+          className="min-w-0 flex-1 bg-transparent py-1.5 text-base outline-none placeholder:text-neutral-400"
         />
         {textDraft.trim() ? (
           <button
@@ -1576,7 +1576,7 @@ export default function StreamingStage({
               value={textDraft}
               onChange={(e) => setTextDraft(e.target.value)}
               placeholder={`${avatarName} にテキストで質問…`}
-              className="flex-1 bg-transparent px-2 py-1 text-sm outline-none placeholder:text-neutral-400"
+              className="flex-1 bg-transparent px-2 py-1 text-base outline-none placeholder:text-neutral-400"
             />
             <button
               type="submit"
@@ -2029,7 +2029,7 @@ export default function StreamingStage({
             value={textDraft}
             onChange={(e) => setTextDraft(e.target.value)}
             placeholder={`${avatarName} にテキストで質問…`}
-            className="flex-1 bg-transparent px-2 py-1 text-sm outline-none placeholder:text-neutral-400"
+            className="flex-1 bg-transparent px-2 py-1 text-base outline-none placeholder:text-neutral-400"
           />
           <button
             type="submit"
