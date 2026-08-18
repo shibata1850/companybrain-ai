@@ -2216,12 +2216,17 @@ function Pricing() {
               <p className="text-sm text-neutral-300">料金</p>
               <p className="mt-1 flex items-baseline justify-center gap-1 tracking-tight">
                 <span className="text-3xl font-semibold">
-                  ¥{ENTERPRISE_PLAN.priceJpy.toLocaleString('ja-JP')}〜
+                  ¥{ENTERPRISE_PLAN.priceJpy.toLocaleString('ja-JP')}
                 </span>
                 <span className="text-sm text-neutral-400">/ 1シート・月</span>
               </p>
-              <p className="mt-1 text-xs text-neutral-400">
-                税別。人数と要件に応じてご案内します(請求書 / 銀行振込)。
+              <p className="mt-1 text-sm text-neutral-200">
+                + 基本料 ¥20,000/社・月(最低5シート)
+              </p>
+              <p className="mt-2 text-xs text-neutral-400">
+                例: 5名 月29,900円 / 20名 月59,600円(税別)。
+                別途、導入支援 ¥100,000(体験から30日以内のご契約で半額)。
+                請求書・年払い標準。
               </p>
               <Link
                 href="/signup"
