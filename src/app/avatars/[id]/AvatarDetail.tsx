@@ -526,37 +526,6 @@ export default function AvatarDetail({ id }: { id: string }) {
     });
   }, [id]);
 
-  // スマホのキーボード対策。iOS はキーボードが開いても 100dvh が変わらず
-  // 画面に「被さる」ため、高さ固定のシェルでは入力欄がキーボードの裏に
-  // 隠れて文字が打てなくなる(チャット不能の報告の原因)。実際に見えて
-  // いる高さ(visualViewport)を CSS 変数 --vvh に流し、シェルの高さを
-  // これ基準にすることで、キーボード表示中は画面が縮んで入力欄が上に残る。
-  useEffect(() => {
-    if (!isPhone) return;
-    const vv = window.visualViewport;
-    if (!vv) return;
-    // 高さの追従は resize のみ。以前は scroll にも反応して毎回ページ位置を
-    // 強制的に戻していたため、iOS 自身の「入力欄を見せるための移動」と
-    // 衝突して入力中に画面がガタつく不具合になっていた。位置の管理は
-    // ブラウザに任せ、こちらは高さだけを合わせる。連続発火は rAF で
-    // 1フレームにまとめる(キーボード開閉アニメ中の段付きを抑える)。
-    let raf = 0;
-    const apply = () => {
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        document.documentElement.style.setProperty('--vvh', `${vv.height}px`);
-      });
-    };
-    apply();
-    vv.addEventListener('resize', apply);
-    return () => {
-      if (raf) cancelAnimationFrame(raf);
-      vv.removeEventListener('resize', apply);
-      document.documentElement.style.removeProperty('--vvh');
-    };
-  }, [isPhone]);
-
   // 通話画面(全面)の表示中は背面のページスクロールを止める。スマホの
   // ブラウザで背面が動くと、閉じたときに位置が飛んで不具合に見える。
   useEffect(() => {
@@ -1137,7 +1106,7 @@ export default function AvatarDetail({ id }: { id: string }) {
         className={
           stageMinimized
             ? 'border-t border-neutral-200 bg-white pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] sm:border-0 sm:bg-transparent sm:p-0'
-            : 'anim-call-in fixed inset-x-0 top-0 z-50 h-[var(--vvh,100dvh)] overflow-y-auto bg-white p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:static sm:h-auto sm:overflow-visible sm:p-0'
+            : 'anim-call-in fixed inset-0 z-50 overflow-y-auto bg-white p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:static sm:overflow-visible sm:p-0'
         }
       >
         <div className="mx-auto w-full max-w-2xl">
@@ -1167,7 +1136,7 @@ export default function AvatarDetail({ id }: { id: string }) {
        する(ページと会話の二重スクロールが操作感を悪くしていた)。
        上の 5rem = ヘッダー3.5rem + main 上余白1.5rem。下の負マージンは
        layout が下部ナビ用に入れる余白の打ち消し(この画面はナビ非表示)。 */
-    <div className="mx-auto flex h-[calc(var(--vvh,100dvh)-5rem)] w-full max-w-2xl flex-col -mb-[calc(6rem+env(safe-area-inset-bottom))] sm:mb-0 sm:block sm:h-auto xl:max-w-5xl">
+    <div className="mx-auto flex h-[calc(100dvh-5rem)] w-full max-w-2xl flex-col -mb-[calc(6rem+env(safe-area-inset-bottom))] sm:mb-0 sm:block sm:h-auto xl:max-w-5xl">
       <div className="flex min-h-0 flex-1 flex-col sm:block xl:flex xl:flex-row xl:items-start xl:gap-6">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col space-y-3 sm:block xl:flex-1">
       {/* LINE 型チャットヘッダー: 戻る / 相手(ブレイン)/ メニュー。
