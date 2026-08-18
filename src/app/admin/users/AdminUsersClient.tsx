@@ -9,6 +9,8 @@ type User = {
   email: string;
   role: 'admin' | 'member';
   admin_label: string | null;
+  trial_plan?: string | null;
+  trial_until?: string | null;
   created_at: string;
   suspended_at: string | null;
   plan: 'free' | 'starter' | 'standard' | 'pro';
@@ -425,6 +427,18 @@ function UserRow({
               一時停止中
             </span>
           )}
+          {u.trial_until && new Date(u.trial_until).getTime() > Date.now() && (
+            <span className="shrink-0 rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+              体験中 残り
+              {Math.max(
+                1,
+                Math.ceil(
+                  (new Date(u.trial_until).getTime() - Date.now()) / 86_400_000,
+                ),
+              )}
+              日
+            </span>
+          )}
           {u.company && (
             <span className="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-bold text-neutral-600">
               {u.company}
@@ -444,6 +458,15 @@ function UserRow({
           ) : (
             <PlanSelect email={u.email} value={u.plan} onSaved={onSaved} />
           ))}
+        {u.role !== 'admin' && !u.org_id && (
+          <TrialButton
+            email={u.email}
+            active={
+              !!u.trial_until && new Date(u.trial_until).getTime() > Date.now()
+            }
+            onSaved={onSaved}
+          />
+        )}
         {u.role !== 'admin' && <ResetQuestionsButton email={u.email} />}
         <ResetPasswordButton email={u.email} />
         <SuspendButton
@@ -460,6 +483,66 @@ function UserRow({
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * 14日間の体験(スタンダード相当)の付与/解除。営業導線用で、付与すると
+ * その時点から14日。再度押すと解除。組織所属メンバーには出さない
+ * (シート上限が優先されるため)。
+ */
+function TrialButton({
+  email,
+  active,
+  onSaved,
+}: {
+  email: string;
+  active: boolean;
+  onSaved: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function toggle() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, trial: active ? 'clear' : 'grant14' }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <span className="inline-flex flex-col">
+      <button
+        type="button"
+        onClick={toggle}
+        disabled={busy}
+        className={`text-xs font-medium transition disabled:opacity-40 ${
+          active
+            ? 'text-emerald-700 hover:text-red-600'
+            : 'text-neutral-500 hover:text-neutral-900'
+        }`}
+        title={
+          active
+            ? '体験を解除する'
+            : '14日間の体験(スタンダード相当)を付与する'
+        }
+      >
+        {active ? '体験を解除' : '体験14日を付与'}
+      </button>
+      {error && (
+        <span className="max-w-[16rem] text-[10px] text-red-600">{error}</span>
+      )}
+    </span>
   );
 }
 

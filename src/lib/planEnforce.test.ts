@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   canCreateBrain,
   canAsk,
@@ -20,6 +20,7 @@ const usageFor = (
   plan: planById(id),
   brainsUsed: 0,
   questionsThisMonth: 0,
+  trialUntil: null,
   ...over,
 });
 
@@ -117,5 +118,82 @@ describe('model selection', () => {
     expect(adminLiveModel('fallback-live')).toBe('fallback-live');
     process.env.GEMINI_LIVE_MODEL_ADMIN = 'admin-live';
     expect(adminLiveModel('fallback-live')).toBe('admin-live');
+  });
+});
+
+describe('体験(トライアル)のプラン解決', () => {
+  /**
+   * 営業が付与する14日体験は課金に直結するため、適用条件を固定する:
+   * 期限内の個人 → trial_plan / 期限切れ → 本来のプラン /
+   * 組織所属者 → シート上限が優先(体験は効かない)。
+   */
+  function makeDb(userRow: Record<string, unknown>) {
+    const builder = () => {
+      const b: Record<string, unknown> = {};
+      const chain = () => b;
+      for (const m of ['select', 'eq', 'is', 'in', 'gte', 'not', 'order', 'limit', 'range']) {
+        b[m] = chain;
+      }
+      b.single = async () => ({ data: userRow, error: null });
+      // count クエリ(ブレイン数・質問数)は 0 で返す
+      b.then = (resolve: (v: unknown) => unknown) =>
+        resolve({ data: [], count: 0, error: null });
+      return b;
+    };
+    return { from: builder, rpc: async () => ({ data: [], error: null }) };
+  }
+
+  async function usageWith(userRow: Record<string, unknown>, orgId?: string) {
+    vi.resetModules();
+    vi.doMock('./supabase', () => ({ supabaseAdmin: () => makeDb(userRow) }));
+    const { getPlanUsage } = await import('./planEnforce');
+    return getPlanUsage({
+      email: 'test@example.com',
+      role: 'member',
+      org_id: orgId ?? null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+  }
+
+  afterEach(() => {
+    vi.doUnmock('./supabase');
+    vi.resetModules();
+  });
+
+  it('期限内の体験は trial_plan の上限で動作する', async () => {
+    const until = new Date(Date.now() + 7 * 86_400_000).toISOString();
+    const usage = await usageWith({
+      plan: 'free',
+      trial_plan: 'standard',
+      trial_until: until,
+    });
+    expect(usage.plan.id).toBe('standard');
+    expect(usage.trialUntil).toBe(until);
+  });
+
+  it('期限切れの体験は無視され、本来のプランに戻る', async () => {
+    const usage = await usageWith({
+      plan: 'free',
+      trial_plan: 'standard',
+      trial_until: new Date(Date.now() - 86_400_000).toISOString(),
+    });
+    expect(usage.plan.id).toBe('free');
+    expect(usage.trialUntil).toBeNull();
+  });
+
+  it('組織所属者はシート上限が優先(体験は効かない)', async () => {
+    const usage = await usageWith(
+      {
+        plan: 'free',
+        trial_plan: 'standard',
+        trial_until: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+      },
+      'org-1',
+    );
+    expect(usage.plan.id).toBe('enterprise');
+    // 席上限の整備(2026-08 決定)が効いていることも固定する
+    expect(usage.plan.limits.monthlyQuestions).toBe(1000);
+    expect(usage.plan.limits.monthlyVoiceMinutes).toBe(180);
+    expect(usage.plan.limits.brains).toBe(10);
   });
 });

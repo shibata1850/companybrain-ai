@@ -23,6 +23,8 @@ export async function GET() {
   // org_id / org_role(0026)も返し、どのアカウントがどの組織に属すか
   // (=つながり)を管理画面で見せる。0026 未適用の環境では従来列で
   // 取り直す(org 情報は null 扱い)。
+  const withTrial =
+    'email, role, admin_label, created_at, suspended_at, plan, company, org_id, org_role, trial_plan, trial_until';
   const withOrg =
     'email, role, admin_label, created_at, suspended_at, plan, company, org_id, org_role';
   const legacy =
@@ -40,14 +42,18 @@ export async function GET() {
     );
   let rows: Array<Record<string, unknown>>;
   try {
-    // org_id / org_role(0026)が未適用の環境では従来列で取り直す。
-    rows = (await listUsers(withOrg)).rows;
+    // trial 列(0029)→ org 列(0026)→ 従来列 の順でフォールバック。
+    rows = (await listUsers(withTrial)).rows;
   } catch {
     try {
-      rows = (await listUsers(legacy)).rows;
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      return NextResponse.json({ error: message }, { status: 500 });
+      rows = (await listUsers(withOrg)).rows;
+    } catch {
+      try {
+        rows = (await listUsers(legacy)).rows;
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        return NextResponse.json({ error: message }, { status: 500 });
+      }
     }
   }
 
@@ -81,13 +87,15 @@ export async function PATCH(req: NextRequest) {
   if (!(await requireAdmin())) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
-  const { email, admin_label, role, plan } = (await req
+  const { email, admin_label, role, plan, trial } = (await req
     .json()
     .catch(() => ({}))) as {
     email?: string;
     admin_label?: string | null;
     role?: string;
     plan?: string;
+    /** 'grant14' = 14日間の体験(スタンダード相当)を付与 / 'clear' = 解除 */
+    trial?: 'grant14' | 'clear';
   };
   const cleanEmail = email?.trim().toLowerCase();
   if (!cleanEmail) {
@@ -104,6 +112,17 @@ export async function PATCH(req: NextRequest) {
   if (plan === 'free' || plan === 'starter' || plan === 'standard' || plan === 'pro') {
     updates.plan = plan;
   }
+  // 体験(トライアル)。営業導線のため管理者だけが付与できる。再付与は
+  // その時点から14日で延長になる。
+  if (trial === 'grant14') {
+    updates.trial_plan = 'standard';
+    updates.trial_until = new Date(
+      Date.now() + 14 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+  } else if (trial === 'clear') {
+    updates.trial_plan = null;
+    updates.trial_until = null;
+  }
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ ok: true });
   }
@@ -113,7 +132,14 @@ export async function PATCH(req: NextRequest) {
     .update(updates)
     .eq('email', cleanEmail);
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    // trial 列(0029)未適用の環境では列エラーになる。原因を明示する。
+    const hint = /trial_/.test(error.message)
+      ? 'マイグレーション 0029_trial.sql が未適用です。'
+      : '';
+    return NextResponse.json(
+      { error: `${hint}${error.message}` },
+      { status: 500 },
+    );
   }
   return NextResponse.json({ ok: true });
 }

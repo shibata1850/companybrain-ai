@@ -7,6 +7,8 @@ export type PlanUsage = {
   plan: Plan;
   brainsUsed: number;
   questionsThisMonth: number;
+  /** 体験(トライアル)適用中なら期限。表示用(残り日数バナー)。 */
+  trialUntil: string | null;
 };
 
 /**
@@ -22,25 +24,41 @@ export async function getPlanUsage(user: AppUser): Promise<PlanUsage> {
   // downgrade a paying user to 'free'. The caller surfaces this as
   // a 500 so the next attempt re-checks.
   // questions_reset_at(0025)が未適用の環境では plan だけで取り直す。
-  type PlanRow = { plan?: string; questions_reset_at?: string | null };
+  type PlanRow = {
+    plan?: string;
+    questions_reset_at?: string | null;
+    trial_plan?: string | null;
+    trial_until?: string | null;
+  };
   let row: PlanRow | null = null;
   let planErr: { message: string } | null = null;
   {
-    const full = await db
+    // trial 列(0029)→ questions_reset_at 列(0025)→ plan のみ、の順で
+    // 未適用のDBでも読めるように段階的にフォールバックする。
+    const withTrial = await db
       .from('app_users')
-      .select('plan, questions_reset_at')
+      .select('plan, questions_reset_at, trial_plan, trial_until')
       .eq('email', user.email.toLowerCase())
       .single();
-    if (full.error) {
-      const legacy = await db
+    if (!withTrial.error) {
+      row = (withTrial.data as unknown as PlanRow | null) ?? null;
+    } else {
+      const full = await db
         .from('app_users')
-        .select('plan')
+        .select('plan, questions_reset_at')
         .eq('email', user.email.toLowerCase())
         .single();
-      row = (legacy.data as unknown as PlanRow | null) ?? null;
-      planErr = legacy.error;
-    } else {
-      row = (full.data as unknown as PlanRow | null) ?? null;
+      if (full.error) {
+        const legacy = await db
+          .from('app_users')
+          .select('plan')
+          .eq('email', user.email.toLowerCase())
+          .single();
+        row = (legacy.data as unknown as PlanRow | null) ?? null;
+        planErr = legacy.error;
+      } else {
+        row = (full.data as unknown as PlanRow | null) ?? null;
+      }
     }
   }
   if (planErr) {
@@ -50,7 +68,17 @@ export async function getPlanUsage(user: AppUser): Promise<PlanUsage> {
   // 「1シートあたりの上限」で制限する。個人アカウントは従来どおり。
   const inOrg = !!user.org_id;
   const planId = (row?.plan ?? 'free') as PlanId;
-  const plan = inOrg ? ENTERPRISE_PLAN : PLANS.find((p) => p.id === planId) ?? PLANS[0];
+  const basePlan = inOrg
+    ? ENTERPRISE_PLAN
+    : PLANS.find((p) => p.id === planId) ?? PLANS[0];
+  // 営業が付与した14日間の体験。期限内なら trial_plan の上限で動作する。
+  // 組織所属者はシート上限を優先(体験は個人アカウント向けの営業導線)。
+  const trialUntilDate = row?.trial_until ? new Date(row.trial_until) : null;
+  const trialPlan =
+    !inOrg && trialUntilDate && trialUntilDate.getTime() > Date.now()
+      ? PLANS.find((p) => p.id === row?.trial_plan) ?? null
+      : null;
+  const plan = trialPlan ?? basePlan;
 
   // Active brains (excludes trashed). Request-built brains (gifted by
   // an admin) are exempt from plan limits, so we never count them.
@@ -114,6 +142,7 @@ export async function getPlanUsage(user: AppUser): Promise<PlanUsage> {
     plan,
     brainsUsed: brainsUsed ?? 0,
     questionsThisMonth,
+    trialUntil: trialPlan ? row?.trial_until ?? null : null,
   };
 }
 
