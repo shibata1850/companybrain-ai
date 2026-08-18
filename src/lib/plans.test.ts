@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { PLANS, type PlanId } from './plans';
 
 describe('PLANS catalog', () => {
-  it('defines exactly the four known tiers in ascending price order', () => {
+  it('defines exactly the five known tiers in ascending price order', () => {
     const ids = PLANS.map((p) => p.id);
-    expect(ids).toEqual(['free', 'starter', 'standard', 'pro']);
+    expect(ids).toEqual(['free', 'starter', 'basic', 'standard', 'pro']);
     const prices = PLANS.map((p) => p.priceJpy);
     const sorted = [...prices].sort((a, b) => a - b);
     expect(prices).toEqual(sorted);

@@ -2180,13 +2180,13 @@ function Pricing() {
           title="まずは無料で。成長に合わせて選べる 4 プラン。"
           subtitle="いつでもアップグレード / 解約可能 · 税抜"
         />
-        <div className="mt-12 grid gap-5 lg:grid-cols-4">
+        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {PLANS.map((p) => (
             <PlanCard key={p.id} plan={p} />
           ))}
         </div>
 
-        {/* 企業向け(組織テナント・シート課金)。個人4プランとは別枠で
+        {/* 企業向け(組織テナント・シート課金)。個人5プランとは別枠で
             「お問い合わせ」導線にする。 */}
         <div className="mt-5 overflow-hidden rounded-2xl border border-neutral-900 bg-neutral-900 text-white">
           <div className="grid gap-6 p-6 sm:p-8 md:grid-cols-[1.1fr_1fr] md:items-center">

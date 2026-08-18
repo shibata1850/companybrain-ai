@@ -18,7 +18,7 @@
  *
  * Targets (for reference): initial year 45 cos, 3-year 135 cos.
  */
-export type PlanId = 'free' | 'starter' | 'standard' | 'pro' | 'enterprise';
+export type PlanId = 'free' | 'starter' | 'basic' | 'standard' | 'pro' | 'enterprise';
 
 export type Plan = {
   id: PlanId;
@@ -96,6 +96,34 @@ export const PLANS: Plan[] = [
       '素材 合計 30 MB まで',
       '監査ログ・履歴: 30 日分',
       'メールサポート',
+    ],
+  },
+  {
+    // 2026-08 新設。スターター→スタンダードの4倍ギャップを2倍刻みに整える
+    // 中間プラン。価格は公表ROI基準「1日15分の削減=月1万円」の直下に置き、
+    // 「削減効果 > 費用」を1行で言える位置に固定した。
+    id: 'basic',
+    name: 'ベーシック',
+    tagline: '毎日の調べ物を任せたい方へ',
+    priceJpy: 9800,
+    bestFor: '1〜10 名',
+    priceNote: '1 アカウントあたりの月額',
+    ctaLabel: '申し込む',
+    limits: {
+      brains: 5,
+      monthlyQuestions: 800,
+      monthlyVoiceMinutes: 120,
+      materialMb: 100,
+      historyDays: 90,
+      modelTier: 'pro',
+    },
+    features: [
+      'ブレイン 5 個',
+      'テキスト質問 月 800 回',
+      '音声会話 月 2 時間',
+      '素材 合計 100 MB まで',
+      '監査ログ・履歴: 90 日分',
+      '高精度モデルで回答',
     ],
   },
   {

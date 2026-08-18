@@ -581,6 +581,7 @@ function PlanSelect({
     >
       <option value="free">フリー</option>
       <option value="starter">スターター</option>
+      <option value="basic">ベーシック</option>
       <option value="standard">スタンダード</option>
       <option value="pro">プロ</option>
     </select>

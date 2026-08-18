@@ -334,6 +334,10 @@ export function liveModelForPlan(planId: PlanId, fallback: string): string {
   const byTier: Record<PlanId, string | undefined> = {
     free: process.env.GEMINI_LIVE_MODEL_FREE,
     starter: process.env.GEMINI_LIVE_MODEL_STARTER,
+    // ベーシック(2026-08 新設)は専用 env が未設定ならスタンダードに追随
+    basic:
+      process.env.GEMINI_LIVE_MODEL_BASIC ||
+      process.env.GEMINI_LIVE_MODEL_STANDARD,
     standard: process.env.GEMINI_LIVE_MODEL_STANDARD,
     pro: process.env.GEMINI_LIVE_MODEL_PRO,
     enterprise:

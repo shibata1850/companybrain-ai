@@ -109,7 +109,13 @@ export async function PATCH(req: NextRequest) {
   if (role === 'admin' || role === 'member') {
     updates.role = role;
   }
-  if (plan === 'free' || plan === 'starter' || plan === 'standard' || plan === 'pro') {
+  if (
+    plan === 'free' ||
+    plan === 'starter' ||
+    plan === 'basic' ||
+    plan === 'standard' ||
+    plan === 'pro'
+  ) {
     updates.plan = plan;
   }
   // 体験(トライアル)。営業導線のため管理者だけが付与できる。再付与は
