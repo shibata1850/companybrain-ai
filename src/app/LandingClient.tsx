@@ -578,6 +578,13 @@ function Features() {
       accent: 'from-sky-500 to-cyan-500',
     },
     {
+      icon: 'distill',
+      title: 'AIが資料を分析・要約',
+      body: '投入した資料は AI が中身を分析し、要約と回答ルールを自動で抽出。何十ページの規程も要点が整理され、質問には短く分かりやすく答えます。',
+      detail: '要約+回答ルールを自動抽出',
+      accent: 'from-teal-500 to-cyan-600',
+    },
+    {
       icon: 'shield',
       title: '既定でプライベート',
       body: 'ブレインは既定で作成者本人だけが利用可能。管理者にも中身は見えず、監査ログのみです。',
@@ -680,6 +687,12 @@ const ICONS = {
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M12 2.5l7.5 3v5.5c0 4.7-3.2 8.3-7.5 10-4.3-1.7-7.5-5.3-7.5-10V5.5z" />
       <path d="M9 12l2 2 4-4.5" />
+    </svg>
+  ),
+  distill: () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3.5 4.5h13L11 11.5V18l-3.5 2v-8.5z" />
+      <path d="M18.5 13l.9 2 2 .9-2 .9-.9 2-.9-2-2-.9 2-.9z" />
     </svg>
   ),
   log: () => (
