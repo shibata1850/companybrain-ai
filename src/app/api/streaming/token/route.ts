@@ -32,7 +32,7 @@ export const dynamic = 'force-dynamic';
  *     can show a debug peek if it wants
  */
 export async function POST(req: NextRequest) {
-  let body: { avatarId?: string; model?: string } = {};
+  let body: { avatarId?: string; model?: string; avatarVideo?: boolean } = {};
   try {
     body = await req.json();
   } catch {
@@ -297,36 +297,91 @@ ${styleSamples || '（参考発言なし。一般的な人柄として自然に�
         : memberPlanId
         ? liveModelForPlan(memberPlanId, env.geminiLiveModel())
         : env.geminiLiveModel();
-    const liveModel = modelOverride || baseLiveModel;
-    // Gemini 3 系の Live モデル(gemini-3.1-flash-live-preview など)は
-    // thinkingBudget ではなく thinkingLevel を使う仕様になった。旧
-    // フィールドを渡すと構成が拒否されるため、3 系では thinkingConfig
-    // を丸ごと省いて既定挙動に任せる(2.5 系は従来どおり budget=0)。
+
+    // アバター映像PoC(管理者限定・実験)。gemini-3.8-live の Live Avatar
+    // 出力を検証する。映像トークンは音声の約16倍の従量費(≈$0.37/分)の
+    // ため、プラン設計が決まるまで一般ユーザーには開放しない。
+    // クライアントの 1008 フォールバック中(modelOverride あり)は、
+    // 代替モデルがアバター非対応なので音声のみに落とす(強制的に 3.8 へ
+    // 戻すと 1008 ループになる)。
+    const avatarVideo =
+      body.avatarVideo === true && auth.me.role === 'admin' && !modelOverride;
+    const avatarName =
+      process.env.GEMINI_LIVE_AVATAR_NAME || 'Ben';
+
+    const requestedModel = avatarVideo
+      ? 'gemini-3.8-live'
+      : modelOverride || baseLiveModel;
+
+    // Gemini 3 系の Live モデルは thinkingBudget ではなく thinkingLevel を
+    // 使う仕様になった。旧フィールドを渡すと構成が拒否されるため、3 系では
+    // thinkingConfig を丸ごと省いて既定挙動に任せる(2.5 系は従来どおり
+    // budget=0)。
     const { thinkingConfig: _legacyThinking, ...liveConfigNoThinking } =
       liveConfig;
-    const constraintConfig = liveModel.startsWith('gemini-3')
-      ? liveConfigNoThinking
-      : liveConfig;
-    const token = await create({
-      config: {
-        uses: 5,
-        expireTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-        newSessionExpireTime: new Date(
-          Date.now() + 10 * 60 * 1000,
-        ).toISOString(),
-        liveConnectConstraints: {
-          model: liveModel,
-          config: constraintConfig,
-        },
-        httpOptions: { apiVersion: 'v1alpha' },
-      },
-    });
+    const configFor = (model: string): Record<string, unknown> => {
+      const base = model.startsWith('gemini-3')
+        ? liveConfigNoThinking
+        : liveConfig;
+      if (avatarVideo && model === 'gemini-3.8-live') {
+        return {
+          ...base,
+          responseModalities: [Modality.VIDEO],
+          avatarConfig: { avatarName },
+        };
+      }
+      return base;
+    };
+
+    // モデルがこのAPIキー/APIバージョンで使えない場合、mint 時点で
+    // 弾かれることがある(接続後の 1008 はクライアント側で別途処理)。
+    // 音声が全断しないよう、既知の Live モデルを順に試す。アバター映像は
+    // 3.8 専用なので代替を試さず、そのままエラーを返して診断に使う。
+    const SERVER_LIVE_FALLBACKS = [
+      'gemini-3.8-live',
+      'gemini-3.1-flash-live-preview',
+      'gemini-2.5-flash-native-audio-latest',
+    ];
+    const candidates = avatarVideo
+      ? [requestedModel]
+      : [
+          requestedModel,
+          ...SERVER_LIVE_FALLBACKS.filter((m) => m !== requestedModel),
+        ];
+
+    let token: unknown = null;
+    let liveModel = requestedModel;
+    let lastErr: unknown = null;
+    for (const m of candidates) {
+      try {
+        token = await create({
+          config: {
+            uses: 5,
+            expireTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+            newSessionExpireTime: new Date(
+              Date.now() + 10 * 60 * 1000,
+            ).toISOString(),
+            liveConnectConstraints: {
+              model: m,
+              config: configFor(m),
+            },
+            httpOptions: { apiVersion: 'v1alpha' },
+          },
+        });
+        liveModel = m;
+        break;
+      } catch (e) {
+        lastErr = e;
+        token = null;
+      }
+    }
+    if (!token) throw lastErr ?? new Error('authTokens.create failed');
     const tokenString =
       // SDK can return `{ name }` or just a string depending on version.
       typeof token === 'string'
         ? token
-        : (token?.name as string | undefined) ||
-          (token?.token as string | undefined);
+        : ((token as { name?: string })?.name as string | undefined) ||
+          ((token as { token?: string })?.token as string | undefined);
     if (!tokenString) {
       throw new Error('no token returned from authTokens.create');
     }
@@ -336,6 +391,8 @@ ${styleSamples || '（参考発言なし。一般的な人柄として自然に�
       voice: voiceName,
       voiceEnabled,
       voiceDisabledReason,
+      avatarVideo: avatarVideo || undefined,
+      avatarVideoName: avatarVideo ? avatarName : undefined,
       avatar: { id: avatar.id, name: avatar.name },
     });
   } catch (e) {

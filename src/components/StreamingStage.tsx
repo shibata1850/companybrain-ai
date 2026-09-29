@@ -39,15 +39,14 @@ const MAX_AUTO_RECONNECTS = 3;
 // permanent rejection of the requested model for this API key — retrying
 // the same config can never succeed. Instead we walk this list of known
 // Live-capable models and reconnect with the next candidate.
-// 2026-07 時点の現行ラインナップに更新済み:
-//   - gemini-3.1-flash-live-preview: 2026-03 リリースの最新 Live モデル
-//     (公式の移行先。全プランのフォールバック先としても最有力)
-//   - gemini-2.5-flash-native-audio-latest: 12-2025 プレビューを指す
-//     エイリアス(非推奨化済みだが提供中)
-//   - gemini-2.5-flash-native-audio-preview-12-2025: 同・明示 ID
-// 旧 half-cascade 系(gemini-live-2.5-flash-preview /
-// gemini-2.0-flash-live-001)は 2025-12-09 に提供終了したため削除。
+// 2026-09 時点の現行ラインナップに更新済み:
+//   - gemini-3.8-live: 2026-09-24 GA の最新 Live モデル(移行先本命。
+//     Live Avatar 映像出力にも対応)
+//   - gemini-3.1-flash-live-preview: 2026-03 リリース
+//   - gemini-2.5-flash-native-audio-*: 2026-10-16 提供終了予定のため
+//     最終フォールバックとしてのみ残す(EOL 後は自然に素通りされる)
 const LIVE_MODEL_FALLBACKS = [
+  'gemini-3.8-live',
   'gemini-3.1-flash-live-preview',
   'gemini-2.5-flash-native-audio-latest',
   'gemini-2.5-flash-native-audio-preview-12-2025',
@@ -286,6 +285,41 @@ export default function StreamingStage({
     mutedRef.current = muted;
   }, [muted]);
 
+  // ---- アバター映像 PoC(管理者限定・実験) --------------------------
+  // gemini-3.8-live の Live Avatar 出力を検証する試験実装。映像は
+  // modelTurn.parts の inlineData(video/mp4 の断片)で届く想定で、
+  // MediaSource に順次追記して <video> で再生する。ワイヤ仕様の詳細が
+  // 公開ドキュメントで確認できないため、届いた MIME・エラーはすべて
+  // videoDiag に出して管理者が画面上で診断できるようにする。
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [avatarVideoOn, setAvatarVideoOn] = useState(false);
+  const avatarVideoOnRef = useRef(false);
+  const [videoActive, setVideoActive] = useState(false);
+  const [videoDiag, setVideoDiag] = useState<string | null>(null);
+  const videoElRef = useRef<HTMLVideoElement | null>(null);
+  const mediaSourceRef = useRef<MediaSource | null>(null);
+  const sourceBufferRef = useRef<SourceBuffer | null>(null);
+  const videoQueueRef = useRef<Uint8Array[]>([]);
+  const videoUrlRef = useRef<string | null>(null);
+  // PCM 音声が別チャンネルで届いているか。届いているなら映像側の音声
+  // トラックは消音して二重再生を防ぐ。
+  const pcmSeenRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/auth/me')
+      .then((r) => r.json())
+      .then((j: { user?: { role?: string } | null }) => {
+        if (!cancelled) setIsAdmin(j?.user?.role === 'admin');
+      })
+      .catch(() => {
+        // 判定不能時はトグル非表示のままでよい
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const stop = useCallback(async () => {
     manualStopRef.current = true;
     sessionOpenRef.current = false;
@@ -345,6 +379,7 @@ export default function StreamingStage({
       pendingFlushTimerRef.current = null;
     }
     setLevel(0);
+    teardownVideoSink();
     // Report how many seconds of voice were actually consumed so plan
     // enforcement can sum per-month usage. Fire-and-forget, must not
     // block the cleanup or surface errors to the user. Text-only mode
@@ -420,6 +455,133 @@ export default function StreamingStage({
       // tick (max 300ms later), so trailing transcript chunks have
       // time to land before the message is sealed. No flush here.
     };
+  }
+
+  // ---- アバター映像 PoC: 受信チャンク → MediaSource → <video> --------
+
+  function base64ToBytes(b64: string): Uint8Array {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+
+  /** 届いた映像断片をキューに積み、シンク未初期化なら立ち上げる。 */
+  function appendVideoChunk(base64: string, mimeType: string) {
+    if (!avatarVideoOnRef.current) return;
+    const bytes = base64ToBytes(base64);
+    if (bytes.length === 0) return;
+    videoQueueRef.current.push(bytes);
+    if (!mediaSourceRef.current) initVideoSink(mimeType);
+    else drainVideoQueue();
+  }
+
+  function initVideoSink(mimeType: string) {
+    if (typeof MediaSource === 'undefined') {
+      setVideoDiag('この端末は MediaSource 非対応のため映像を再生できません');
+      return;
+    }
+    // サーバーが codecs 付き MIME を寄越せばそれを最優先。無ければ
+    // Live Avatar の想定コーデック(H.264+AAC)の一般的な組み合わせを順に試す。
+    const candidates = [
+      mimeType,
+      'video/mp4; codecs="avc1.64001F, mp4a.40.2"',
+      'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',
+      'video/mp4; codecs="avc1.64001F"',
+      'video/mp4',
+    ];
+    const type = candidates.find((t) => {
+      try {
+        return MediaSource.isTypeSupported(t);
+      } catch {
+        return false;
+      }
+    });
+    if (!type) {
+      setVideoDiag(`映像MIME非対応: ${mimeType}`);
+      return;
+    }
+    const ms = new MediaSource();
+    mediaSourceRef.current = ms;
+    ms.addEventListener('sourceopen', () => {
+      try {
+        const sb = ms.addSourceBuffer(type);
+        // 断片の並びをタイムスタンプでなく到着順として扱う(ライブ配信)。
+        sb.mode = 'sequence';
+        sb.addEventListener('updateend', drainVideoQueue);
+        sourceBufferRef.current = sb;
+        setVideoDiag(`映像受信中: ${mimeType} → ${type}`);
+        drainVideoQueue();
+      } catch (e) {
+        setVideoDiag(
+          `SourceBuffer作成失敗(${type}): ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    });
+    videoUrlRef.current = URL.createObjectURL(ms);
+    setVideoActive(true); // <video> をマウント → attachVideoEl が src を張る
+  }
+
+  function drainVideoQueue() {
+    const sb = sourceBufferRef.current;
+    if (!sb || sb.updating) return;
+    const chunk = videoQueueRef.current.shift();
+    if (!chunk) return;
+    try {
+      sb.appendBuffer(chunk as unknown as BufferSource);
+    } catch (e) {
+      setVideoDiag(
+        `映像追記失敗: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }
+
+  /** videoActive で <video> がマウントされた時点で src を張って再生する。 */
+  const attachVideoEl = (el: HTMLVideoElement | null) => {
+    videoElRef.current = el;
+    if (!el || !videoUrlRef.current) return;
+    if (el.src !== videoUrlRef.current) {
+      el.src = videoUrlRef.current;
+      // PCM 音声が別に届いているなら映像側は消音(二重再生防止)。
+      el.muted = pcmSeenRef.current;
+      el.play().catch(() => {
+        // 自動再生ポリシーで音声付き再生が拒否された場合は消音で再試行。
+        el.muted = true;
+        el.play().catch(() => {});
+        setVideoDiag((d) =>
+          [d, '自動再生ブロック→消音で再生(タップで音声ON)'].filter(Boolean).join(' / '),
+        );
+      });
+    }
+  };
+
+  function teardownVideoSink() {
+    videoQueueRef.current = [];
+    try {
+      sourceBufferRef.current?.abort();
+    } catch {
+      // ignore
+    }
+    sourceBufferRef.current = null;
+    try {
+      if (mediaSourceRef.current?.readyState === 'open') {
+        mediaSourceRef.current.endOfStream();
+      }
+    } catch {
+      // ignore
+    }
+    mediaSourceRef.current = null;
+    if (videoUrlRef.current) {
+      try {
+        URL.revokeObjectURL(videoUrlRef.current);
+      } catch {
+        // ignore
+      }
+      videoUrlRef.current = null;
+    }
+    videoElRef.current?.removeAttribute('src');
+    pcmSeenRef.current = false;
+    setVideoActive(false);
   }
 
   /**
@@ -618,7 +780,17 @@ export default function StreamingStage({
     // actually heard is `outputTranscription` below.
     for (const p of sc?.modelTurn?.parts ?? []) {
       if (p.inlineData?.data && p.inlineData.mimeType?.startsWith('audio/')) {
+        // 映像モードでも PCM 音声が別に届く構成があり得る。届いたら
+        // 以後は映像側の音声トラックを消音して二重再生を防ぐ。
+        if (!pcmSeenRef.current) {
+          pcmSeenRef.current = true;
+          if (videoElRef.current) videoElRef.current.muted = true;
+        }
         playAudioChunk(p.inlineData.data);
+      }
+      // アバター映像 PoC: 映像断片は MediaSource へ。
+      if (p.inlineData?.data && p.inlineData.mimeType?.startsWith('video/')) {
+        appendVideoChunk(p.inlineData.data, p.inlineData.mimeType);
       }
     }
 
@@ -842,6 +1014,8 @@ export default function StreamingStage({
         body: JSON.stringify({
           avatarId,
           model: modelOverrideRef.current || undefined,
+          // アバター映像 PoC(管理者限定)。サーバー側で権限を検証する。
+          avatarVideo: avatarVideoOnRef.current || undefined,
         }),
       });
       const tokenJson = (await tokenRes.json()) as {
@@ -851,6 +1025,8 @@ export default function StreamingStage({
         textOnly?: boolean;
         voiceEnabled?: boolean;
         voiceDisabledReason?: 'plan' | 'quota' | null;
+        avatarVideo?: boolean;
+        avatarVideoName?: string;
         error?: string;
       };
       // 音声なしプラン(または今月の音声上限到達): Live 接続は行わず、
@@ -875,8 +1051,17 @@ export default function StreamingStage({
       if (!tokenRes.ok || !tokenJson.token) {
         throw new Error(tokenJson.error || `HTTP ${tokenRes.status}`);
       }
-      const usedModel =
-        tokenJson.model || 'gemini-2.5-flash-native-audio-latest';
+      const usedModel = tokenJson.model || 'gemini-3.8-live';
+      // サーバーが映像モードを承認した場合のみ VIDEO モダリティで接続
+      // (トークンの liveConnectConstraints と一致させる必要がある)。
+      const useVideo = tokenJson.avatarVideo === true;
+      if (useVideo) {
+        setVideoDiag(
+          `映像モードで接続中(アバター: ${tokenJson.avatarVideoName || '?'})`,
+        );
+      } else if (avatarVideoOnRef.current) {
+        setVideoDiag('映像モードはこのセッションでは無効(音声のみで接続)');
+      }
 
       const ai = new GoogleGenAI({
         apiKey: tokenJson.token,
@@ -890,7 +1075,7 @@ export default function StreamingStage({
       const session = await ai.live.connect({
         model: usedModel,
         config: {
-          responseModalities: [Modality.AUDIO],
+          responseModalities: useVideo ? [Modality.VIDEO] : [Modality.AUDIO],
         },
         callbacks: {
           onopen: () => {
@@ -1604,22 +1789,40 @@ export default function StreamingStage({
     return (
       <div className="flex min-h-[calc(100dvh-7rem)] w-full flex-col items-center justify-between pb-2 pt-8">
         <div className="flex flex-1 flex-col items-center justify-center gap-4">
-          <div
-            className={`h-28 w-28 overflow-hidden rounded-full bg-neutral-200 ring-4 ${
-              status === 'speaking'
-                ? 'animate-pulse ring-emerald-300'
-                : 'ring-neutral-200'
-            }`}
-          >
-            {coverUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={coverUrl}
-                alt=""
-                className="h-full w-full object-cover"
+          {videoActive ? (
+            /* アバター映像 PoC: 映像が届いたら写真の代わりに再生する。
+               タップで音声のミュートを切り替え(自動再生ブロック対策)。 */
+            <div className="w-60 overflow-hidden rounded-3xl bg-black shadow-lg">
+              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+              <video
+                ref={attachVideoEl}
+                playsInline
+                autoPlay
+                onClick={(e) => {
+                  const v = e.currentTarget;
+                  if (!pcmSeenRef.current) v.muted = !v.muted;
+                }}
+                className="h-auto w-full"
               />
-            ) : null}
-          </div>
+            </div>
+          ) : (
+            <div
+              className={`h-28 w-28 overflow-hidden rounded-full bg-neutral-200 ring-4 ${
+                status === 'speaking'
+                  ? 'animate-pulse ring-emerald-300'
+                  : 'ring-neutral-200'
+              }`}
+            >
+              {coverUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={coverUrl}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              ) : null}
+            </div>
+          )}
           <div className="text-center">
             <p className="text-xl font-bold tracking-tight">{avatarName}</p>
             <p className="mt-1 text-sm text-neutral-500">
@@ -1660,6 +1863,35 @@ export default function StreamingStage({
               );
             })}
           </div>
+          {isAdmin && (
+            <div className="flex flex-col items-center gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !avatarVideoOnRef.current;
+                  avatarVideoOnRef.current = next;
+                  setAvatarVideoOn(next);
+                  setVideoDiag(
+                    next
+                      ? '映像β ON — 次の通話開始から適用されます'
+                      : '映像β OFF',
+                  );
+                }}
+                className={`rounded-full px-3 py-1 text-[11px] font-bold transition ${
+                  avatarVideoOn
+                    ? 'bg-violet-600 text-white'
+                    : 'bg-neutral-100 text-neutral-500'
+                }`}
+              >
+                映像β {avatarVideoOn ? 'ON' : 'OFF'}
+              </button>
+              {videoDiag && (
+                <p className="max-w-[18rem] text-center text-[10px] leading-relaxed text-neutral-400">
+                  {videoDiag}
+                </p>
+              )}
+            </div>
+          )}
           {textOnly && (
             <p className="max-w-[18rem] rounded-xl bg-neutral-100 px-4 py-2.5 text-center text-xs leading-relaxed text-neutral-600">
               {voiceDisabledReason === 'quota'
@@ -1770,12 +2002,57 @@ export default function StreamingStage({
           </div>
         )}
 
+        {/* アバター映像 PoC: 映像が届いたら背景写真の上に重ねて再生。 */}
+        {videoActive && (
+          /* eslint-disable-next-line jsx-a11y/media-has-caption */
+          <video
+            ref={attachVideoEl}
+            playsInline
+            autoPlay
+            onClick={(e) => {
+              const v = e.currentTarget;
+              if (!pcmSeenRef.current) v.muted = !v.muted;
+            }}
+            className="absolute inset-0 z-[5] h-full w-full bg-black/85 object-contain"
+          />
+        )}
+        {isAdmin && videoDiag && (
+          <p className="absolute bottom-2 left-3 z-10 max-w-[70%] rounded bg-black/50 px-2 py-1 text-[10px] leading-relaxed text-white/80">
+            {videoDiag}
+          </p>
+        )}
+
         {/* Edit-stage-background affordance, only visible while idle. */}
         {/* 右上のボタン群。「背景を変更」と「隠す」を同じ形・同じ場所に
             まとめ、隠す/広げるの操作を一貫した見た目にする。 */}
-        {(onToggleMinimized ||
+        {(isAdmin ||
+          onToggleMinimized ||
           (!isLive && status !== 'connecting' && onEditStage)) && (
           <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5">
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !avatarVideoOnRef.current;
+                  avatarVideoOnRef.current = next;
+                  setAvatarVideoOn(next);
+                  setVideoDiag(
+                    next
+                      ? isLive
+                        ? '映像β ON — 次の通話開始から適用されます'
+                        : '映像β ON — マイクONで映像モードの通話を開始します'
+                      : '映像β OFF',
+                  );
+                }}
+                className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium shadow-sm backdrop-blur transition focus:outline-none focus:ring-2 focus:ring-white ${
+                  avatarVideoOn
+                    ? 'bg-violet-600 text-white hover:bg-violet-500'
+                    : 'bg-white/90 text-neutral-700 hover:bg-white'
+                }`}
+              >
+                映像β {avatarVideoOn ? 'ON' : 'OFF'}
+              </button>
+            )}
             {!isLive && status !== 'connecting' && onEditStage && (
               <button
                 type="button"
