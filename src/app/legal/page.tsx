@@ -7,8 +7,7 @@ export const metadata: Metadata = {
 
 /**
  * 特定商取引法に基づく表記。
- * 【要記入】の2箇所(所在地・代表者)はユーザー(柴田さん)の入力待ち。
- * プレースホルダのまま本番公開しないこと。
+ * 事業者情報は公開されている法人情報(法人番号 9400001012763)に基づく。
  */
 export default function LegalNoticePage() {
   return (
@@ -17,8 +16,8 @@ export default function LegalNoticePage() {
         <LegalTable
           rows={[
             ['販売事業者', 'SOFTDOING株式会社'],
-            ['代表者', '【要記入: 代表者氏名】'],
-            ['所在地', '【要記入: 本店所在地】'],
+            ['代表者', '柴田 祥悦'],
+            ['所在地', '岩手県北上市大曲町3-25'],
             ['電話番号', '0197-62-6557(受付: 平日 9:00〜17:00)'],
             ['メールアドレス', 'info@softdoing.net'],
             [
