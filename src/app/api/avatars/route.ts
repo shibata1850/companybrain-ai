@@ -132,6 +132,18 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // 人物動画には被写体本人の同意が必要(利用規約 第6条)。UIの
+  // チェックボックスを経由しない直接POSTも弾く。
+  if (form.get('consent') !== 'true') {
+    return NextResponse.json(
+      {
+        error:
+          '動画の学習には、被写体ご本人の同意の確認が必要です(利用規約 第6条)。',
+      },
+      { status: 400 },
+    );
+  }
+
   const db = supabaseAdmin();
   const bucket = storageBucket();
 

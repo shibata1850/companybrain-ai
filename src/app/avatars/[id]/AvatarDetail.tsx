@@ -100,6 +100,8 @@ export default function AvatarDetail({ id }: { id: string }) {
 
   // Training panel state.
   const [trainFile, setTrainFile] = useState<File | null>(null);
+  // 動画アップロード時の本人同意チェック(利用規約 第6条)。送信ごとに確認。
+  const [trainConsent, setTrainConsent] = useState(false);
   const [training, setTraining] = useState(false);
   const [trainText, setTrainText] = useState('');
   const [trainTextTitle, setTrainTextTitle] = useState('');
@@ -405,8 +407,13 @@ export default function AvatarDetail({ id }: { id: string }) {
   async function addTrainingVideo(e: React.FormEvent) {
     e.preventDefault();
     if (!trainFile) return;
+    if (!trainConsent) {
+      setError('被写体ご本人の同意の確認が必要です(利用規約 第6条)。');
+      return;
+    }
     const form = new FormData();
     form.append('video', trainFile);
+    form.append('consent', 'true');
     if (trainFolder) form.append('folder', trainFolder);
     setTraining(true);
     setError(null);
@@ -418,6 +425,7 @@ export default function AvatarDetail({ id }: { id: string }) {
       const json = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
       setTrainFile(null);
+      setTrainConsent(false);
       setFileResetKey((k) => k + 1);
       await load();
       flashLearned('動画を学習しました');
@@ -843,6 +851,8 @@ export default function AvatarDetail({ id }: { id: string }) {
               onPickFile={setTrainFile}
               onSubmitVideo={addTrainingVideo}
               submittingVideo={training}
+              videoConsent={trainConsent}
+              onChangeVideoConsent={setTrainConsent}
               trainText={trainText}
               onChangeText={setTrainText}
               trainTextTitle={trainTextTitle}
@@ -1067,6 +1077,8 @@ function TrainingPanel({
   onPickFile,
   onSubmitVideo,
   submittingVideo,
+  videoConsent,
+  onChangeVideoConsent,
   trainText,
   onChangeText,
   trainTextTitle,
@@ -1089,6 +1101,9 @@ function TrainingPanel({
   onPickFile: (f: File | null) => void;
   onSubmitVideo: (e: React.FormEvent) => void;
   submittingVideo: boolean;
+  /** 動画の被写体本人の同意確認(利用規約 第6条)。 */
+  videoConsent: boolean;
+  onChangeVideoConsent: (v: boolean) => void;
   trainText: string;
   onChangeText: (v: string) => void;
   trainTextTitle: string;
@@ -1266,9 +1281,28 @@ function TrainingPanel({
             onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
             className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs file:mr-3 file:rounded-md file:border-0 file:bg-neutral-900 file:px-3 file:py-1 file:text-white"
           />
+          <label className="flex items-start gap-2 text-xs leading-relaxed text-neutral-600">
+            <input
+              type="checkbox"
+              checked={videoConsent}
+              onChange={(e) => onChangeVideoConsent(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-neutral-900"
+            />
+            <span>
+              動画に映っているご本人から、本サービスでの利用(AIによる口調・考え方の再現を含む)について同意を得ています(
+              <a
+                href="/terms"
+                target="_blank"
+                className="underline hover:text-neutral-900"
+              >
+                利用規約 第6条
+              </a>
+              )
+            </span>
+          </label>
           <button
             type="submit"
-            disabled={!trainFile || submittingVideo}
+            disabled={!trainFile || !videoConsent || submittingVideo}
             className="w-full rounded-full bg-neutral-900 px-4 py-2 text-xs font-medium text-white transition hover:bg-neutral-700 active:scale-[0.99] disabled:opacity-40"
           >
             {submittingVideo ? '学習中…' : '動画から学習'}

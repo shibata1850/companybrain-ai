@@ -68,11 +68,22 @@ export async function POST(
       video_name?: string;
       video_mime?: string;
       folder?: string;
+      consent?: boolean;
     } = {};
     try {
       body = await req.json();
     } catch {
       return NextResponse.json({ error: 'invalid json' }, { status: 400 });
+    }
+    // 人物動画には被写体本人の同意が必要(利用規約 第6条)。
+    if (body.consent !== true) {
+      return NextResponse.json(
+        {
+          error:
+            '動画の学習には、被写体ご本人の同意の確認が必要です(利用規約 第6条)。',
+        },
+        { status: 400 },
+      );
     }
     const path = typeof body.video_path === 'string' ? body.video_path : '';
     // 署名発行時にこのブレイン専用のプレフィックスで切っているので、
@@ -96,6 +107,16 @@ export async function POST(
     const form = await req.formData();
     const file = form.get('video');
     const folderRaw = form.get('folder');
+    // 人物動画には被写体本人の同意が必要(利用規約 第6条)。
+    if (form.get('consent') !== 'true') {
+      return NextResponse.json(
+        {
+          error:
+            '動画の学習には、被写体ご本人の同意の確認が必要です(利用規約 第6条)。',
+        },
+        { status: 400 },
+      );
+    }
     folder =
       typeof folderRaw === 'string' && folderRaw.trim()
         ? folderRaw.trim()

@@ -18,6 +18,8 @@ export default function NewAvatarPage() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [seedText, setSeedText] = useState('');
   const [seedFolder, setSeedFolder] = useState('');
+  // 動画の被写体本人の同意確認(利用規約 第6条)。動画モードのみ必須。
+  const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progressLabel, setProgressLabel] = useState<string | null>(null);
@@ -44,6 +46,10 @@ export default function NewAvatarPage() {
     if (mode === 'video') {
       if (!file) {
         setError('動画ファイルを選択してください');
+        return;
+      }
+      if (!consent) {
+        setError('被写体ご本人の同意の確認が必要です(利用規約 第6条)。');
         return;
       }
       if (file.size > MAX_VIDEO_BYTES) {
@@ -78,6 +84,7 @@ export default function NewAvatarPage() {
         form.append('video_path', up.path);
         form.append('video_name', file.name);
         form.append('video_mime', file.type || 'video/mp4');
+        form.append('consent', 'true');
       }
       const res = await fetch('/api/avatars', { method: 'POST', body: form });
       const data = (await res.json()) as { id?: string; error?: string };
@@ -194,6 +201,25 @@ export default function NewAvatarPage() {
               正面の顔がはっきり映り、音声がクリアな動画ほど精度が
               上がります。30秒〜2分が目安。
             </p>
+            <label className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-neutral-600">
+              <input
+                type="checkbox"
+                checked={consent}
+                onChange={(e) => setConsent(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-neutral-900"
+              />
+              <span>
+                動画に映っているご本人から、本サービスでの利用(AIによる口調・考え方の再現を含む)について同意を得ています(
+                <a
+                  href="/terms"
+                  target="_blank"
+                  className="underline hover:text-neutral-900"
+                >
+                  利用規約 第6条
+                </a>
+                )
+              </span>
+            </label>
           </div>
         ) : (
           <>

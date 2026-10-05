@@ -46,6 +46,8 @@ export default function TrainingClient({ avatarId }: { avatarId: string }) {
   // Add-material form state.
   const [mode, setMode] = useState<'video' | 'text'>('text');
   const [trainFile, setTrainFile] = useState<File | null>(null);
+  // 動画の被写体本人の同意確認(利用規約 第6条)。送信ごとに確認。
+  const [trainConsent, setTrainConsent] = useState(false);
   const [training, setTraining] = useState(false);
   const [trainText, setTrainText] = useState('');
   const [trainTextTitle, setTrainTextTitle] = useState('');
@@ -284,6 +286,10 @@ export default function TrainingClient({ avatarId }: { avatarId: string }) {
   async function addVideo(e: React.FormEvent) {
     e.preventDefault();
     if (!trainFile) return;
+    if (!trainConsent) {
+      setError('被写体ご本人の同意の確認が必要です(利用規約 第6条)。');
+      return;
+    }
     if (trainFile.size > MAX_VIDEO_BYTES) {
       setError(
         `動画は 1 ファイル ${MAX_VIDEO_LABEL} までです。長い動画は要点部分を切り出してアップロードしてください。`,
@@ -304,11 +310,13 @@ export default function TrainingClient({ avatarId }: { avatarId: string }) {
           video_name: trainFile.name,
           video_mime: trainFile.type || 'video/mp4',
           folder: trainFileFolder.trim() || undefined,
+          consent: true,
         }),
       });
       const json = (await res.json()) as { video_id?: string; error?: string };
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
       setTrainFile(null);
+      setTrainConsent(false);
       setTrainFileFolder('');
       await load();
     } catch (e) {
@@ -595,9 +603,28 @@ export default function TrainingClient({ avatarId }: { avatarId: string }) {
                     onChange={setTrainFileFolder}
                   />
                 </div>
+                <label className="flex items-start gap-2 text-xs leading-relaxed text-neutral-600">
+                  <input
+                    type="checkbox"
+                    checked={trainConsent}
+                    onChange={(e) => setTrainConsent(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-neutral-900"
+                  />
+                  <span>
+                    動画に映っているご本人から、本サービスでの利用(AIによる口調・考え方の再現を含む)について同意を得ています(
+                    <a
+                      href="/terms"
+                      target="_blank"
+                      className="underline hover:text-neutral-900"
+                    >
+                      利用規約 第6条
+                    </a>
+                    )
+                  </span>
+                </label>
                 <button
                   type="submit"
-                  disabled={!trainFile || training}
+                  disabled={!trainFile || !trainConsent || training}
                   className="rounded-full bg-neutral-900 px-4 py-2 text-xs font-medium text-white transition hover:bg-neutral-700 disabled:opacity-40"
                 >
                   {training ? '学習中…' : '動画から学習'}

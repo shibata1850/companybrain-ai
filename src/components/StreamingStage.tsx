@@ -1314,6 +1314,10 @@ export default function StreamingStage({
               : '話し始める'}
           </button>
         )}
+        {/* 人物再現サービスの常設注記(利用規約 第7条)。 */}
+        <p className="mt-1 max-w-[22rem] text-center text-[10px] leading-relaxed text-neutral-400">
+          回答はAIによる再現であり、ご本人の発言ではありません。重要な判断は原典資料をご確認ください。
+        </p>
       </div>
     </div>
   );
