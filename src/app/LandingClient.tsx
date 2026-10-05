@@ -2461,7 +2461,7 @@ function Footer() {
         <p className="text-xs text-neutral-500">
           © {new Date().getFullYear()} SOFTDOING — Powered by Google Gemini
         </p>
-        <div className="flex gap-4 text-xs text-neutral-500">
+        <div className="flex flex-wrap gap-4 text-xs text-neutral-500">
           <Link href="/login" className="hover:text-neutral-900">
             ログイン
           </Link>
@@ -2471,6 +2471,15 @@ function Footer() {
           <a href="#features" className="hover:text-neutral-900">
             機能
           </a>
+          <Link href="/terms" className="hover:text-neutral-900">
+            利用規約
+          </Link>
+          <Link href="/privacy" className="hover:text-neutral-900">
+            プライバシーポリシー
+          </Link>
+          <Link href="/legal" className="hover:text-neutral-900">
+            特定商取引法に基づく表記
+          </Link>
         </div>
       </div>
     </footer>

@@ -45,11 +45,20 @@ export function useNavBadges(show: boolean) {
 }
 
 /**
- * ログイン後のアプリ画面かどうか。マーケ用ランディングと認証画面では
- * サイドバーを出さず、ヘッダーナビを従来どおり使う。
+ * ログイン後のアプリ画面かどうか。マーケ用ランディング・認証画面・
+ * 法的文書(規約等)の公開ページではサイドバーを出さず、ヘッダーナビを
+ * 従来どおり使う。
  */
 export function isAppRoute(pathname: string): boolean {
-  return !['/', '/login', '/signup', '/login/forgot'].includes(pathname);
+  return ![
+    '/',
+    '/login',
+    '/signup',
+    '/login/forgot',
+    '/terms',
+    '/privacy',
+    '/legal',
+  ].includes(pathname);
 }
 
 /** Shared destination list + active-route matching for both nav bars. */
