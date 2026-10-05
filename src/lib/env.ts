@@ -27,13 +27,6 @@ export const env = {
     'gemini-2.5-flash',
   geminiEmbeddingModel: () =>
     process.env.GEMINI_EMBEDDING_MODEL || 'gemini-embedding-001',
-  didApiKey: () => process.env.DID_API_KEY || '',
-  didVoiceId: () => process.env.DID_VOICE_ID || 'ja-JP-NanamiNeural',
-  heygenApiKey: () => process.env.HEYGEN_API_KEY || '',
-  heygenInteractiveAvatarId: () =>
-    process.env.HEYGEN_INTERACTIVE_AVATAR_ID || 'Wayne_20240711',
-  heygenInteractiveLanguage: () =>
-    process.env.HEYGEN_INTERACTIVE_LANGUAGE || 'ja',
   // Gemini Live API — the real-time voice conversation engine.
   // Available voices (multi-lingual incl. Japanese):
   //   Aoede / Charon / Fenrir / Kore / Leda / Orus / Puck / Zephyr.

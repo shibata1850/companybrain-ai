@@ -26,17 +26,21 @@ function runFfmpeg(args: string[]): Promise<void> {
 
 /**
  * Extract one frame (taken from around the 2-second mark to skip black
- * intros) and the audio track from the given video bytes. Returns both
- * as Buffers along with a tmp dir cleanup callback.
+ * intros) from the given video bytes, for use as the brain's cover image.
+ *
+ * NOTE: 旧実装はここで音声トラック(mp3)も抽出していたが、抽出先だった
+ * D-ID の音声クローン連携が廃止されて以降は捨てられるだけだったため削除
+ * した(アップロードごとの無駄な変換時間を削減)。Gemini TTS の音声
+ * クローン(30秒サンプル)を実装する際は、目的を明確にした抽出処理を
+ * 改めて追加すること。
  */
-export async function extractFrameAndAudio(
+export async function extractCoverFrame(
   videoBytes: Buffer,
   videoExt = 'mp4',
-): Promise<{ frame: Buffer; audio: Buffer; audioMime: string }> {
+): Promise<{ frame: Buffer }> {
   const work = await mkdtemp(path.join(tmpdir(), 'companybrain-'));
   const inPath = path.join(work, `in.${videoExt}`);
   const framePath = path.join(work, 'frame.jpg');
-  const audioPath = path.join(work, 'audio.mp3');
   try {
     await writeFile(inPath, videoBytes);
     await runFfmpeg([
@@ -47,17 +51,8 @@ export async function extractFrameAndAudio(
       '-q:v', '2',
       framePath,
     ]);
-    await runFfmpeg([
-      '-y',
-      '-i', inPath,
-      '-vn',
-      '-acodec', 'libmp3lame',
-      '-q:a', '2',
-      audioPath,
-    ]);
     const frame = await readFile(framePath);
-    const audio = await readFile(audioPath);
-    return { frame, audio, audioMime: 'audio/mpeg' };
+    return { frame };
   } finally {
     await rm(work, { recursive: true, force: true });
   }

@@ -16,9 +16,9 @@ export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 /**
- * Add another training video to an existing avatar. We do NOT re-create
- * the HeyGen avatar/voice — those are locked in from the first upload.
- * We just transcribe + embed the new content for retrieval.
+ * Add another training video to an existing avatar: transcribe + embed
+ * the new content for retrieval. ブレインの見た目(カバー画像)や声の
+ * 設定は初回作成時のまま変えない。
  */
 export async function POST(
   req: NextRequest,

@@ -72,15 +72,6 @@ export async function GET(
     if (page.length < PAGE) break;
   }
 
-  const { data: generations } = await db
-    .from('generations')
-    .select(
-      'id, question, answer, status, video_url, thumbnail_url, error_message, created_at',
-    )
-    .eq('avatar_id', params.id)
-    .order('created_at', { ascending: false })
-    .limit(20);
-
   let coverUrl: string | null = null;
   if (avatar.cover_image_path) {
     const { data: signed } = await db.storage
@@ -112,7 +103,6 @@ export async function GET(
       shared: auth.access === 'shared',
     },
     training_videos: canEdit ? videos : [],
-    generations: canEdit ? generations ?? [] : [],
   });
 }
 

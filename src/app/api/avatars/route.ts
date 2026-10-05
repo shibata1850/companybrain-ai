@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { randomUUID } from 'node:crypto';
 import { storageBucket, supabaseAdmin } from '@/lib/supabase';
-import { extractFrameAndAudio } from '@/lib/media';
+import { extractCoverFrame } from '@/lib/media';
 import { processTrainingVideo } from '@/lib/processing';
 import { chunkTranscript, embedTexts, understandMaterial } from '@/lib/gemini';
 import { saveExtractedRules } from '@/lib/materialRules';
@@ -250,11 +250,9 @@ export async function POST(req: NextRequest) {
   const videoId = tv.id as string;
 
   // 4. Extract one frame from the video to serve as the face image.
-  //    Audio is also extracted but unused for now (D-ID's default flow
-  //    uses Microsoft TTS rather than cloning the user's voice).
   let frame: Buffer;
   try {
-    const out = await extractFrameAndAudio(videoBytes, ext);
+    const out = await extractCoverFrame(videoBytes, ext);
     frame = out.frame;
   } catch (e) {
     reportError(e, { route: 'POST /api/avatars (ffmpeg)', actor: me.email });
@@ -271,10 +269,9 @@ export async function POST(req: NextRequest) {
       upsert: true,
     });
 
-  // 6. We're using HeyGen's stock Interactive Avatar for streaming, so
-  //    there's no per-brain Photo Avatar to register. The face we
-  //    extracted is kept as the cover image for the UI; the actual
-  //    streaming avatar is configured globally via env.
+  // 6. The extracted face is the brain's cover image for the UI.
+  //    リアルタイム会話は Gemini Live(音声/アバター映像)が担うため、
+  //    ここで外部サービスにアバターを登録する処理は無い。
   await db
     .from('avatars')
     .update({

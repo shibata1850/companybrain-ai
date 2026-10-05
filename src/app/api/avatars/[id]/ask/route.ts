@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase';
 import { answerAsPersona, type AnswerLength } from '@/lib/gemini';
 import { authorizeAvatar } from '@/lib/authServer';
@@ -20,9 +19,10 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 /**
- * Generate a draft answer (Gemini only — no HeyGen render yet). The user
- * then reviews / edits / regenerates the draft and explicitly clicks
- * "動画にする" to spend HeyGen credits.
+ * テキスト質問に人物として回答する(RAG + プラン別モデル)。
+ * チャット画面の表示・会話記録はクライアント側(localStorage +
+ * /api/audit への監査記録)が担うため、このルートはサーバーに
+ * 会話を保存しない。
  *
  * Body: { question: string, length?: 'short' | 'standard' | 'detailed' }
  */
@@ -71,21 +71,9 @@ export async function POST(
     return NextResponse.json({ error: 'avatar not found' }, { status: 404 });
   }
 
-  // Conversation log row. status='spoken' means the answer has been (or
-  // is about to be) spoken live by the streaming avatar — no separate
-  // video render step in this flow.
-  const { data: gen, error: genErr } = await db
-    .from('generations')
-    .insert({ avatar_id: avatarId, question, status: 'spoken' })
-    .select('id')
-    .single();
-  if (genErr || !gen) {
-    return NextResponse.json(
-      { error: genErr?.message || 'insert failed' },
-      { status: 500 },
-    );
-  }
-  const generationId = gen.id as string;
+  // NOTE: 旧実装はここで generations テーブルに質問・回答を記録していた
+  // (D-ID/HeyGen時代の「回答→動画生成」フローの名残)。読み手が無く、
+  // 質問数カウントも監査も audit_logs 基盤のため、記録を廃止した。
 
   try {
     // ハイブリッド検索(キーワード + 意味)。音声側の knowledge ルートと
@@ -110,31 +98,10 @@ export async function POST(
       model: usage ? answerModelForPlan(usage.plan) : adminAnswerModel(),
     });
 
-    await db
-      .from('generations')
-      .update({
-        answer,
-        status: 'spoken',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', generationId);
-
-    revalidatePath(`/avatars/${avatarId}`);
-    return NextResponse.json({ id: generationId, answer, length });
+    return NextResponse.json({ answer, length });
   } catch (e) {
     reportError(e, { route: 'POST /api/avatars/[id]/ask', actor: auth.me.email });
     const message = e instanceof Error ? e.message : String(e);
-    await db
-      .from('generations')
-      .update({
-        status: 'error',
-        error_message: message,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', generationId);
-    return NextResponse.json(
-      { error: message, id: generationId },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

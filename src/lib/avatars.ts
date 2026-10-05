@@ -3,11 +3,8 @@ import { storageBucket, supabaseAdmin } from './supabase';
 /**
  * Permanently delete one or more avatars. Removes the storage files
  * (cover image + all training video uploads) and then deletes the DB
- * rows. Related rows in training_videos / knowledge_chunks / generations
- * cascade via ON DELETE CASCADE.
- *
- * NOTE: This does not delete the corresponding Photo Avatar or cloned
- * voice on HeyGen — those continue to exist in the HeyGen account.
+ * rows. Related rows in training_videos / knowledge_chunks cascade via
+ * ON DELETE CASCADE.
  */
 export async function permanentlyDeleteAvatars(
   ids: string[],
