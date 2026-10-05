@@ -7,7 +7,6 @@ import {
   type LiveServerMessage,
   type Session,
 } from '@google/genai';
-import useIsMobile from '@/lib/useIsMobile';
 import { TARGET_INPUT_RATE, floatTo16kPcm } from '@/lib/audioResample';
 
 type Status =
@@ -107,23 +106,17 @@ function newMessageId() {
 export default function StreamingStage({
   avatarId,
   coverUrl,
-  stageUrl,
   avatarName,
   onMessage,
   onPartial,
-  onEditStage,
-  minimized = false,
-  onToggleMinimized,
-  onVoiceLiveChange,
 }: {
   avatarId: string;
   coverUrl: string | null;
-  /** Wider 16:9 backdrop image; falls back to coverUrl if null. */
-  stageUrl?: string | null;
   avatarName: string;
   /**
    * Fires once per completed turn (or on barge-in) with a full
-   * transcript message. Parent appends to its conversation log.
+   * transcript message. Parent appends to its conversation log
+   * (localStorage + audit_logs 投稿 = 質問数カウントの基盤)。
    */
   onMessage?: (m: TranscriptMessage) => void;
   /**
@@ -132,27 +125,7 @@ export default function StreamingStage({
    * partial should be cleared (e.g. turn complete).
    */
   onPartial?: (role: 'user' | 'agent', text: string | null) => void;
-  /** Fires when the user clicks the "背景を変更" affordance on the stage. */
-  onEditStage?: () => void;
-  /** When true, the stage collapses to a slim status bar. */
-  minimized?: boolean;
-  /** Fires when the user toggles the minimise button on the stage. */
-  onToggleMinimized?: () => void;
-  /**
-   * 音声セッションの開始・終了の「変化」を親へ通知する。LINE 型 UI では
-   * 開始で通話画面(全面)へ、終了で下部バーへ自動で切り替えるため。
-   * テキストのみのセッション(textOnly)は通話画面にしないので通知しない。
-   */
-  onVoiceLiveChange?: (live: boolean) => void;
 }) {
-  // タッチ端末(coarse ポインタ)は、押している間だけ話す方式ではなく
-  // 「1回タップで開始→もう一度タップで停止」にする。画面幅ではなく
-  // ポインタ種別で判定するので、大きめのスマホ/タブレットでも確実に
-  // タップ・トグルになる。
-  const isTouch = useIsMobile('(pointer: coarse)');
-  // 電話型の通話画面を出すかどうかは「画面幅」で決める(タブレットの
-  // タッチでも広い画面なら従来のステージ表示のほうが情報量が多い)。
-  const isPhone = useIsMobile();
   const [status, setStatus] = useState<Status>('idle');
   // Mirror status in a ref so event handlers (which capture stale state)
   // can read the current value without being recreated on every change.
@@ -161,9 +134,7 @@ export default function StreamingStage({
     statusRef.current = status;
   }, [status]);
   const [error, setError] = useState<string | null>(null);
-  const [muted, setMuted] = useState(false);
   const [level, setLevel] = useState(0); // mic level 0..1 for the visualizer
-  const [textDraft, setTextDraft] = useState('');
   // Session timer (seconds since the WebSocket opened).
   const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
   // Mirror of sessionStartedAt for stable callbacks (so `stop` doesn't
@@ -236,7 +207,6 @@ export default function StreamingStage({
   // mic gate closed briefly after playback so the speaker echo tail
   // doesn't register as user speech.
   const speakingEndedAtRef = useRef(0);
-  const mutedRef = useRef(false);
   // When `interrupted` fires we cancel the audio queue, but the server
   // keeps streaming chunks from the in-flight generation for several
   // more seconds. Those late chunks would re-open the speaker and
@@ -268,22 +238,10 @@ export default function StreamingStage({
   // across multiple turns without the user shortening anything.
   const continuationCountRef = useRef(0);
   const MAX_CONTINUATIONS = 6;
-  // Manual turn control (push-to-talk). Server-side automatic VAD is
-  // disabled in the token config; mic audio only flows upstream while
-  // the user is actively holding the talk button or Space. We send
-  // explicit activityStart / activityEnd around each utterance so the
-  // server never has to guess when a turn began or ended — which
-  // eliminates every echo / noise / pause induced truncation we've
-  // chased so far.
-  const [isTalking, setIsTalking] = useState(false);
-  const isTalkingRef = useRef(false);
-  useEffect(() => {
-    isTalkingRef.current = isTalking;
-  }, [isTalking]);
+  // Manual turn control(押して話す)は gemini-3.8-live 移行で廃止。
+  // ターン検出はサーバーの自動VADに任せ、マイクはセッション中ずっと
+  // 流しっぱなしにする(自然な会話・割り込みが可能になる)。
 
-  useEffect(() => {
-    mutedRef.current = muted;
-  }, [muted]);
 
   // ---- アバター映像 PoC(管理者限定・実験) --------------------------
   // gemini-3.8-live の Live Avatar 出力を検証する試験実装。映像は
@@ -323,8 +281,6 @@ export default function StreamingStage({
   const stop = useCallback(async () => {
     manualStopRef.current = true;
     sessionOpenRef.current = false;
-    isTalkingRef.current = false;
-    setIsTalking(false);
     if (reconnectTimerRef.current) {
       clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
@@ -1033,16 +989,13 @@ export default function StreamingStage({
       // テキスト質問を /ask(通常のHTTP API)に流すモードで開始する。
       // ネイティブ音声モデルは TEXT モダリティを受け付けないため、
       // Live 側でのテキスト専用セッションは成立しない(code 1007)。
+      // 音声なしプラン・今月の音声上限到達: 接続せず、理由を表示して
+      // 待機に戻る(テキスト質問のフォールバックはチャット再実装まで無し)。
       if (tokenRes.ok && tokenJson.textOnly) {
         textOnlyRef.current = true;
         setTextOnly(true);
         setVoiceDisabledReason(tokenJson.voiceDisabledReason ?? 'plan');
-        setSessionStartedAt((prev) => {
-          const next = prev ?? Date.now();
-          sessionStartedAtRef.current = next;
-          return next;
-        });
-        setStatus('listening');
+        setStatus('idle');
         return;
       }
       textOnlyRef.current = false;
@@ -1226,12 +1179,10 @@ export default function StreamingStage({
       analyserRef.current = analyser;
       source.connect(analyser);
 
-      // マイクの Float32 フレームを受け取り、押して話す中だけ 16kHz PCM に
-      // 変換して送る共通処理。
+      // マイクの Float32 フレームを受け取り、セッション中は常時 16kHz PCM
+      // に変換して送る。ターンの切れ目はサーバーの自動VADが検出する。
       const sendFrame = (input: Float32Array, inRate: number) => {
-        if (mutedRef.current) return;
         if (!sessionOpenRef.current || !sessionRef.current) return;
-        if (!isTalkingRef.current) return;
         const pcm = floatTo16kPcm(input, inRate);
         const b64 = int16ToBase64(pcm);
         try {
@@ -1316,16 +1267,13 @@ export default function StreamingStage({
         }
         const rms = Math.sqrt(sum / buf.length);
         const scaled = Math.min(1, rms * 4);
-        // Only reflect mic level while the user is actually talking, so
-        // the meter stays flat (and clearly "not listening") between
-        // turns even though the track stays open for instant response.
-        setLevel(isTalkingRef.current ? scaled : 0);
+        setLevel(scaled);
 
         // VAD-ish bookkeeping: notice when the user starts and stops
         // talking so we can transition into "thinking" once they go
         // silent and the model hasn't started speaking yet.
         const now = performance.now();
-        if (!mutedRef.current && scaled > MIC_VOICE_THRESHOLD) {
+        if (scaled > MIC_VOICE_THRESHOLD) {
           userTalkingRef.current = true;
           lastVoiceAtRef.current = now;
           if (thinkingTimerRef.current) {
@@ -1375,183 +1323,12 @@ export default function StreamingStage({
     }
   }
 
-  /**
-   * Send a typed message into the live session. Useful when the user
-   * doesn't want to (or can't) talk out loud. Mirrors the message into
-   * the transcript log immediately so it shows up in chat.
-   */
-  function startTalking() {
-    if (!sessionRef.current || !sessionOpenRef.current) return;
-    if (textOnlyRef.current) return; // 音声なしプラン: マイク入力は無効
-    if (isTalkingRef.current) return;
-    if (mutedRef.current) return;
-    // iOS 対策: 録音/再生の AudioContext を、この直接のタップ操作の中で
-    // 確実に再開する。start() は await(通信)を挟むため、iOS では
-    // resume がジェスチャ外扱いになりコンテキストが suspended のまま
-    // 残ることがあり、その場合 ScriptProcessor の onaudioprocess が
-    // 発火せずマイク音声が全く流れない(=話しても何も起きない)。
-    void inputCtxRef.current?.resume?.().catch(() => {});
-    void outputCtxRef.current?.resume?.().catch(() => {});
-    // Cut off any in-flight agent audio — the user is starting a new
-    // turn, they shouldn't have to talk over the previous answer.
-    stopAllPlayback();
-    audioBlockedRef.current = false;
-    // New user turn: abandon any pending auto-continuation and seal
-    // whatever the agent already said.
-    continuationCountRef.current = 0;
-    if (pendingFlushRef.current || agentBufRef.current) {
-      pendingFlushRef.current = false;
-      flushTranscripts();
-    }
-    isTalkingRef.current = true;
-    setIsTalking(true);
-    setStatus('listening');
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (sessionRef.current as any).sendRealtimeInput?.({ activityStart: {} });
-    } catch (e) {
-      console.warn('[live] activityStart failed:', e);
-    }
-  }
-
-  function stopTalking() {
-    if (!isTalkingRef.current) return;
-    isTalkingRef.current = false;
-    setIsTalking(false);
-    // Flatten the level meter so it doesn't keep reacting to ambient
-    // sound between turns (the send-gate already stops upstream audio).
-    setLevel(0);
-    userTalkingRef.current = false;
-    if (!sessionRef.current || !sessionOpenRef.current) return;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (sessionRef.current as any).sendRealtimeInput?.({ activityEnd: {} });
-    } catch (e) {
-      console.warn('[live] activityEnd failed:', e);
-    }
-    // The agent will start replying shortly; mark intent — and always
-    // arm a safety-net timeout so we can never get stuck on "thinking"
-    // if the model doesn't respond (e.g. it heard only silence).
-    setStatus((s) => (s === 'listening' ? 'thinking' : s));
-    if (thinkingTimerRef.current) clearTimeout(thinkingTimerRef.current);
-    thinkingTimerRef.current = setTimeout(() => {
-      setStatus((s) => (s === 'thinking' ? 'listening' : s));
-    }, THINKING_FALLBACK_MS);
-  }
-
-  function sendTextMessage(text: string) {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-
-    // テキスト専用モード(音声なしプラン/音声上限到達)、またはセッション
-    // 未開始のままの送信: Live セッションは無いので、通常のテキストAPI
-    // (/ask)で回答を取得する。RAG・プラン別モデル・質問数カウントは
-    // サーバー側で従来どおり効く。マイクを押さなくても質問できるように
-    // するための経路(LINE と同じ、開いてすぐ入力)。
-    if (textOnlyRef.current || !sessionOpenRef.current) {
-      onMessageRef.current?.({
-        id: newMessageId(),
-        role: 'user',
-        text: trimmed,
-        at: Date.now(),
-      });
-      // セッション無しの単発テキスト質問は「通話」の状態機械に触れない。
-      // 以前は status を thinking にしていたため isLive 扱いになり、
-      // 通話していないのに緑の「通話中」バナーが出て、回答と同時に消える
-      // 紛らわしい挙動になっていた。待ち時間の表示は入力中バブルで行う。
-      const oneShot = !textOnlyRef.current;
-      if (oneShot) {
-        onPartialRef.current?.('agent', '考えています…');
-      } else {
-        setStatus('thinking');
-      }
-      void (async () => {
-        try {
-          const res = await fetch(`/api/avatars/${avatarId}/ask`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ question: trimmed }),
-          });
-          const json = (await res.json()) as {
-            answer?: string;
-            error?: string;
-          };
-          if (!res.ok || !json.answer) {
-            throw new Error(json.error || `HTTP ${res.status}`);
-          }
-          onMessageRef.current?.({
-            id: newMessageId(),
-            role: 'agent',
-            text: json.answer,
-            at: Date.now(),
-          });
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          setError(`回答の生成に失敗しました: ${msg}`);
-        } finally {
-          if (oneShot) {
-            // 単発質問: 「考えています…」の入力中バブルを消すだけ。
-            onPartialRef.current?.('agent', null);
-          } else {
-            // テキスト専用セッション中は「聞いています」に戻す。
-            setStatus((s) => (s === 'thinking' ? 'listening' : s));
-          }
-        }
-      })();
-      return;
-    }
-
-    const sess = sessionRef.current;
-    if (!sess || !sessionOpenRef.current) return;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (sess as any).sendClientContent?.({
-        turns: [{ role: 'user', parts: [{ text: trimmed }] }],
-        turnComplete: true,
-      });
-    } catch (e) {
-      console.warn('[live] sendClientContent failed:', e);
-      return;
-    }
-    onMessageRef.current?.({
-      id: newMessageId(),
-      role: 'user',
-      text: trimmed,
-      at: Date.now(),
-    });
-    // Any agent audio that was already playing should be cut off so it
-    // doesn't talk over its new answer. Also lift the post-interrupt
-    // audio block — a brand new turn just started.
-    stopAllPlayback();
-    audioBlockedRef.current = false;
-    continuationCountRef.current = 0;
-  }
-
-  function onTextSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!textDraft.trim()) return;
-    sendTextMessage(textDraft);
-    setTextDraft('');
-  }
-
   const isLive =
     status === 'connected' ||
     status === 'listening' ||
     status === 'thinking' ||
     status === 'searching' ||
     status === 'speaking';
-
-  // 音声ライブ状態の遷移だけを親へ通知する。値の比較を挟まないと、親が
-  // インライン関数を渡した場合に毎レンダー発火し、ユーザーが手動で開いた
-  // ステージが即座に畳まれてしまう。
-  const prevVoiceLiveRef = useRef(false);
-  useEffect(() => {
-    const voiceLive = isLive && !textOnly;
-    if (voiceLive !== prevVoiceLiveRef.current) {
-      prevVoiceLiveRef.current = voiceLive;
-      onVoiceLiveChange?.(voiceLive);
-    }
-  });
 
   // Keyboard shortcuts. Skip when the user is typing in an input.
   useEffect(() => {
@@ -1566,11 +1343,7 @@ export default function StreamingStage({
     }
     function onKey(e: KeyboardEvent) {
       if (isTyping(e.target)) return;
-      // Space (hold) = push-to-talk while live.
-      if (isLive && e.code === 'Space') {
-        e.preventDefault();
-        if (!e.repeat) startTalking();
-      } else if (isLive && e.key === 'Escape') {
+      if (isLive && e.key === 'Escape') {
         e.preventDefault();
         void stop();
       } else if (!isLive && e.code === 'KeyS') {
@@ -1579,18 +1352,9 @@ export default function StreamingStage({
         void start();
       }
     }
-    function onKeyUp(e: KeyboardEvent) {
-      if (isTyping(e.target)) return;
-      if (isLive && e.code === 'Space') {
-        e.preventDefault();
-        stopTalking();
-      }
-    }
     window.addEventListener('keydown', onKey);
-    window.addEventListener('keyup', onKeyUp);
     return () => {
       window.removeEventListener('keydown', onKey);
-      window.removeEventListener('keyup', onKeyUp);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLive]);
@@ -1626,233 +1390,84 @@ export default function StreamingStage({
     }
   }, [status, avatarName, coverUrl]);
 
-  if (minimized) {
-    const busy = isLive || status === 'connecting' || status === 'reconnecting';
+  // ---- 画面: ワンボタンのリアルタイム会話 --------------------------
+  // チャットUI・押して話す・写真ステージ・最小化バーは廃止し、
+  // 「開始 → そのまま話す → 終了」だけの電話型に一本化した
+  // (チャットは将来、別機能として再実装する)。
+  const statusText =
+    status === 'speaking'
+      ? '話しています…'
+      : status === 'listening'
+        ? 'そのまま話しかけてください'
+        : status === 'thinking'
+          ? '考えています…'
+          : status === 'searching'
+            ? '資料を確認しています…'
+            : status === 'connecting'
+              ? '接続中…'
+              : status === 'reconnecting'
+                ? '再接続中…'
+                : status === 'error'
+                  ? 'エラーが発生しました'
+                  : '待機中';
 
-    // 入力バー(LINE 型)。待機中と、スマホの通話中の両方で使う。
-    // マイク: 待機中は音声開始(スマホは通話画面へ直行)、通話中は
-    // 通話画面へ戻るボタンとして働く。
-    const inputForm = (
-      <form
-        onSubmit={onTextSubmit}
-        className="flex items-center gap-2 rounded-full border border-neutral-300 bg-white py-1.5 pl-4 pr-1.5 shadow-sm focus-within:border-neutral-900"
-      >
-        <input
-          value={textDraft}
-          onChange={(e) => setTextDraft(e.target.value)}
-          placeholder={busy ? 'テキストでも質問できます' : `${avatarName} に質問を入力`}
-          className="min-w-0 flex-1 bg-transparent py-1.5 text-base outline-none placeholder:text-neutral-400"
-        />
-        {textDraft.trim() ? (
-          <button
-            type="submit"
-            className="shrink-0 rounded-full bg-neutral-900 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-neutral-700"
-          >
-            送信
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => {
-              if (busy) {
-                onToggleMinimized?.();
-              } else {
-                void start();
-                // スマホは通話画面へ直行し、接続中もその画面で待つ。
-                if (isPhone) onToggleMinimized?.();
-              }
-            }}
-            aria-label={busy ? '通話画面へ戻る' : 'マイクで話す'}
-            title={busy ? '通話画面へ戻る' : 'マイクで話す'}
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-neutral-900 text-white transition hover:bg-neutral-700 active:scale-95"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
-              <rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" />
-              <path
-                d="M5 11a7 7 0 0 0 14 0M12 18v3"
-                stroke="currentColor"
-                strokeWidth="2"
-                fill="none"
-                strokeLinecap="round"
-              />
-            </svg>
-          </button>
-        )}
-      </form>
-    );
-
-    // スマホ: 黒い操作バー(マイクON/終了/広げる)は出さない。通話中は
-    // LINE と同じく、上に細い「通話中」バナー(タップで通話画面へ)だけを
-    // 添えて、下は普段どおりの入力バーにする。終了は通話画面側で行う。
-    if (isPhone) {
-      return (
-        <div className="w-full space-y-2">
-          {busy && !textOnly && (
-            <button
-              type="button"
-              onClick={onToggleMinimized}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-emerald-500 py-2.5 text-sm font-bold text-white shadow-sm transition active:scale-[0.99]"
-            >
-              <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-white" />
-              {status === 'connecting'
-                ? '接続中…'
-                : status === 'reconnecting'
-                  ? '再接続中…'
-                  : (
-                    <>
-                      通話中
-                      <span className="font-mono tabular-nums">
-                        {formatElapsed(elapsedSec)}
-                      </span>
-                    </>
-                  )}
-              <span className="text-xs font-medium opacity-90">
-                タップで通話画面
-              </span>
-            </button>
-          )}
-          {inputForm}
-          {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-              {error}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // PC / タブレットの待機中: 入力バーのみ。
-    if (!busy) {
-      return (
-        <div className="w-full space-y-3">
-          {inputForm}
-          {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-              {error}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // PC / タブレットのライブ中: 従来どおり状態バー+テキスト欄。
-    return (
-      <div className="w-full space-y-3">
-        <CompactBar
-          status={status}
-          level={level}
-          muted={muted}
-          isLive={isLive}
-          elapsedSec={elapsedSec}
-          textOnly={textOnly}
-          onToggleMute={() => setMuted((m) => !m)}
-          onStop={stop}
-          onStart={start}
-          onExpand={onToggleMinimized}
-          avatarName={avatarName}
-          coverUrl={coverUrl}
-        />
-        {isLive && (
-          <form
-            onSubmit={onTextSubmit}
-            className="flex items-center gap-2 rounded-full border border-neutral-300 bg-white px-3 py-2 shadow-sm focus-within:border-neutral-900"
-          >
-            <input
-              value={textDraft}
-              onChange={(e) => setTextDraft(e.target.value)}
-              placeholder={`${avatarName} にテキストで質問…`}
-              className="flex-1 bg-transparent px-2 py-1 text-base outline-none placeholder:text-neutral-400"
+  return (
+    <div className="flex h-full min-h-[24rem] w-full flex-1 flex-col items-center justify-between gap-6 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-6">
+      <div className="flex flex-1 flex-col items-center justify-center gap-5">
+        {videoActive ? (
+          /* アバター映像 PoC: 映像が届いたら写真の代わりに再生する。 */
+          <div className="w-64 max-w-full overflow-hidden rounded-3xl bg-black shadow-lg">
+            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+            <video
+              ref={attachVideoEl}
+              playsInline
+              autoPlay
+              onClick={(e) => {
+                const v = e.currentTarget;
+                if (!pcmSeenRef.current) v.muted = !v.muted;
+              }}
+              className="h-auto w-full"
             />
-            <button
-              type="submit"
-              disabled={!textDraft.trim()}
-              className="rounded-full bg-neutral-900 px-5 py-2 text-sm font-bold text-white transition hover:bg-neutral-700 disabled:opacity-40"
-            >
-              送信
-            </button>
-          </form>
-        )}
-        {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-            {error}
           </div>
-        )}
-      </div>
-    );
-  }
-
-  // スマホの通話画面(全面)。写真ステージにボタンを重ねる従来の形は
-  // 狭い画面では操作が小さく散らばるため、電話アプリと同じ構成にする:
-  // 中央に相手(写真・名前・状態)、下部に大きな丸ボタン+ラベル。
-  // LINE 通話・ChatGPT 音声モードと同じ配列(戻る / 話す / 終了)。
-  if (isPhone) {
-    return (
-      <div className="flex min-h-[calc(100dvh-7rem)] w-full flex-col items-center justify-between pb-2 pt-8">
-        <div className="flex flex-1 flex-col items-center justify-center gap-4">
-          {videoActive ? (
-            /* アバター映像 PoC: 映像が届いたら写真の代わりに再生する。
-               タップで音声のミュートを切り替え(自動再生ブロック対策)。 */
-            <div className="w-60 overflow-hidden rounded-3xl bg-black shadow-lg">
-              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-              <video
-                ref={attachVideoEl}
-                playsInline
-                autoPlay
-                onClick={(e) => {
-                  const v = e.currentTarget;
-                  if (!pcmSeenRef.current) v.muted = !v.muted;
-                }}
-                className="h-auto w-full"
-              />
-            </div>
-          ) : (
-            <div
-              className={`h-28 w-28 overflow-hidden rounded-full bg-neutral-200 ring-4 ${
-                status === 'speaking'
-                  ? 'animate-pulse ring-emerald-300'
+        ) : (
+          <div
+            className={`h-32 w-32 overflow-hidden rounded-full bg-neutral-200 ring-4 transition-shadow sm:h-36 sm:w-36 ${
+              status === 'speaking'
+                ? 'animate-pulse ring-emerald-300'
+                : status === 'thinking' || status === 'searching'
+                  ? 'ring-indigo-200'
                   : 'ring-neutral-200'
-              }`}
-            >
-              {coverUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={coverUrl}
-                  alt=""
-                  className="h-full w-full object-cover"
-                />
-              ) : null}
-            </div>
-          )}
-          <div className="text-center">
-            <p className="text-xl font-bold tracking-tight">{avatarName}</p>
-            <p className="mt-1 text-sm text-neutral-500">
-              {status === 'speaking'
-                ? '話しています…'
-                : status === 'listening'
-                  ? isTalking
-                    ? '録音中…'
-                    : '聞いています'
-                  : status === 'thinking'
-                    ? '考えています…'
-                    : status === 'searching'
-                      ? '資料を確認しています…'
-                      : status === 'connecting'
-                        ? '接続中…'
-                        : status === 'reconnecting'
-                          ? '再接続中…'
-                          : '待機中'}
-              {isLive && (
-                <span className="ml-2 font-mono tabular-nums text-neutral-400">
-                  {formatElapsed(elapsedSec)}
-                </span>
-              )}
-            </p>
+            }`}
+          >
+            {coverUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={coverUrl}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : null}
           </div>
+        )}
+
+        <div className="text-center">
+          <p className="text-xl font-bold tracking-tight">{avatarName}</p>
+          <p className="mt-1 text-sm text-neutral-500">
+            {statusText}
+            {isLive && (
+              <span className="ml-2 font-mono tabular-nums text-neutral-400">
+                {formatElapsed(elapsedSec)}
+              </span>
+            )}
+          </p>
+        </div>
+
+        {/* マイクが拾えていることを示す小さな波形。 */}
+        {isLive && (
           <div className="flex h-6 items-end gap-1" aria-hidden>
             {Array.from({ length: 12 }).map((_, i) => {
               const m = 1 - Math.abs(i - 5.5) * 0.12;
-              const active =
-                (status === 'listening' || status === 'thinking') && !muted;
+              const active = status === 'listening' || status === 'thinking';
               const h = active ? 3 + Math.min(20, level * 44 * m) : 3;
               return (
                 <span
@@ -1863,114 +1478,75 @@ export default function StreamingStage({
               );
             })}
           </div>
-          {isAdmin && (
-            <div className="flex flex-col items-center gap-1">
-              <button
-                type="button"
-                onClick={() => {
-                  const next = !avatarVideoOnRef.current;
-                  avatarVideoOnRef.current = next;
-                  setAvatarVideoOn(next);
-                  setVideoDiag(
-                    next
-                      ? '映像β ON — 次の通話開始から適用されます'
-                      : '映像β OFF',
-                  );
-                }}
-                className={`rounded-full px-3 py-1 text-[11px] font-bold transition ${
-                  avatarVideoOn
-                    ? 'bg-violet-600 text-white'
-                    : 'bg-neutral-100 text-neutral-500'
-                }`}
-              >
-                映像β {avatarVideoOn ? 'ON' : 'OFF'}
-              </button>
-              {videoDiag && (
-                <p className="max-w-[18rem] text-center text-[10px] leading-relaxed text-neutral-400">
-                  {videoDiag}
-                </p>
-              )}
-            </div>
-          )}
-          {textOnly && (
-            <p className="max-w-[18rem] rounded-xl bg-neutral-100 px-4 py-2.5 text-center text-xs leading-relaxed text-neutral-600">
-              {voiceDisabledReason === 'quota'
-                ? '今月の音声会話上限に達しました。テキストで質問できます。'
-                : '音声会話はスターター以上のプランで利用できます。'}
-            </p>
-          )}
-          {error && (
-            <p className="max-w-[18rem] text-center text-xs leading-relaxed text-red-600">
-              {error}
-            </p>
-          )}
-        </div>
+        )}
 
-        {/* 下部の操作。丸ボタン+下ラベル(電話アプリの並び)。 */}
-        <div className="flex w-full items-start justify-center gap-9">
-          <div className="flex w-16 flex-col items-center gap-1.5">
+        {!isLive &&
+          status !== 'connecting' &&
+          status !== 'reconnecting' &&
+          !textOnly && (
+            <p className="max-w-[20rem] text-center text-xs leading-relaxed text-neutral-500">
+              ボタンを押したら、そのまま話しかけてください。
+              学習させた資料にもとづいて答えます。
+            </p>
+          )}
+
+        {isAdmin && (
+          <div className="flex flex-col items-center gap-1">
             <button
               type="button"
-              onClick={onToggleMinimized}
-              aria-label="チャット画面へ戻る"
-              className="grid h-14 w-14 place-items-center rounded-full bg-neutral-100 text-neutral-700 transition active:scale-95"
+              onClick={() => {
+                const next = !avatarVideoOnRef.current;
+                avatarVideoOnRef.current = next;
+                setAvatarVideoOn(next);
+                setVideoDiag(
+                  next
+                    ? isLive
+                      ? '映像β ON — 次の会話開始から適用されます'
+                      : '映像β ON — 開始すると映像モードで接続します'
+                    : '映像β OFF',
+                );
+              }}
+              className={`rounded-full px-3 py-1 text-[11px] font-bold transition ${
+                avatarVideoOn
+                  ? 'bg-violet-600 text-white'
+                  : 'bg-neutral-100 text-neutral-500'
+              }`}
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden>
-                <path
-                  d="M5 9l7 7 7-7"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              映像β {avatarVideoOn ? 'ON' : 'OFF'}
             </button>
-            <span className="text-xs font-bold text-neutral-600">チャットへ</span>
+            {videoDiag && (
+              <p className="max-w-[18rem] text-center text-[10px] leading-relaxed text-neutral-400">
+                {videoDiag}
+              </p>
+            )}
           </div>
+        )}
 
-          {!textOnly && (
-            <div className="flex w-20 flex-col items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => {
-                  if (isTalkingRef.current) stopTalking();
-                  else startTalking();
-                }}
-                onContextMenu={(e) => e.preventDefault()}
-                disabled={muted}
-                aria-label={isTalking ? '話すのをやめる' : '話す'}
-                className={`grid h-20 w-20 place-items-center rounded-full shadow-lg transition active:scale-95 disabled:opacity-50 ${
-                  isTalking
-                    ? 'animate-pulse bg-red-500 text-white ring-4 ring-red-200'
-                    : 'bg-neutral-900 text-white'
-                }`}
-              >
-                <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden>
-                  <rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" />
-                  <path
-                    d="M5 11a7 7 0 0 0 14 0M12 18v3"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    fill="none"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
-              <span className="text-xs font-bold text-neutral-700">
-                {isTalking ? 'タップで停止' : 'タップで話す'}
-              </span>
-            </div>
-          )}
+        {textOnly && (
+          <p className="max-w-[20rem] rounded-xl bg-neutral-100 px-4 py-2.5 text-center text-xs leading-relaxed text-neutral-600">
+            {voiceDisabledReason === 'quota'
+              ? '今月の音声会話の上限に達しました(毎月1日にリセットされます)。'
+              : '音声会話はスターター以上のプランで利用できます。'}
+          </p>
+        )}
+        {error && (
+          <p className="max-w-[20rem] text-center text-xs leading-relaxed text-red-600">
+            {error}
+          </p>
+        )}
+      </div>
 
-          <div className="flex w-16 flex-col items-center gap-1.5">
+      {/* 操作はひとつだけ: 開始 or 終了。 */}
+      <div className="flex w-full flex-col items-center gap-1.5">
+        {isLive || status === 'connecting' || status === 'reconnecting' ? (
+          <>
             <button
               type="button"
               onClick={stop}
               aria-label="会話を終了する"
-              className="grid h-14 w-14 place-items-center rounded-full bg-red-600 text-white transition active:scale-95"
+              className="grid h-16 w-16 place-items-center rounded-full bg-red-600 text-white shadow-lg transition active:scale-95"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden>
+              <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden>
                 <path
                   d="M6 6l12 12M18 6L6 18"
                   stroke="currentColor"
@@ -1980,509 +1556,25 @@ export default function StreamingStage({
               </svg>
             </button>
             <span className="text-xs font-bold text-red-600">終了</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="w-full space-y-3">
-      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-3xl border border-neutral-200 bg-neutral-900 sm:aspect-video">
-        {(stageUrl || coverUrl) ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={stageUrl || coverUrl || ''}
-            alt={avatarName}
-            className="absolute inset-0 h-full w-full object-cover opacity-90"
-          />
+          </>
         ) : (
-          <div className="absolute inset-0 grid place-items-center text-white/30">
-            no cover
-          </div>
-        )}
-
-        {/* アバター映像 PoC: 映像が届いたら背景写真の上に重ねて再生。 */}
-        {videoActive && (
-          /* eslint-disable-next-line jsx-a11y/media-has-caption */
-          <video
-            ref={attachVideoEl}
-            playsInline
-            autoPlay
-            onClick={(e) => {
-              const v = e.currentTarget;
-              if (!pcmSeenRef.current) v.muted = !v.muted;
-            }}
-            className="absolute inset-0 z-[5] h-full w-full bg-black/85 object-contain"
-          />
-        )}
-        {isAdmin && videoDiag && (
-          <p className="absolute bottom-2 left-3 z-10 max-w-[70%] rounded bg-black/50 px-2 py-1 text-[10px] leading-relaxed text-white/80">
-            {videoDiag}
-          </p>
-        )}
-
-        {/* Edit-stage-background affordance, only visible while idle. */}
-        {/* 右上のボタン群。「背景を変更」と「隠す」を同じ形・同じ場所に
-            まとめ、隠す/広げるの操作を一貫した見た目にする。 */}
-        {(isAdmin ||
-          onToggleMinimized ||
-          (!isLive && status !== 'connecting' && onEditStage)) && (
-          <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5">
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => {
-                  const next = !avatarVideoOnRef.current;
-                  avatarVideoOnRef.current = next;
-                  setAvatarVideoOn(next);
-                  setVideoDiag(
-                    next
-                      ? isLive
-                        ? '映像β ON — 次の通話開始から適用されます'
-                        : '映像β ON — マイクONで映像モードの通話を開始します'
-                      : '映像β OFF',
-                  );
-                }}
-                className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium shadow-sm backdrop-blur transition focus:outline-none focus:ring-2 focus:ring-white ${
-                  avatarVideoOn
-                    ? 'bg-violet-600 text-white hover:bg-violet-500'
-                    : 'bg-white/90 text-neutral-700 hover:bg-white'
-                }`}
-              >
-                映像β {avatarVideoOn ? 'ON' : 'OFF'}
-              </button>
-            )}
-            {!isLive && status !== 'connecting' && onEditStage && (
-              <button
-                type="button"
-                onClick={onEditStage}
-                className="inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-neutral-700 shadow-sm backdrop-blur transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-white"
-              >
-                <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden>
-                  <path
-                    d="M11 1.5l3.5 3.5L5 14.5H1.5V11L11 1.5z"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    fill="none"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                背景を変更
-              </button>
-            )}
-            {onToggleMinimized && (
-              <button
-                type="button"
-                onClick={onToggleMinimized}
-                aria-label="ステージを隠す"
-                className="inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-neutral-700 shadow-sm backdrop-blur transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-white"
-              >
-                <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
-                  <path
-                    d="M2 7.5l4-4 4 4"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    fill="none"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                隠す
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Speaking pulse — radial glow that grows when the agent talks. */}
-        {status === 'speaking' && (
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.45),transparent_60%)] animate-pulse" />
-        )}
-
-        {/* Mic-level halo — subtle ring that breathes with the user voice. */}
-        {(status === 'listening' ||
-          status === 'thinking' ||
-          status === 'speaking') && (
-          <div
-            className="pointer-events-none absolute inset-0 rounded-3xl ring-inset transition-[box-shadow] duration-100"
-            style={{
-              boxShadow: `inset 0 0 ${20 + level * 60}px ${
-                4 + level * 16
-              }px rgba(255,255,255,${0.15 + level * 0.25})`,
-            }}
-          />
-        )}
-
-        {/* Voice-activity bars: vibrating mini-equaliser at the bottom of
-            the stage so the user can see at a glance that their mic is
-            being heard. Visible whenever the session is active and not
-            yet in the thinking/speaking flow. */}
-        {(status === 'listening' || status === 'thinking') && !muted && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-6 flex h-8 items-end justify-center gap-1">
-            {Array.from({ length: 7 }).map((_, i) => {
-              // Bell-shaped multiplier so middle bars react more.
-              const m = 1 - Math.abs(i - 3) * 0.18;
-              const h = 4 + Math.min(28, level * 60 * m);
-              return (
-                <span
-                  key={i}
-                  className="w-1 rounded-full bg-white/85 shadow-[0_0_8px_rgba(255,255,255,0.35)] transition-[height] duration-75"
-                  style={{ height: `${h}px` }}
-                />
-              );
-            })}
-          </div>
-        )}
-
-        {/* Thinking / searching overlay — three bouncing dots while the
-            agent is processing the user's last turn or fetching docs. */}
-        {(status === 'thinking' || status === 'searching') && (
-          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 bg-neutral-900/35 text-white backdrop-blur-[2px]">
-            <div className="flex items-end gap-1.5">
-              <span
-                className="h-2.5 w-2.5 animate-bounce rounded-full bg-white"
-                style={{ animationDelay: '0ms' }}
-              />
-              <span
-                className="h-2.5 w-2.5 animate-bounce rounded-full bg-white"
-                style={{ animationDelay: '120ms' }}
-              />
-              <span
-                className="h-2.5 w-2.5 animate-bounce rounded-full bg-white"
-                style={{ animationDelay: '240ms' }}
-              />
-            </div>
-            <p className="text-xs font-medium tracking-wide">
-              {status === 'searching'
-                ? '🔎 資料を検索中… 少しお待ちください'
-                : '考えています…'}
-            </p>
-          </div>
-        )}
-
-        {/* Status pill */}
-        {isLive && (
-          <div className="absolute right-3 top-3 flex items-center gap-2 rounded-full bg-black/60 px-3 py-1 text-xs text-white backdrop-blur">
-            <span
-              className={`inline-block h-2 w-2 rounded-full ${
-                status === 'speaking'
-                  ? 'animate-pulse bg-emerald-400'
-                  : status === 'listening'
-                    ? 'bg-emerald-400'
-                    : status === 'thinking' || status === 'searching'
-                      ? 'animate-pulse bg-indigo-300'
-                      : 'bg-amber-400'
-              }`}
-            />
-            {status === 'speaking'
-              ? '話しています…'
-              : status === 'listening'
-                ? '聞いています'
-                : status === 'searching'
-                  ? '🔎 資料を検索中…'
-                  : status === 'thinking'
-                    ? '考えています…'
-                    : '接続中'}
-            <span
-              className="ml-1 font-mono text-xs tabular-nums text-white/70"
-              aria-label="経過時間"
-            >
-              {formatElapsed(elapsedSec)}
-            </span>
-          </div>
-        )}
-
-        {/* Idle / ended overlay. pt-14 keeps the content clear of the
-            top-corner buttons (隠す / 背景を変更) on narrow screens. */}
-        {(status === 'idle' || status === 'ended') && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-neutral-900/60 px-5 pb-5 pt-14 text-center text-white backdrop-blur-sm">
-            <div>
-              <p className="text-sm font-semibold sm:text-sm">
-                {avatarName} と会話する
-              </p>
-              <p className="mt-1 text-xs text-white/70">
-                「始める」を押して会話を開始してください。
-              </p>
-              {/* Keyboard shortcuts are desktop-only; hide on touch. */}
-              <p className="mt-2 hidden text-xs text-white/40 sm:block">
-                ショートカット: S で開始 / Space を長押しして話す / Esc で終了 / / で検索
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={start}
-              className="rounded-full bg-white px-8 py-3 text-sm font-bold text-neutral-900 shadow-lg transition active:scale-95 hover:bg-white/90"
-            >
-              始める
-            </button>
-          </div>
-        )}
-
-        {status === 'connecting' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-neutral-900/70 text-white">
-            <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-white" />
-            <p className="text-sm">接続中…</p>
-          </div>
-        )}
-
-        {status === 'reconnecting' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-neutral-900/80 text-white">
-            <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-amber-300" />
-            <p className="text-sm">回線が一瞬切れました…再接続しています</p>
-          </div>
-        )}
-
-        {/* Bottom control bar: large push-to-talk button + session end. */}
-        {isLive && (
-          <div className="absolute inset-x-3 bottom-3 flex items-center justify-between gap-2">
-            {textOnly ? (
-              // 音声なしセッション: マイクの代わりに理由を示す。
-              // テキスト入力欄(下)はそのまま使える。
-              <div className="flex-1 select-none rounded-full bg-white/15 px-4 py-3 text-center text-xs font-medium leading-tight text-white backdrop-blur">
-                {voiceDisabledReason === 'quota'
-                  ? '今月の音声会話上限に達しました(毎月1日リセット)。テキストで質問できます。'
-                  : '音声会話はスターター以上のプランで利用できます。テキストで質問できます。'}
-              </div>
-            ) : isTouch ? (
-              // タッチ端末: 1回タップで開始、もう一度タップで停止(トグル)。
-              <button
-                type="button"
-                onClick={() => {
-                  if (isTalkingRef.current) stopTalking();
-                  else startTalking();
-                }}
-                onContextMenu={(e) => e.preventDefault()}
-                disabled={muted}
-                className={`flex-1 select-none rounded-full px-4 py-3 text-sm font-bold shadow-md backdrop-blur transition active:scale-[0.98] disabled:opacity-50 ${
-                  isTalking
-                    ? 'animate-pulse bg-red-500 text-white ring-4 ring-red-300/60'
-                    : 'bg-white/95 text-neutral-900 hover:bg-white'
-                }`}
-                title="タップで開始。もう一度タップで停止"
-              >
-                {isTalking ? 'タップで停止' : 'タップで話す'}
-              </button>
-            ) : (
-              // Desktop: hold to talk (mouse / Space).
-              <button
-                type="button"
-                onMouseDown={startTalking}
-                onMouseUp={stopTalking}
-                onMouseLeave={() => {
-                  if (isTalkingRef.current) stopTalking();
-                }}
-                onContextMenu={(e) => e.preventDefault()}
-                disabled={muted}
-                className={`flex-1 select-none rounded-full px-4 py-2 text-sm font-bold shadow-md backdrop-blur transition active:scale-[0.98] disabled:opacity-50 ${
-                  isTalking
-                    ? 'animate-pulse bg-red-500 text-white ring-4 ring-red-300/60'
-                    : 'bg-white/95 text-neutral-900 hover:bg-white'
-                }`}
-                title="押している間だけ話す。離すと送信"
-              >
-                {isTalking
-                  ? '録音中… 離すと送信'
-                  : '押している間だけ話す (またはSpace長押し)'}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={stop}
-              className="shrink-0 rounded-full bg-white/90 px-3 py-2 text-xs font-medium text-neutral-800 backdrop-blur transition hover:bg-white"
-            >
-              終了
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={start}
+            disabled={textOnly}
+            className="rounded-full bg-neutral-900 px-10 py-4 text-base font-bold text-white shadow-lg transition hover:bg-neutral-700 active:scale-95 disabled:opacity-40"
+          >
+            {status === 'ended' || status === 'error'
+              ? 'もう一度話す'
+              : '話し始める'}
+          </button>
         )}
       </div>
-
-      {isLive && (
-        <form
-          onSubmit={onTextSubmit}
-          className="flex items-center gap-2 rounded-full border border-neutral-300 bg-white px-3 py-2 shadow-sm focus-within:border-neutral-900"
-        >
-          <input
-            value={textDraft}
-            onChange={(e) => setTextDraft(e.target.value)}
-            placeholder={`${avatarName} にテキストで質問…`}
-            className="flex-1 bg-transparent px-2 py-1 text-base outline-none placeholder:text-neutral-400"
-          />
-          <button
-            type="submit"
-            disabled={!textDraft.trim()}
-            className="rounded-full bg-neutral-900 px-4 py-1.5 text-xs font-medium text-white transition hover:bg-neutral-700 disabled:opacity-40"
-          >
-            送信
-          </button>
-        </form>
-      )}
-
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-          {error}
-        </div>
-      )}
     </div>
   );
 }
 
 // ---- helpers ----
-
-function CompactBar({
-  status,
-  level,
-  muted,
-  isLive,
-  elapsedSec,
-  textOnly,
-  onToggleMute,
-  onStop,
-  onStart,
-  onExpand,
-  avatarName,
-  coverUrl,
-}: {
-  status: Status;
-  level: number;
-  muted: boolean;
-  isLive: boolean;
-  elapsedSec: number;
-  /** 音声なしセッション(テキスト回答のみ)ではマイク操作を隠す。 */
-  textOnly?: boolean;
-  onToggleMute: () => void;
-  onStop: () => void;
-  onStart: () => void;
-  onExpand?: () => void;
-  avatarName: string;
-  coverUrl: string | null;
-}) {
-  return (
-    <div className="flex items-center gap-3 rounded-2xl border border-neutral-200 bg-neutral-900 px-3 py-2 text-white shadow-sm">
-      {coverUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={coverUrl}
-          alt={avatarName}
-          className="h-8 w-8 shrink-0 rounded-full object-cover ring-2 ring-white/30"
-        />
-      ) : (
-        <span className="h-8 w-8 shrink-0 rounded-full bg-white/10" />
-      )}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 text-xs">
-          <span
-            className={`inline-block h-2 w-2 rounded-full ${
-              status === 'speaking'
-                ? 'animate-pulse bg-emerald-400'
-                : status === 'listening'
-                  ? 'bg-emerald-400'
-                  : status === 'thinking'
-                    ? 'animate-pulse bg-indigo-300'
-                    : status === 'idle' || status === 'ended'
-                      ? 'bg-neutral-500'
-                      : 'bg-amber-400'
-            }`}
-          />
-          <span className="truncate">
-            {status === 'speaking'
-              ? '話しています…'
-              : status === 'listening'
-                ? '聞いています'
-                : status === 'thinking'
-                  ? '考えています…'
-                  : status === 'connecting'
-                    ? '接続中…'
-                    : status === 'reconnecting'
-                      ? '再接続中…'
-                      : status === 'error'
-                        ? 'エラー'
-                        : isLive
-                          ? 'スタンバイ'
-                          : '停止中'}
-            {isLive && (
-              <span className="ml-1 font-mono tabular-nums text-white/60">
-                {formatElapsed(elapsedSec)}
-              </span>
-            )}
-          </span>
-        </div>
-        {/* Inline waveform */}
-        {(status === 'listening' || status === 'thinking') && !muted && (
-          <div className="mt-1 flex h-3 items-end gap-0.5">
-            {Array.from({ length: 9 }).map((_, i) => {
-              const m = 1 - Math.abs(i - 4) * 0.15;
-              const h = 2 + Math.min(10, level * 22 * m);
-              return (
-                <span
-                  key={i}
-                  className="w-[3px] rounded-full bg-white/70 transition-[height] duration-75"
-                  style={{ height: `${h}px` }}
-                />
-              );
-            })}
-          </div>
-        )}
-      </div>
-      <div className="flex shrink-0 items-center gap-1.5">
-        {isLive ? (
-          <>
-            {!textOnly && (
-              <button
-                type="button"
-                onClick={onToggleMute}
-                className={`rounded-full px-3.5 py-2 text-sm font-bold transition ${
-                  muted
-                    ? 'bg-red-500 text-white hover:bg-red-400'
-                    : 'bg-white/15 text-white hover:bg-white/25'
-                }`}
-              >
-                {muted ? 'マイクOFF' : 'マイクON'}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={onStop}
-              className="rounded-full bg-white/15 px-3.5 py-2 text-sm font-bold transition hover:bg-white/25"
-            >
-              終了
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={onStart}
-            className="rounded-full bg-white px-4 py-2 text-sm font-bold text-neutral-900 transition hover:bg-white/90"
-          >
-            始める
-          </button>
-        )}
-        {onExpand && (
-          // 「隠す」と対になる復元ボタン。同じピル形状+シェブロン+ラベルで
-          // 見た目を揃える(下向き=展開して広げる)。
-          <button
-            type="button"
-            onClick={onExpand}
-            aria-label="ステージを表示"
-            className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3.5 py-2 text-sm font-bold text-white transition hover:bg-white/25"
-          >
-            <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
-              <path
-                d="M2 4.5l4 4 4-4"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            広げる
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function formatElapsed(totalSec: number): string {
   const s = Math.max(0, Math.floor(totalSec));

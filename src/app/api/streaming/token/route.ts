@@ -262,17 +262,11 @@ ${styleSamples || '（参考発言なし。一般的な人柄として自然に�
     // mechanism is the model treating each topic-switch as a turn
     // boundary on multi-topic prompts. The 一度の応答で扱う話題は
     // 1つに絞る rule in the system prompt is what addresses that.
-    // Manual turn control. The server-side VAD has been the source of
-    // every truncation we've chased — echo, ambient noise, or even the
-    // model's own audio leakage was being read as user barge-in, and
-    // the server cancelled its own generation. Disable automatic
-    // detection entirely and let the client declare turn boundaries
-    // (activityStart / activityEnd) via push-to-talk. The client
-    // already stops queued playback when the user starts a new turn,
-    // so explicit interrupts are unnecessary.
-    realtimeInputConfig: {
-      automaticActivityDetection: { disabled: true },
-    },
+    // ターン検出はサーバーの自動VADに任せる(gemini-3.8-live 移行で
+    // 「押して話す」方式を廃止)。2.5系時代はエコーや環境音を割り込みと
+    // 誤認する事故が多く automaticActivityDetection を無効化していたが、
+    // 3.8 はターンテイキングが改善しており、ボタン無しの自然な会話を
+    // 成立させるため既定(自動検出)に戻す。
   };
 
   try {
