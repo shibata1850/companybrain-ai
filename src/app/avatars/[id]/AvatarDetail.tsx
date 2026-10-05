@@ -17,7 +17,6 @@ type Avatar = {
   description: string | null;
   persona_prompt: string | null;
   cover_url: string | null;
-  stage_url: string | null;
   voice: string | null;
   language: string | null;
   request_id: string | null;
@@ -147,13 +146,6 @@ export default function AvatarDetail({ id }: { id: string }) {
       })
       .catch(() => {});
   }, []);
-
-  const currentThread = useMemo(
-    () =>
-      chatStore.threads.find((t) => t.id === chatStore.currentId) ?? null,
-    [chatStore],
-  );
-  const transcript = currentThread?.messages ?? [];
 
   // When a user message gets escalation-flagged, the matching agent
   // reply that follows inherits the same flag — the warning belongs on
@@ -381,14 +373,11 @@ export default function AvatarDetail({ id }: { id: string }) {
     }
   }, [data]);
 
-  // Photo cropping flow — supports both the round avatar thumbnail
-  // and the landscape streaming-stage backdrop.
-  type CropperKind = 'cover' | 'stage';
-  const [cropperKind, setCropperKind] = useState<CropperKind>('cover');
+  // Photo cropping flow — the round avatar thumbnail.
+  // (背景写真(stage)は通話UIの一本化で廃止した)
   const [cropperSrc, setCropperSrc] = useState<string | null>(null);
   const [cropperBusy, setCropperBusy] = useState(false);
   const coverFileInputRef = useRef<HTMLInputElement>(null);
-  const stageFileInputRef = useRef<HTMLInputElement>(null);
 
   // Inline name / description editing.
   const [editingName, setEditingName] = useState(false);
@@ -505,10 +494,8 @@ export default function AvatarDetail({ id }: { id: string }) {
     }
   }
 
-  function openFilePicker(kind: CropperKind) {
-    setCropperKind(kind);
-    if (kind === 'cover') coverFileInputRef.current?.click();
-    else stageFileInputRef.current?.click();
+  function openFilePicker() {
+    coverFileInputRef.current?.click();
   }
 
   function onFilePicked(e: React.ChangeEvent<HTMLInputElement>) {
@@ -526,13 +513,12 @@ export default function AvatarDetail({ id }: { id: string }) {
       const form = new FormData();
       form.append(
         'photo',
-        new File([blob], `${cropperKind}.jpg`, { type: 'image/jpeg' }),
+        new File([blob], 'cover.jpg', { type: 'image/jpeg' }),
       );
-      const endpoint =
-        cropperKind === 'cover'
-          ? `/api/avatars/${id}/photo`
-          : `/api/avatars/${id}/stage-photo`;
-      const res = await fetch(endpoint, { method: 'POST', body: form });
+      const res = await fetch(`/api/avatars/${id}/photo`, {
+        method: 'POST',
+        body: form,
+      });
       const json = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
       if (cropperSrc) URL.revokeObjectURL(cropperSrc);
@@ -654,7 +640,7 @@ export default function AvatarDetail({ id }: { id: string }) {
           {canEdit && (
             <button
               type="button"
-              onClick={() => openFilePicker('cover')}
+              onClick={() => openFilePicker()}
               aria-label="アバター写真を変更"
               className="absolute -bottom-1 -right-1 grid h-5 w-5 place-items-center rounded-full bg-neutral-900 text-white shadow-md transition hover:bg-neutral-700 focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:ring-offset-2"
             >
@@ -1043,16 +1029,9 @@ export default function AvatarDetail({ id }: { id: string }) {
       </div>
 
       {/* 写真変更用の hidden input。メニュー開閉と無関係に参照できるよう
-          ルート直下に置く(通話画面のステージ写真変更からも使う)。 */}
+          ルート直下に置く。 */}
         <input
           ref={coverFileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={onFilePicked}
-          className="hidden"
-        />
-        <input
-          ref={stageFileInputRef}
           type="file"
           accept="image/*"
           onChange={onFilePicked}
@@ -1065,20 +1044,12 @@ export default function AvatarDetail({ id }: { id: string }) {
         busy={cropperBusy}
         onConfirm={saveCroppedPhoto}
         onCancel={cancelCrop}
-        aspect={cropperKind === 'stage' ? 16 / 9 : 1}
-        cropShape={cropperKind === 'stage' ? 'rect' : 'round'}
-        outputWidth={cropperKind === 'stage' ? 1280 : 512}
-        outputHeight={cropperKind === 'stage' ? 720 : 512}
-        title={
-          cropperKind === 'stage'
-            ? 'ステージ背景をトリミング'
-            : 'アバター写真をトリミング'
-        }
-        hint={
-          cropperKind === 'stage'
-            ? '16:9 の横長範囲を切り出します。'
-            : '丸く切り抜かれた範囲がアバター写真になります。'
-        }
+        aspect={1}
+        cropShape="round"
+        outputWidth={512}
+        outputHeight={512}
+        title="アバター写真をトリミング"
+        hint="丸く切り抜かれた範囲がアバター写真になります。"
       />
     </div>
   );
@@ -1525,7 +1496,7 @@ function FolderPickerInline({
 }
 
 /* ===========================================================
- * Live transcript collapsible panel
+ * Setting rows / pickers
  * =========================================================== */
 
 const SettingRow = forwardRef<

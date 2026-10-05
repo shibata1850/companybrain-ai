@@ -79,13 +79,8 @@ export async function GET(
       .createSignedUrl(avatar.cover_image_path, 60 * 60);
     coverUrl = signed?.signedUrl ?? null;
   }
-  let stageUrl: string | null = null;
-  if (avatar.stage_image_path) {
-    const { data: signed } = await db.storage
-      .from(storageBucket())
-      .createSignedUrl(avatar.stage_image_path, 60 * 60);
-    stageUrl = signed?.signedUrl ?? null;
-  }
+  // NOTE: stage_image_path(背景写真)は通話UIの一本化で表示先が無くなった
+  // ため、署名URLの発行をやめた(列・既存ファイルは温存)。
 
   // 共有相手(閲覧・会話のみ)の場合は can_edit=false。UI 側で編集系を隠す。
   const canEdit = auth.access === 'owner';
@@ -98,7 +93,6 @@ export async function GET(
     avatar: {
       ...avatarOut,
       cover_url: coverUrl,
-      stage_url: stageUrl,
       can_edit: canEdit,
       shared: auth.access === 'shared',
     },

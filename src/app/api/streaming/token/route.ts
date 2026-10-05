@@ -32,7 +32,7 @@ export const dynamic = 'force-dynamic';
  *     can show a debug peek if it wants
  */
 export async function POST(req: NextRequest) {
-  let body: { avatarId?: string; model?: string; avatarVideo?: boolean } = {};
+  let body: { avatarId?: string; model?: string } = {};
   try {
     body = await req.json();
   } catch {
@@ -292,20 +292,7 @@ ${styleSamples || '（参考発言なし。一般的な人柄として自然に�
         ? liveModelForPlan(memberPlanId, env.geminiLiveModel())
         : env.geminiLiveModel();
 
-    // アバター映像PoC(管理者限定・実験)。gemini-3.8-live の Live Avatar
-    // 出力を検証する。映像トークンは音声の約16倍の従量費(≈$0.37/分)の
-    // ため、プラン設計が決まるまで一般ユーザーには開放しない。
-    // クライアントの 1008 フォールバック中(modelOverride あり)は、
-    // 代替モデルがアバター非対応なので音声のみに落とす(強制的に 3.8 へ
-    // 戻すと 1008 ループになる)。
-    const avatarVideo =
-      body.avatarVideo === true && auth.me.role === 'admin' && !modelOverride;
-    const avatarName =
-      process.env.GEMINI_LIVE_AVATAR_NAME || 'Ben';
-
-    const requestedModel = avatarVideo
-      ? 'gemini-3.8-live'
-      : modelOverride || baseLiveModel;
+    const requestedModel = modelOverride || baseLiveModel;
 
     // Gemini 3 系の Live モデルは thinkingBudget ではなく thinkingLevel を
     // 使う仕様になった。旧フィールドを渡すと構成が拒否されるため、3 系では
@@ -313,35 +300,21 @@ ${styleSamples || '（参考発言なし。一般的な人柄として自然に�
     // budget=0)。
     const { thinkingConfig: _legacyThinking, ...liveConfigNoThinking } =
       liveConfig;
-    const configFor = (model: string): Record<string, unknown> => {
-      const base = model.startsWith('gemini-3')
-        ? liveConfigNoThinking
-        : liveConfig;
-      if (avatarVideo && model === 'gemini-3.8-live') {
-        return {
-          ...base,
-          responseModalities: [Modality.VIDEO],
-          avatarConfig: { avatarName },
-        };
-      }
-      return base;
-    };
+    const configFor = (model: string): Record<string, unknown> =>
+      model.startsWith('gemini-3') ? liveConfigNoThinking : liveConfig;
 
     // モデルがこのAPIキー/APIバージョンで使えない場合、mint 時点で
     // 弾かれることがある(接続後の 1008 はクライアント側で別途処理)。
-    // 音声が全断しないよう、既知の Live モデルを順に試す。アバター映像は
-    // 3.8 専用なので代替を試さず、そのままエラーを返して診断に使う。
+    // 音声が全断しないよう、既知の Live モデルを順に試す。
     const SERVER_LIVE_FALLBACKS = [
       'gemini-3.8-live',
       'gemini-3.1-flash-live-preview',
       'gemini-2.5-flash-native-audio-latest',
     ];
-    const candidates = avatarVideo
-      ? [requestedModel]
-      : [
-          requestedModel,
-          ...SERVER_LIVE_FALLBACKS.filter((m) => m !== requestedModel),
-        ];
+    const candidates = [
+      requestedModel,
+      ...SERVER_LIVE_FALLBACKS.filter((m) => m !== requestedModel),
+    ];
 
     let token: unknown = null;
     let liveModel = requestedModel;
@@ -385,8 +358,6 @@ ${styleSamples || '（参考発言なし。一般的な人柄として自然に�
       voice: voiceName,
       voiceEnabled,
       voiceDisabledReason,
-      avatarVideo: avatarVideo || undefined,
-      avatarVideoName: avatarVideo ? avatarName : undefined,
       avatar: { id: avatar.id, name: avatar.name },
     });
   } catch (e) {
