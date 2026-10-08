@@ -2197,7 +2197,7 @@ function Pricing() {
       <div className="mx-auto max-w-7xl px-6">
         <SectionHeading
           eyebrow="PRICING"
-          title="まずは無料で。成長に合わせて選べる 4 プラン。"
+          title="まずは無料で。成長に合わせて選べる 5 プラン。"
           subtitle="いつでもアップグレード / 解約可能 · 税抜"
         />
         <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
@@ -2256,6 +2256,28 @@ function Pricing() {
               </Link>
             </div>
           </div>
+        </div>
+
+        {/* 14日無料体験の案内。体験の付与機能は実装済み(管理者が手動付与)。
+            申し込み導線はお問い合わせに一本化し、自動課金なしを明記する。 */}
+        <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-6 text-center">
+          <p className="text-sm font-bold text-emerald-900">
+            動画の学習まで試せる「14日間の無料体験」をご用意しています
+          </p>
+          <p className="mt-1.5 text-xs leading-relaxed text-emerald-800">
+            有料プランの機能を14日間そのままお試しいただけます。体験期間が終わっても、自動で課金されることはありません。
+            エンタープライズは体験開始から30日以内のご契約で、導入支援費(¥100,000)が半額になります。
+          </p>
+          <p className="mt-2 text-xs text-emerald-800">
+            お申し込み:{' '}
+            <a
+              href="mailto:info@softdoing.net"
+              className="font-bold underline hover:text-emerald-950"
+            >
+              info@softdoing.net
+            </a>{' '}
+            まで、社名とご担当者名をお送りください。
+          </p>
         </div>
 
         <p className="mt-10 text-center text-xs text-neutral-500">
@@ -2373,6 +2395,7 @@ function PlanCard({ plan }: { plan: Plan }) {
 
 function FaqSection() {
   const faqs = [
+    { q: '無料で試せますか?', a: 'はい。フリープランに加えて、動画の学習まで含めて有料プランの機能を試せる「14日間の無料体験」をご用意しています(info@softdoing.net までお申し込みください)。体験期間が終わっても、自動で課金されることはありません。' },
     { q: 'プラン変更や解約はいつでも可能ですか?', a: 'はい。ダッシュボードの「プラン変更」からいつでも申請できます。お支払いは請求書 / 銀行振込で、管理者が確認後にプランを切り替えます。' },
     { q: '動画はどのくらいのサイズまでアップロードできますか?', a: '1 ファイルあたり 50 MB までです(これとは別に、プランごとに素材の合計容量の上限があります)。長い動画は要点部分を切り出してアップロードすると、学習の精度も上がります。' },
     { q: 'データは AI の学習に使われますか?', a: 'いいえ。投入された資料・質問・回答が AI モデルの学習に使われることはありません。処理は Google Gemini API(有料 API に送信されたデータはモデルの学習に使用されない規約)と Supabase(SOC 2 Type 2 取得・保存時暗号化)の上で行われ、当社が第三者に提供することもありません。' },
