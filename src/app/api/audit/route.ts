@@ -144,6 +144,117 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ users });
   }
 
+  // ---- 利用実績レポート(管理者のみ) ----
+  // 体験導入の効果測定・実証事例づくり用。期間内の利用実績を「会話の
+  // 中身を読まずに」件数だけ集計する(本文の閲覧は view=entries の監査
+  // フローに限定する。営業資料に使う数字にプライバシーを混ぜない)。
+  if (view === 'report') {
+    if (me.role !== 'admin') {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    }
+    const user = url.searchParams.get('user')?.trim().toLowerCase();
+    if (!user) {
+      return NextResponse.json({ error: 'user is required' }, { status: 400 });
+    }
+    // 期間は日本時間の日付で受け取る。既定は直近30日。
+    const toRaw = url.searchParams.get('to');
+    const fromRaw = url.searchParams.get('from');
+    const to = toRaw ? new Date(`${toRaw}T23:59:59+09:00`) : new Date();
+    const from = fromRaw
+      ? new Date(`${fromRaw}T00:00:00+09:00`)
+      : new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+    if (isNaN(from.getTime()) || isNaN(to.getTime()) || from > to) {
+      return NextResponse.json({ error: 'invalid period' }, { status: 400 });
+    }
+    const fromIso = from.toISOString();
+    const toIso = to.toISOString();
+
+    // 件数系は head+count。sources は本文断片を含んで重いので、行取得は
+    // 軽い列だけに絞る。
+    const countBase = () =>
+      db
+        .from('audit_logs')
+        .select('id', { count: 'exact', head: true })
+        .eq('actor', user)
+        .gte('created_at', fromIso)
+        .lte('created_at', toIso);
+    const [qs, ans, ansSrc, esc] = await Promise.all([
+      countBase().eq('role', 'user'),
+      countBase().eq('role', 'agent'),
+      countBase().eq('role', 'agent').not('sources', 'is', null),
+      countBase().eq('role', 'user').not('escalation', 'is', null),
+    ]);
+
+    const { rows, truncated } = await fetchAllPages<{
+      role: string;
+      created_at: string;
+      session_id: string | null;
+      avatar_id: string | null;
+      avatar_name: string | null;
+    }>((f, t) =>
+      db
+        .from('audit_logs')
+        .select('role, created_at, session_id, avatar_id, avatar_name')
+        .eq('actor', user)
+        .gte('created_at', fromIso)
+        .lte('created_at', toIso)
+        .order('created_at', { ascending: true })
+        .range(f, t),
+    );
+    const days = new Set<string>();
+    const sessions = new Set<string>();
+    const brainMap = new Map<
+      string,
+      { name: string | null; questions: number }
+    >();
+    for (const r of rows) {
+      // 利用日は日本時間で数える。
+      days.add(
+        new Date(r.created_at).toLocaleDateString('ja-JP', {
+          timeZone: 'Asia/Tokyo',
+        }),
+      );
+      if (r.session_id) sessions.add(r.session_id);
+      if (r.role === 'user' && r.avatar_id) {
+        const cur = brainMap.get(r.avatar_id) ?? {
+          name: r.avatar_name ?? null,
+          questions: 0,
+        };
+        cur.questions += 1;
+        if (!cur.name && r.avatar_name) cur.name = r.avatar_name;
+        brainMap.set(r.avatar_id, cur);
+      }
+    }
+
+    const { data: voiceRows } = await db
+      .from('voice_sessions')
+      .select('seconds')
+      .eq('actor', user)
+      .gte('created_at', fromIso)
+      .lte('created_at', toIso);
+    const voiceSeconds = (voiceRows ?? []).reduce(
+      (s, r) => s + Number(r.seconds ?? 0),
+      0,
+    );
+
+    return NextResponse.json({
+      user,
+      from: fromIso,
+      to: toIso,
+      truncated,
+      questions: qs.count ?? 0,
+      answers: ans.count ?? 0,
+      answersWithSources: ansSrc.count ?? 0,
+      escalated: esc.count ?? 0,
+      activeDays: days.size,
+      sessions: sessions.size,
+      voiceSeconds,
+      brains: Array.from(brainMap.entries())
+        .map(([id, b]) => ({ id, name: b.name, questions: b.questions }))
+        .sort((a, b) => b.questions - a.questions),
+    });
+  }
+
   // The user being audited. Members can only ever be themselves.
   const requestedUser = url.searchParams.get('user')?.trim().toLowerCase();
   const targetUser =
