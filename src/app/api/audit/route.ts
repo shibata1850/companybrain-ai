@@ -101,6 +101,27 @@ export async function GET(req: NextRequest) {
     if (me.role !== 'admin') {
       return NextResponse.json({ error: 'forbidden' }, { status: 403 });
     }
+    // scope=all: ブレイン所有者に限らず全アカウントを返す(利用実績
+    // レポート用)。共有ブレインでしか会話しない体験ユーザーは avatars
+    // の所有者一覧に現れないため、既定の一覧では拾えない。
+    if (url.searchParams.get('scope') === 'all') {
+      const { rows: allUsers } = await fetchAllPages<{
+        email: string;
+        admin_label: string | null;
+      }>((from, to) =>
+        db
+          .from('app_users')
+          .select('email, admin_label')
+          .order('email', { ascending: true })
+          .range(from, to),
+      );
+      return NextResponse.json({
+        users: allUsers.map((r) => ({
+          email: r.email,
+          label: r.admin_label ?? null,
+        })),
+      });
+    }
     // 全件取得だと PostgREST の行上限(既定1000)で黙って欠落し、ブレインが
     // 1,000件を超えると監査対象から消えるユーザーが出る。管理者の統制手段が
     // 届かなくなるため、明示ページングで取得する。
@@ -156,103 +177,131 @@ export async function GET(req: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'user is required' }, { status: 400 });
     }
-    // 期間は日本時間の日付で受け取る。既定は直近30日。
+    // 期間は日本時間の日付で受け取る。既定は直近30日。上限は「終了日の
+    // 翌日0時 JST 未満」の排他境界にし、終了日の最終1秒を取りこぼさない。
     const toRaw = url.searchParams.get('to');
     const fromRaw = url.searchParams.get('from');
-    const to = toRaw ? new Date(`${toRaw}T23:59:59+09:00`) : new Date();
+    const toDay = toRaw ? new Date(`${toRaw}T00:00:00+09:00`) : new Date();
+    const toExclusive = toRaw
+      ? new Date(toDay.getTime() + 24 * 60 * 60 * 1000)
+      : new Date();
     const from = fromRaw
       ? new Date(`${fromRaw}T00:00:00+09:00`)
-      : new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
-    if (isNaN(from.getTime()) || isNaN(to.getTime()) || from > to) {
+      : new Date(toExclusive.getTime() - 30 * 24 * 60 * 60 * 1000);
+    if (
+      isNaN(from.getTime()) ||
+      isNaN(toExclusive.getTime()) ||
+      from >= toExclusive
+    ) {
       return NextResponse.json({ error: 'invalid period' }, { status: 400 });
     }
     const fromIso = from.toISOString();
-    const toIso = to.toISOString();
+    const toIso = toExclusive.toISOString();
 
-    // 件数系は head+count。sources は本文断片を含んで重いので、行取得は
-    // 軽い列だけに絞る。
-    const countBase = () =>
-      db
-        .from('audit_logs')
-        .select('id', { count: 'exact', head: true })
-        .eq('actor', user)
-        .gte('created_at', fromIso)
-        .lte('created_at', toIso);
-    const [qs, ans, ansSrc, esc] = await Promise.all([
-      countBase().eq('role', 'user'),
-      countBase().eq('role', 'agent'),
-      countBase().eq('role', 'agent').not('sources', 'is', null),
-      countBase().eq('role', 'user').not('escalation', 'is', null),
-    ]);
-
-    const { rows, truncated } = await fetchAllPages<{
-      role: string;
-      created_at: string;
-      session_id: string | null;
-      avatar_id: string | null;
-      avatar_name: string | null;
-    }>((f, t) =>
-      db
-        .from('audit_logs')
-        .select('role, created_at, session_id, avatar_id, avatar_name')
-        .eq('actor', user)
-        .gte('created_at', fromIso)
-        .lte('created_at', toIso)
-        .order('created_at', { ascending: true })
-        .range(f, t),
-    );
-    const days = new Set<string>();
-    const sessions = new Set<string>();
-    const brainMap = new Map<
-      string,
-      { name: string | null; questions: number }
-    >();
-    for (const r of rows) {
-      // 利用日は日本時間で数える。
-      days.add(
-        new Date(r.created_at).toLocaleDateString('ja-JP', {
-          timeZone: 'Asia/Tokyo',
-        }),
-      );
-      if (r.session_id) sessions.add(r.session_id);
-      if (r.role === 'user' && r.avatar_id) {
-        const cur = brainMap.get(r.avatar_id) ?? {
-          name: r.avatar_name ?? null,
-          questions: 0,
-        };
-        cur.questions += 1;
-        if (!cur.name && r.avatar_name) cur.name = r.avatar_name;
-        brainMap.set(r.avatar_id, cur);
+    try {
+      // 件数系は head+count。sources は本文断片を含んで重いので、行取得は
+      // 軽い列だけに絞る。
+      const countBase = () =>
+        db
+          .from('audit_logs')
+          .select('id', { count: 'exact', head: true })
+          .eq('actor', user)
+          .gte('created_at', fromIso)
+          .lt('created_at', toIso);
+      const counts = await Promise.all([
+        countBase().eq('role', 'user'),
+        countBase().eq('role', 'agent'),
+        countBase().eq('role', 'agent').not('sources', 'is', null),
+        countBase().eq('role', 'user').not('escalation', 'is', null),
+      ]);
+      // 集計はこのページの存在理由(営業の実証数字)なので、失敗を 0 に
+      // 化けさせない。1つでもエラーなら 500 で正直に落とす。
+      for (const c of counts) {
+        if (c.error) throw new Error(c.error.message);
       }
+      const [qs, ans, ansSrc, esc] = counts;
+
+      const { rows, truncated } = await fetchAllPages<{
+        role: string;
+        created_at: string;
+        session_id: string | null;
+        avatar_id: string | null;
+        avatar_name: string | null;
+      }>((f, t) =>
+        db
+          .from('audit_logs')
+          .select('role, created_at, session_id, avatar_id, avatar_name')
+          .eq('actor', user)
+          .gte('created_at', fromIso)
+          .lt('created_at', toIso)
+          .order('created_at', { ascending: true })
+          .range(f, t),
+      );
+      const days = new Set<string>();
+      const sessions = new Set<string>();
+      const brainMap = new Map<
+        string,
+        { name: string | null; questions: number }
+      >();
+      for (const r of rows) {
+        // 利用日は日本時間で数える。
+        days.add(
+          new Date(r.created_at).toLocaleDateString('ja-JP', {
+            timeZone: 'Asia/Tokyo',
+          }),
+        );
+        if (r.session_id) sessions.add(r.session_id);
+        if (r.role === 'user' && r.avatar_id) {
+          const cur = brainMap.get(r.avatar_id) ?? {
+            name: r.avatar_name ?? null,
+            questions: 0,
+          };
+          cur.questions += 1;
+          if (!cur.name && r.avatar_name) cur.name = r.avatar_name;
+          brainMap.set(r.avatar_id, cur);
+        }
+      }
+
+      // 音声秒数も明示ページング(1,000行超で黙って欠落させない)。
+      const { rows: voiceRows } = await fetchAllPages<{ seconds: number }>(
+        (f, t) =>
+          db
+            .from('voice_sessions')
+            .select('seconds')
+            .eq('actor', user)
+            .gte('created_at', fromIso)
+            .lt('created_at', toIso)
+            .order('created_at', { ascending: true })
+            .range(f, t),
+      );
+      const voiceSeconds = voiceRows.reduce(
+        (s, r) => s + Number(r.seconds ?? 0),
+        0,
+      );
+
+      return NextResponse.json({
+        user,
+        from: fromIso,
+        to: toIso,
+        truncated,
+        questions: qs.count ?? 0,
+        answers: ans.count ?? 0,
+        answersWithSources: ansSrc.count ?? 0,
+        escalated: esc.count ?? 0,
+        activeDays: days.size,
+        sessions: sessions.size,
+        voiceSeconds,
+        brains: Array.from(brainMap.entries())
+          .map(([id, b]) => ({ id, name: b.name, questions: b.questions }))
+          .sort((a, b) => b.questions - a.questions),
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return NextResponse.json(
+        { error: `集計に失敗しました: ${message}` },
+        { status: 500 },
+      );
     }
-
-    const { data: voiceRows } = await db
-      .from('voice_sessions')
-      .select('seconds')
-      .eq('actor', user)
-      .gte('created_at', fromIso)
-      .lte('created_at', toIso);
-    const voiceSeconds = (voiceRows ?? []).reduce(
-      (s, r) => s + Number(r.seconds ?? 0),
-      0,
-    );
-
-    return NextResponse.json({
-      user,
-      from: fromIso,
-      to: toIso,
-      truncated,
-      questions: qs.count ?? 0,
-      answers: ans.count ?? 0,
-      answersWithSources: ansSrc.count ?? 0,
-      escalated: esc.count ?? 0,
-      activeDays: days.size,
-      sessions: sessions.size,
-      voiceSeconds,
-      brains: Array.from(brainMap.entries())
-        .map(([id, b]) => ({ id, name: b.name, questions: b.questions }))
-        .sort((a, b) => b.questions - a.questions),
-    });
   }
 
   // The user being audited. Members can only ever be themselves.

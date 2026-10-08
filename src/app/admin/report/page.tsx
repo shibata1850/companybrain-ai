@@ -56,7 +56,7 @@ export default function AdminReportPage() {
 
   useEffect(() => {
     if (role !== 'admin') return;
-    fetch('/api/audit?view=users')
+    fetch('/api/audit?view=users&scope=all')
       .then((r) => r.json())
       .then((j: { users?: Array<{ email: string; label: string | null }> }) => {
         setUsers(j.users ?? []);
@@ -90,6 +90,18 @@ export default function AdminReportPage() {
 
   const summaryText = useMemo(() => {
     if (!report) return '';
+    // 期間は「表示中のレポートが実際に集計した範囲」から導く。入力欄の
+    // 値を使うと、次の集計に向けて日付だけ変えた瞬間にラベルが数字と
+    // 食い違う(間違った期間の数字を提案書に貼る事故になる)。
+    const jst = (iso: string) =>
+      new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(
+        new Date(iso),
+      );
+    const periodFrom = jst(report.from);
+    // report.to は排他境界(翌日0時 JST)なので、表示は1日戻す。
+    const periodTo = jst(
+      new Date(new Date(report.to).getTime() - 24 * 60 * 60 * 1000).toISOString(),
+    );
     const voiceMin = Math.round(report.voiceSeconds / 60);
     const perDay =
       report.activeDays > 0
@@ -102,7 +114,7 @@ export default function AdminReportPage() {
         : 0;
     const lines = [
       `【CompanyBrain AI 利用実績】${report.user}`,
-      `期間: ${from} 〜 ${to}(利用日数 ${report.activeDays}日)`,
+      `期間: ${periodFrom} 〜 ${periodTo}(利用日数 ${report.activeDays}日)`,
       `・質問数: ${report.questions}件(1利用日あたり ${perDay}件)`,
       `・音声会話: ${voiceMin}分`,
       `・利用ブレイン: ${report.brains.length}体${
@@ -112,7 +124,7 @@ export default function AdminReportPage() {
       `・上長確認を要した質問: ${report.escalated}件`,
     ];
     return lines.join('\n');
-  }, [report, from, to]);
+  }, [report]);
 
   if (role === 'loading') {
     return <p className="p-8 text-sm text-neutral-500">読み込み中…</p>;
