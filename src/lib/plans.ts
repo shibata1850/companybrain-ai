@@ -134,6 +134,9 @@ export const PLANS: Plan[] = [
     bestFor: '5〜30 名',
     priceNote: '1 アカウントあたりの月額',
     ctaLabel: '申し込む',
+    // 主力商品(パンフレットでも「推奨」表記)。LPで「人気」バッジ付きの
+    // 強調カードにする。2026-09 のベーシック新設時に欠落していたのを復元。
+    highlighted: true,
     limits: {
       brains: 8,
       monthlyQuestions: 2000,

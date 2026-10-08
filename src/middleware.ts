@@ -20,6 +20,12 @@ export async function middleware(req: NextRequest) {
     pathname === '/login' ||
     pathname.startsWith('/login/') ||
     pathname === '/signup' ||
+    // 法的ページは未ログインでも読めること(特商法表記は公開義務。
+    // 企業の法務・情シスは契約前=アカウント無しの状態で確認する)。
+    pathname === '/terms' ||
+    pathname === '/privacy' ||
+    pathname === '/legal' ||
+    pathname === '/security' ||
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/ingest');
   if (isPublic) return NextResponse.next();
