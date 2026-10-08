@@ -85,7 +85,7 @@ export function LegalTable({
               key={i}
               className={i % 2 === 0 ? 'bg-white' : 'bg-neutral-50/60'}
             >
-              <th className="w-36 shrink-0 border-r border-neutral-200 px-4 py-3 text-left align-top text-xs font-semibold text-neutral-600 sm:w-44">
+              <th className="w-28 shrink-0 border-r border-neutral-200 px-3 py-3 text-left align-top text-xs font-semibold text-neutral-600 sm:w-44 sm:px-4">
                 {k}
               </th>
               <td className="px-4 py-3 align-top leading-relaxed text-neutral-700">

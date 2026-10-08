@@ -2197,7 +2197,7 @@ function Pricing() {
       <div className="mx-auto max-w-7xl px-6">
         <SectionHeading
           eyebrow="PRICING"
-          title="まずは無料で。成長に合わせて選べる 5 プラン。"
+          title="まずは無料で。成長に合わせて選べる5プラン。"
           subtitle="いつでもアップグレード / 解約可能 · 税抜"
         />
         <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
@@ -2530,7 +2530,7 @@ function SectionHeading({
       <span className="text-[11px] font-medium uppercase tracking-[0.2em] text-neutral-400">
         {eyebrow}
       </span>
-      <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+      <h2 className="mt-3 text-3xl font-semibold tracking-tight [text-wrap:balance] sm:text-4xl">
         {title}
       </h2>
       {subtitle && (
