@@ -34,6 +34,9 @@ export function LegalPage({
         <Link href="/legal" className="hover:text-neutral-900">
           特定商取引法に基づく表記
         </Link>
+        <Link href="/security" className="hover:text-neutral-900">
+          セキュリティ
+        </Link>
       </div>
     </div>
   );

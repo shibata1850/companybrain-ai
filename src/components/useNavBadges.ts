@@ -58,6 +58,7 @@ export function isAppRoute(pathname: string): boolean {
     '/terms',
     '/privacy',
     '/legal',
+    '/security',
   ].includes(pathname);
 }
 

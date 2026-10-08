@@ -2477,6 +2477,9 @@ function Footer() {
           <Link href="/privacy" className="hover:text-neutral-900">
             プライバシーポリシー
           </Link>
+          <Link href="/security" className="hover:text-neutral-900">
+            セキュリティ
+          </Link>
           <Link href="/legal" className="hover:text-neutral-900">
             特定商取引法に基づく表記
           </Link>
