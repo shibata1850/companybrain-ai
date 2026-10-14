@@ -21,7 +21,9 @@
   **Supabase**(Postgres + pgvector + Storage + Auth)、**@google/genai**(Gemini)。
 - デプロイ: **Vercel**(`main` ブランチを本番デプロイ。URL: companybrain-ai-chi.vercel.app)。
 - 認証: 招待制 + セルフ登録。`app_users` allowlist。ブレインは作成者本人のみ利用可
-  (管理者は監査のみ)。プランは free / starter / standard / pro。
+  (管理者は監査のみ)。プランは free / starter / basic / standard / pro +
+  エンタープライズ(組織テナント・二部料金)。会話はワンボタンのリアルタイム
+  音声通話(gemini-3.8-live)。チャットUIは 2026-10 に一時撤去(再実装予定)。
 
 ## 2. ブランチと Git
 

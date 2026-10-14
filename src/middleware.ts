@@ -26,6 +26,10 @@ export async function middleware(req: NextRequest) {
     pathname === '/privacy' ||
     pathname === '/legal' ||
     pathname === '/security' ||
+    // キオスク(公開ディスプレイ)はログインの代わりにアクセスキーで
+    // 認証する(/api/kiosk/* がサーバー側でキーを照合)。
+    pathname === '/kiosk' ||
+    pathname.startsWith('/api/kiosk') ||
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/ingest');
   if (isPublic) return NextResponse.next();
