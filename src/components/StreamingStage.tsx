@@ -1,6 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react';
 import {
   GoogleGenAI,
   Modality,
@@ -103,12 +110,13 @@ function newMessageId() {
   return `m_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export default function StreamingStage({
-  avatarId,
-  coverUrl,
-  avatarName,
-  onMessage,
-}: {
+/** 親(キオスク等)から開始・終了を操作するためのハンドル。 */
+export type StreamingStageHandle = {
+  start: () => void;
+  stop: () => void;
+};
+
+type StreamingStageProps = {
   avatarId: string;
   coverUrl: string | null;
   avatarName: string;
@@ -118,7 +126,26 @@ export default function StreamingStage({
    * (localStorage + audit_logs 投稿 = 質問数カウントの基盤)。
    */
   onMessage?: (m: TranscriptMessage) => void;
-}) {
+  /**
+   * キオスク(公開ディスプレイ)モード。指定するとトークン発行・知識検索・
+   * 利用記録をログイン不要の /api/kiosk/* 系へ切り替える(このキーと
+   * サーバー環境変数の照合で、固定された1ブレインのみ会話できる)。
+   */
+  kioskKey?: string;
+  /** 音声セッションの開始・終了の変化を親へ通知(キオスクの待機画面制御用)。 */
+  onLiveChange?: (live: boolean) => void;
+  /**
+   * 無人運転用: 聞き取り状態のままこのミリ秒だけ無音が続いたら自動で
+   * 会話を終了する(立ち去った通行人のセッションを閉じ、費用を止める)。
+   */
+  autoEndAfterSilenceMs?: number;
+};
+
+const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
+  function StreamingStage(
+    { avatarId, coverUrl, avatarName, onMessage, kioskKey, onLiveChange, autoEndAfterSilenceMs },
+    handleRef,
+  ) {
   const [status, setStatus] = useState<Status>('idle');
   // Mirror status in a ref so event handlers (which capture stale state)
   // can read the current value without being recreated on every change.
@@ -308,10 +335,12 @@ export default function StreamingStage({
       const seconds = Math.max(0, Math.round((Date.now() - startedAt) / 1000));
       if (seconds > 0) {
         try {
-          void fetch('/api/streaming/end', {
+          void fetch(kioskKey ? '/api/kiosk/end' : '/api/streaming/end', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ avatarId, seconds }),
+            body: JSON.stringify(
+              kioskKey ? { key: kioskKey, seconds } : { avatarId, seconds },
+            ),
             keepalive: true,
           });
         } catch {
@@ -323,7 +352,8 @@ export default function StreamingStage({
     setSessionStartedAt(null);
     setElapsedSec(0);
     setStatus((s) => (s === 'error' ? s : 'ended'));
-  }, [avatarId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [avatarId, kioskKey]);
 
   useEffect(() => {
     return () => {
@@ -331,7 +361,22 @@ export default function StreamingStage({
     };
   }, [stop]);
 
+  // 親(キオスク)からの開始・終了操作。
+  useImperativeHandle(handleRef, () => ({
+    start: () => {
+      void start();
+    },
+    stop: () => {
+      void stop();
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }));
+
+  // 無人運転用: 最後に「会話が動いた」時刻(ユーザー発話・AI音声)。
+  const lastActivityRef = useRef(0);
+
   function playAudioChunk(base64: string) {
+    lastActivityRef.current = Date.now();
     // Drop chunks that arrive after an interrupt — they're ghost
     // audio from the cancelled generation and would otherwise re-open
     // the speaker and block the mic for the user's next question.
@@ -585,6 +630,7 @@ export default function StreamingStage({
       // not our silent continuation nudge, which is sent as text).
       audioBlockedRef.current = false;
       continuationCountRef.current = 0;
+      lastActivityRef.current = Date.now();
       userBufRef.current += inputTx;
       setCaptionUser(cleanTranscript(userBufRef.current));
     }
@@ -687,12 +733,19 @@ export default function StreamingStage({
         const abort = new AbortController();
         const timer = setTimeout(() => abort.abort(), 15000);
         try {
-          const res = await fetch(`/api/avatars/${avatarId}/knowledge`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query }),
-            signal: abort.signal,
-          });
+          const res = await fetch(
+            kioskKey
+              ? '/api/kiosk/knowledge'
+              : `/api/avatars/${avatarId}/knowledge`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(
+                kioskKey ? { key: kioskKey, query } : { query },
+              ),
+              signal: abort.signal,
+            },
+          );
           const json = (await res.json()) as {
             results?: string[];
             hits?: Array<{
@@ -788,14 +841,18 @@ export default function StreamingStage({
       // the server's GEMINI_LIVE_MODEL env, so changing the model in
       // Vercel had no effect. The server env is now authoritative for
       // every fresh session; the fallback only kicks in on a real 1008.
-      const tokenRes = await fetch('/api/streaming/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          avatarId,
-          model: modelOverrideRef.current || undefined,
-        }),
-      });
+      const tokenRes = await fetch(
+        kioskKey ? '/api/kiosk/token' : '/api/streaming/token',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(
+            kioskKey
+              ? { key: kioskKey, model: modelOverrideRef.current || undefined }
+              : { avatarId, model: modelOverrideRef.current || undefined },
+          ),
+        },
+      );
       const tokenJson = (await tokenRes.json()) as {
         token?: string;
         model?: string;
@@ -845,6 +902,7 @@ export default function StreamingStage({
             console.log('[live] session open', { model: usedModel });
             sessionOpenRef.current = true;
             reconnectAttemptsRef.current = 0;
+            lastActivityRef.current = Date.now();
             // Keep the working model in memory for this session's
             // reconnects, but no longer persist it across sessions —
             // the server env must stay authoritative (see start()).
@@ -1159,6 +1217,36 @@ export default function StreamingStage({
     status === 'searching' ||
     status === 'speaking';
 
+  // 音声セッションの開始・終了の「変化」だけを親へ通知(キオスクの
+  // 待機画面の出し入れに使う)。
+  const onLiveChangeRef = useRef(onLiveChange);
+  useEffect(() => {
+    onLiveChangeRef.current = onLiveChange;
+  }, [onLiveChange]);
+  const prevLiveRef = useRef(false);
+  useEffect(() => {
+    if (prevLiveRef.current !== isLive) {
+      prevLiveRef.current = isLive;
+      onLiveChangeRef.current?.(isLive);
+    }
+  }, [isLive]);
+
+  // 無人運転: 聞き取り状態のまま無音が続いたら自動で終了する
+  // (立ち去った通行人のセッションを閉じて費用を止める)。
+  useEffect(() => {
+    if (!autoEndAfterSilenceMs || !isLive) return;
+    const t = setInterval(() => {
+      if (
+        statusRef.current === 'listening' &&
+        !speakingRef.current &&
+        Date.now() - lastActivityRef.current > autoEndAfterSilenceMs
+      ) {
+        void stop();
+      }
+    }, 2000);
+    return () => clearInterval(t);
+  }, [autoEndAfterSilenceMs, isLive, stop]);
+
   // Keyboard shortcuts. Skip when the user is typing in an input.
   useEffect(() => {
     function isTyping(t: EventTarget | null) {
@@ -1392,7 +1480,10 @@ export default function StreamingStage({
       </div>
     </div>
   );
-}
+  },
+);
+
+export default StreamingStage;
 
 // ---- helpers ----
 
