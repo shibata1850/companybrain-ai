@@ -15,6 +15,7 @@ import {
   type Session,
 } from '@google/genai';
 import { TARGET_INPUT_RATE, floatTo16kPcm } from '@/lib/audioResample';
+import AvatarScene, { type AvatarSceneStatus } from './AvatarScene';
 
 type Status =
   | 'idle'
@@ -1328,8 +1329,29 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
                   ? 'エラーが発生しました'
                   : '待機中';
 
+  // 通話中は全画面のアバターシーンに切り替える(受け答えに合わせて
+  // アバターが動く画面。キオスクと通常通話で共通)。待機・終了・
+  // 音声不可のときは従来のカード表示。
+  const sceneActive =
+    !textOnly &&
+    (isLive || status === 'connecting' || status === 'reconnecting');
+
   return (
     <div className="flex h-full min-h-[24rem] w-full flex-1 flex-col items-center justify-between gap-6 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-6">
+      {sceneActive && (
+        <AvatarScene
+          coverUrl={coverUrl}
+          name={avatarName}
+          status={status as AvatarSceneStatus}
+          agentLevel={agentLevel}
+          micLevel={level}
+          captionAgent={captionAgent}
+          captionUser={captionUser}
+          elapsedLabel={formatElapsed(elapsedSec)}
+          note="回答はAIによる再現であり、ご本人の発言ではありません。重要な判断は原典資料をご確認ください。"
+          onEnd={() => void stop()}
+        />
+      )}
       <div className="flex flex-1 flex-col items-center justify-center gap-5">
         <div
           className={`h-32 w-32 overflow-hidden rounded-full bg-neutral-200 ring-4 sm:h-36 sm:w-36 ${
