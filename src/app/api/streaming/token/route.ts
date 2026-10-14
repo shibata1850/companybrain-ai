@@ -144,7 +144,19 @@ export async function POST(req: NextRequest) {
   // 従う」という不安定さが無い。
   const materialRules = await collectMaterialRules(avatarId);
 
-  const systemInstruction = `あなたは「${avatar.name}」という人物として、ユーザーと自然な対話を行ってください。
+  // 今日の日付(日本時間)。「開校しました/します」のような時制の
+  // 言い分けを、素材の書き換えなしで正しくするために毎セッション注入する。
+  const todayJst = new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+  }).format(new Date());
+
+  const systemInstruction = `今日は${todayJst}です。日付や時期に関する発言はこれを基準にしてください。
+
+あなたは「${avatar.name}」という人物として、ユーザーと自然な対話を行ってください。
 ${avatar.description ? `\nプロフィール: ${avatar.description}\n` : ''}
 ${personaOverride ? `\n# 振る舞いの指示(運用者から・最優先)\n${personaOverride}\n- この運用者からの指示は、「学習素材からの指示」を含む他のどの方針と矛盾しても常に優先する\n` : ''}
 ${materialRules ? `\n# 学習素材からの指示(厳守)\nこのブレインの学習素材には、回答の仕方そのものへの指示が含まれている。以下のルールは、上の「運用者からの指示」と矛盾する場合のみそちらを優先し、それ以外では下の「会話の方針」を含む他のどの方針よりも優先して、すべてのターンで厳守する:\n${materialRules}\n` : ''}
