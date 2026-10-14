@@ -128,6 +128,15 @@ export default function StreamingStage({
   }, [status]);
   const [error, setError] = useState<string | null>(null);
   const [level, setLevel] = useState(0); // mic level 0..1 for the visualizer
+  // AIの発話音量(0..1)。スピーカーに実際に出している音声の振幅から
+  // 毎フレーム取り、アバターの鼓動・波形を「声」に同期させる
+  // (全ブレイン共通のアバター演出の土台。将来の口パクもこの値で駆動)。
+  const [agentLevel, setAgentLevel] = useState(0);
+  const outputAnalyserRef = useRef<AnalyserNode | null>(null);
+  // 通話字幕: 発話途中のリアルタイム文字起こし。騒がしい場所・聴覚配慮・
+  // 公開ディスプレイ(キオスク)掲示を兼ねる。
+  const [captionUser, setCaptionUser] = useState('');
+  const [captionAgent, setCaptionAgent] = useState('');
   // Session timer (seconds since the WebSocket opened).
   const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
   // Mirror of sessionStartedAt for stable callbacks (so `stop` doesn't
@@ -286,6 +295,10 @@ export default function StreamingStage({
       pendingFlushTimerRef.current = null;
     }
     setLevel(0);
+    setAgentLevel(0);
+    outputAnalyserRef.current = null;
+    setCaptionUser('');
+    setCaptionAgent('');
     // Report how many seconds of voice were actually consumed so plan
     // enforcement can sum per-month usage. Fire-and-forget, must not
     // block the cleanup or surface errors to the user. Text-only mode
@@ -333,7 +346,7 @@ export default function StreamingStage({
     buffer.copyToChannel(float, 0);
     const source = ctx.createBufferSource();
     source.buffer = buffer;
-    source.connect(ctx.destination);
+    source.connect(outputAnalyserRef.current ?? ctx.destination);
     const start = Math.max(ctx.currentTime, playheadRef.current);
     source.start(start);
     playheadRef.current = start + buffer.duration;
@@ -527,6 +540,8 @@ export default function StreamingStage({
     userBufRef.current = '';
     agentBufRef.current = '';
     turnSourcesRef.current = [];
+    setCaptionUser('');
+    setCaptionAgent('');
   }
 
   function handleMessage(message: LiveServerMessage) {
@@ -571,11 +586,13 @@ export default function StreamingStage({
       audioBlockedRef.current = false;
       continuationCountRef.current = 0;
       userBufRef.current += inputTx;
+      setCaptionUser(cleanTranscript(userBufRef.current));
     }
     const outputTx = sc?.outputTranscription?.text;
     if (outputTx) {
       agentBufRef.current += outputTx;
       lastTranscriptAtRef.current = Date.now();
+      setCaptionAgent(cleanTranscript(agentBufRef.current));
     }
 
     // Barge-in handling. This is the ROOT CAUSE of the long-standing
@@ -942,6 +959,11 @@ export default function StreamingStage({
       // Some browsers gate audio output until user gesture; resume now.
       await outputCtxRef.current.resume?.();
       playheadRef.current = outputCtxRef.current.currentTime;
+      // 出力側アナライザ: 再生中の音声振幅を読むための通過点。
+      const outAnalyser = outputCtxRef.current.createAnalyser();
+      outAnalyser.fftSize = 512;
+      outAnalyser.connect(outputCtxRef.current.destination);
+      outputAnalyserRef.current = outAnalyser;
 
       // ---- input (mic → Gemini) ----
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -1051,6 +1073,7 @@ export default function StreamingStage({
 
       // Mic-level visualizer.
       const buf = new Uint8Array(analyser.fftSize);
+      const outBuf = new Uint8Array(512);
       const tick = () => {
         analyser.getByteTimeDomainData(buf);
         let sum = 0;
@@ -1061,6 +1084,19 @@ export default function StreamingStage({
         const rms = Math.sqrt(sum / buf.length);
         const scaled = Math.min(1, rms * 4);
         setLevel(scaled);
+
+        // AI発話側の音量(いまスピーカーに出している音)。
+        const oa = outputAnalyserRef.current;
+        if (oa) {
+          oa.getByteTimeDomainData(outBuf);
+          let osum = 0;
+          for (let i = 0; i < outBuf.length; i++) {
+            const v = (outBuf[i] - 128) / 128;
+            osum += v * v;
+          }
+          const orms = Math.sqrt(osum / outBuf.length);
+          setAgentLevel(speakingRef.current ? Math.min(1, orms * 4) : 0);
+        }
 
         // VAD-ish bookkeeping: notice when the user starts and stops
         // talking so we can transition into "thinking" once they go
@@ -1208,13 +1244,24 @@ export default function StreamingStage({
     <div className="flex h-full min-h-[24rem] w-full flex-1 flex-col items-center justify-between gap-6 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-6">
       <div className="flex flex-1 flex-col items-center justify-center gap-5">
         <div
-          className={`h-32 w-32 overflow-hidden rounded-full bg-neutral-200 ring-4 transition-shadow sm:h-36 sm:w-36 ${
+          className={`h-32 w-32 overflow-hidden rounded-full bg-neutral-200 ring-4 sm:h-36 sm:w-36 ${
             status === 'speaking'
-              ? 'animate-pulse ring-emerald-300'
+              ? 'ring-emerald-300'
               : status === 'thinking' || status === 'searching'
                 ? 'ring-indigo-200'
                 : 'ring-neutral-200'
           }`}
+          style={{
+            // 実際の声の振幅でわずかに脈動+光る(点滅アニメより生っぽい)。
+            transform: `scale(${1 + agentLevel * 0.05})`,
+            boxShadow:
+              status === 'speaking'
+                ? `0 0 ${16 + agentLevel * 44}px rgba(16,185,129,${
+                    0.25 + agentLevel * 0.45
+                  })`
+                : 'none',
+            transition: 'transform 90ms ease-out, box-shadow 120ms ease-out',
+          }}
         >
           {coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -1238,21 +1285,45 @@ export default function StreamingStage({
           </p>
         </div>
 
-        {/* マイクが拾えていることを示す小さな波形。 */}
+        {/* 波形: 聞いている間はマイク、話している間はAIの声に追従。 */}
         {isLive && (
           <div className="flex h-6 items-end gap-1" aria-hidden>
             {Array.from({ length: 12 }).map((_, i) => {
               const m = 1 - Math.abs(i - 5.5) * 0.12;
-              const active = status === 'listening' || status === 'thinking';
-              const h = active ? 3 + Math.min(20, level * 44 * m) : 3;
+              const speaking = status === 'speaking';
+              const active =
+                speaking || status === 'listening' || status === 'thinking';
+              const lvl = speaking ? agentLevel : level;
+              const h = active ? 3 + Math.min(20, lvl * 44 * m) : 3;
               return (
                 <span
                   key={i}
-                  className="w-1 rounded-full bg-neutral-900/60 transition-[height] duration-75"
+                  className={`w-1 rounded-full transition-[height] duration-75 ${
+                    speaking ? 'bg-emerald-500/80' : 'bg-neutral-900/60'
+                  }`}
                   style={{ height: `${h}px` }}
                 />
               );
             })}
+          </div>
+        )}
+
+        {/* 通話字幕(リアルタイム文字起こし)。発話の末尾を追いかけて表示。 */}
+        {(captionAgent || captionUser) && (
+          <div
+            className="w-full max-w-md space-y-1.5 px-2 text-center"
+            aria-live="polite"
+          >
+            {captionAgent && (
+              <p className="mx-auto max-w-full rounded-2xl bg-neutral-900/90 px-4 py-2 text-sm font-medium leading-relaxed text-white">
+                {tailText(captionAgent, 76)}
+              </p>
+            )}
+            {captionUser && (
+              <p className="text-xs leading-relaxed text-neutral-400">
+                {tailText(captionUser, 42)}
+              </p>
+            )}
           </div>
         )}
 
@@ -1324,6 +1395,11 @@ export default function StreamingStage({
 }
 
 // ---- helpers ----
+
+/** 字幕用: 長い発話は末尾 n 文字だけを追いかける。 */
+function tailText(s: string, n: number): string {
+  return s.length > n ? `…${s.slice(-n)}` : s;
+}
 
 function formatElapsed(totalSec: number): string {
   const s = Math.max(0, Math.floor(totalSec));
