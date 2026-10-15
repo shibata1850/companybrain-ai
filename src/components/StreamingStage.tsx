@@ -140,11 +140,17 @@ type StreamingStageProps = {
    * 会話を終了する(立ち去った通行人のセッションを閉じ、費用を止める)。
    */
   autoEndAfterSilenceMs?: number;
+  /**
+   * 待機画面(開始前)に表示する有用コンテンツ。親(ブレイン画面)が
+   * 「聞ける事の例」「最近の会話」などを渡す。音声UIの定石どおり、
+   * 何を聞けるのかを画面で示して発見可能性を上げるための枠。
+   */
+  idleExtras?: React.ReactNode;
 };
 
 const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
   function StreamingStage(
-    { avatarId, coverUrl, avatarName, onMessage, kioskKey, onLiveChange, autoEndAfterSilenceMs },
+    { avatarId, coverUrl, avatarName, onMessage, kioskKey, onLiveChange, autoEndAfterSilenceMs, idleExtras },
     handleRef,
   ) {
   const [status, setStatus] = useState<Status>('idle');
@@ -1312,32 +1318,26 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
   // チャットUI・押して話す・写真ステージ・最小化バーは廃止し、
   // 「開始 → そのまま話す → 終了」だけの電話型に一本化した
   // (チャットは将来、別機能として再実装する)。
-  const statusText =
-    status === 'speaking'
-      ? '話しています…'
-      : status === 'listening'
-        ? 'そのまま話しかけてください'
-        : status === 'thinking'
-          ? '考えています…'
-          : status === 'searching'
-            ? '資料を確認しています…'
-            : status === 'connecting'
-              ? '接続中…'
-              : status === 'reconnecting'
-                ? '再接続中…'
-                : status === 'error'
-                  ? 'エラーが発生しました'
-                  : '待機中';
-
-  // 通話中は全画面のアバターシーンに切り替える(受け答えに合わせて
-  // アバターが動く画面。キオスクと通常通話で共通)。待機・終了・
-  // 音声不可のときは従来のカード表示。
+  // 通話中は全画面のアバターシーン(受け答えに合わせてアバターが動く
+  // 画面。キオスクと通常通話で共通)。待機・終了時は下のコンパクトな
+  // 開始ヘッダー+親から渡される有用コンテンツ(聞ける事の例・最近の
+  // 会話など)を表示する — 大きな空白で画面を占有しない。
   const sceneActive =
     !textOnly &&
     (isLive || status === 'connecting' || status === 'reconnecting');
 
+  const idleHint = textOnly
+    ? voiceDisabledReason === 'quota'
+      ? '今月の音声会話の上限に達しました(毎月1日にリセット)'
+      : '音声会話はスターター以上のプランで利用できます'
+    : status === 'error'
+      ? 'エラーが発生しました。もう一度お試しください'
+      : status === 'ended'
+        ? 'マイクで話しかけられます'
+        : 'マイクで話しかけられます';
+
   return (
-    <div className="flex h-full min-h-[24rem] w-full flex-1 flex-col items-center justify-between gap-6 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-6">
+    <div className="flex h-full w-full flex-1 flex-col gap-3">
       {sceneActive && (
         <AvatarScene
           coverUrl={coverUrl}
@@ -1352,154 +1352,55 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
           onEnd={() => void stop()}
         />
       )}
-      <div className="flex flex-1 flex-col items-center justify-center gap-5">
-        <div
-          className={`h-32 w-32 overflow-hidden rounded-full bg-neutral-200 ring-4 sm:h-36 sm:w-36 ${
-            status === 'speaking'
-              ? 'ring-emerald-300'
-              : status === 'thinking' || status === 'searching'
-                ? 'ring-indigo-200'
-                : 'ring-neutral-200'
-          }`}
-          style={{
-            // 実際の声の振幅でわずかに脈動+光る(点滅アニメより生っぽい)。
-            transform: `scale(${1 + agentLevel * 0.05})`,
-            boxShadow:
-              status === 'speaking'
-                ? `0 0 ${16 + agentLevel * 44}px rgba(16,185,129,${
-                    0.25 + agentLevel * 0.45
-                  })`
-                : 'none',
-            transition: 'transform 90ms ease-out, box-shadow 120ms ease-out',
-          }}
-        >
+
+      {/* コンパクトな開始ヘッダー(待機・終了時)。 */}
+      <div className="flex shrink-0 items-center gap-3 rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm">
+        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-neutral-200">
           {coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={coverUrl}
-              alt=""
-              className="h-full w-full object-cover"
-            />
-          ) : null}
-        </div>
-
-        <div className="text-center">
-          <p className="text-xl font-bold tracking-tight">{avatarName}</p>
-          <p className="mt-1 text-sm text-neutral-500">
-            {statusText}
-            {isLive && (
-              <span className="ml-2 font-mono tabular-nums text-neutral-400">
-                {formatElapsed(elapsedSec)}
-              </span>
-            )}
-          </p>
-        </div>
-
-        {/* 波形: 聞いている間はマイク、話している間はAIの声に追従。 */}
-        {isLive && (
-          <div className="flex h-6 items-end gap-1" aria-hidden>
-            {Array.from({ length: 12 }).map((_, i) => {
-              const m = 1 - Math.abs(i - 5.5) * 0.12;
-              const speaking = status === 'speaking';
-              const active =
-                speaking || status === 'listening' || status === 'thinking';
-              const lvl = speaking ? agentLevel : level;
-              const h = active ? 3 + Math.min(20, lvl * 44 * m) : 3;
-              return (
-                <span
-                  key={i}
-                  className={`w-1 rounded-full transition-[height] duration-75 ${
-                    speaking ? 'bg-emerald-500/80' : 'bg-neutral-900/60'
-                  }`}
-                  style={{ height: `${h}px` }}
-                />
-              );
-            })}
-          </div>
-        )}
-
-        {/* 通話字幕(リアルタイム文字起こし)。発話の末尾を追いかけて表示。 */}
-        {(captionAgent || captionUser) && (
-          <div
-            className="w-full max-w-md space-y-1.5 px-2 text-center"
-            aria-live="polite"
-          >
-            {captionAgent && (
-              <p className="mx-auto max-w-full rounded-2xl bg-neutral-900/90 px-4 py-2 text-sm font-medium leading-relaxed text-white">
-                {tailText(captionAgent, 76)}
-              </p>
-            )}
-            {captionUser && (
-              <p className="text-xs leading-relaxed text-neutral-400">
-                {tailText(captionUser, 42)}
-              </p>
-            )}
-          </div>
-        )}
-
-        {!isLive &&
-          status !== 'connecting' &&
-          status !== 'reconnecting' &&
-          !textOnly && (
-            <p className="max-w-[20rem] text-center text-xs leading-relaxed text-neutral-500">
-              ボタンを押したら、そのまま話しかけてください。
-              学習させた資料にもとづいて答えます。
-            </p>
+            <img src={coverUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <span className="grid h-full w-full place-items-center text-lg font-bold text-neutral-400">
+              {avatarName.slice(0, 1)}
+            </span>
           )}
-
-
-        {textOnly && (
-          <p className="max-w-[20rem] rounded-xl bg-neutral-100 px-4 py-2.5 text-center text-xs leading-relaxed text-neutral-600">
-            {voiceDisabledReason === 'quota'
-              ? '今月の音声会話の上限に達しました(毎月1日にリセットされます)。'
-              : '音声会話はスターター以上のプランで利用できます。'}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-bold text-neutral-900">
+            {avatarName}
           </p>
-        )}
-        {error && (
-          <p className="max-w-[20rem] text-center text-xs leading-relaxed text-red-600">
-            {error}
-          </p>
-        )}
+          <p className="truncate text-xs text-neutral-500">{idleHint}</p>
+        </div>
+        <button
+          type="button"
+          onClick={start}
+          disabled={textOnly}
+          className="inline-flex shrink-0 items-center gap-2 rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-500 active:scale-95 disabled:opacity-40"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden>
+            <rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" />
+            <path
+              d="M5 11a7 7 0 0 0 14 0M12 18v3"
+              stroke="currentColor"
+              strokeWidth="2"
+              fill="none"
+              strokeLinecap="round"
+            />
+          </svg>
+          話す
+        </button>
       </div>
 
-      {/* 操作はひとつだけ: 開始 or 終了。 */}
-      <div className="flex w-full flex-col items-center gap-1.5">
-        {isLive || status === 'connecting' || status === 'reconnecting' ? (
-          <>
-            <button
-              type="button"
-              onClick={stop}
-              aria-label="会話を終了する"
-              className="grid h-16 w-16 place-items-center rounded-full bg-red-600 text-white shadow-lg transition active:scale-95"
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden>
-                <path
-                  d="M6 6l12 12M18 6L6 18"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </button>
-            <span className="text-xs font-bold text-red-600">終了</span>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={start}
-            disabled={textOnly}
-            className="rounded-full bg-neutral-900 px-10 py-4 text-base font-bold text-white shadow-lg transition hover:bg-neutral-700 active:scale-95 disabled:opacity-40"
-          >
-            {status === 'ended' || status === 'error'
-              ? 'もう一度話す'
-              : '話し始める'}
-          </button>
-        )}
-        {/* 人物再現サービスの常設注記(利用規約 第7条)。 */}
-        <p className="mt-1 max-w-[22rem] text-center text-[10px] leading-relaxed text-neutral-400">
-          回答はAIによる再現であり、ご本人の発言ではありません。重要な判断は原典資料をご確認ください。
+      {error && (
+        <p className="shrink-0 rounded-xl border border-red-200 bg-red-50 p-3 text-xs leading-relaxed text-red-700">
+          {error}
         </p>
-      </div>
+      )}
+
+      {/* 親から渡される待機画面コンテンツ(聞ける事の例・最近の会話)。 */}
+      {idleExtras && (
+        <div className="min-h-0 flex-1 overflow-y-auto">{idleExtras}</div>
+      )}
     </div>
   );
   },

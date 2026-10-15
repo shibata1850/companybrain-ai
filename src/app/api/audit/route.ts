@@ -362,6 +362,13 @@ export async function GET(req: NextRequest) {
     }
   }
   const q = url.searchParams.get('q')?.trim();
+  // 呼び出し側が少件数だけ欲しい場合(会話画面の「最近の会話」等)に
+  // 1,000件を丸ごと運ばないための上限指定。
+  const limitRaw = Number(url.searchParams.get('limit'));
+  const rowLimit =
+    Number.isFinite(limitRaw) && limitRaw >= 1 && limitRaw <= 1000
+      ? Math.floor(limitRaw)
+      : 1000;
   let query = db
     .from('audit_logs')
     .select(
@@ -370,7 +377,7 @@ export async function GET(req: NextRequest) {
     .eq('avatar_id', avatar)
     .eq('actor', targetUser)
     .order('created_at', { ascending: false })
-    .limit(1000);
+    .limit(rowLimit);
   if (q) {
     // Escape LIKE wildcards so user input is matched literally.
     const safe = q.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');

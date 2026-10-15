@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import StreamingStage, {
+  type StreamingStageHandle,
   type TranscriptMessage,
   type TranscriptSource,
 } from '@/components/StreamingStage';
@@ -132,6 +133,49 @@ export default function AvatarDetail({ id }: { id: string }) {
     currentId: null,
   });
   const [chatLoaded, setChatLoaded] = useState(false);
+  // 待機画面用: 通話の開始を待機コンテンツ(チップ)からも起こせる
+  // ようにするハンドルと、「最近の会話」(自分の監査記録の直近3往復)。
+  // 共有相手は履歴を閲覧できない(403)ため、その場合は黙って非表示。
+  const stageHandleRef = useRef<StreamingStageHandle>(null);
+  const [recentQa, setRecentQa] = useState<
+    Array<{ q: string; a: string | null; at: string }>
+  >([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/audit?view=entries&avatar=${id}&limit=12`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then(
+        (
+          j: {
+            entries?: Array<{
+              role: string;
+              content: string;
+              created_at: string;
+            }>;
+          } | null,
+        ) => {
+          if (cancelled || !j?.entries) return;
+          // 新しい順に並んでいるので、agent を控えてから user と対にする。
+          const pairs: Array<{ q: string; a: string | null; at: string }> = [];
+          let pendingAnswer: string | null = null;
+          for (const e of j.entries) {
+            if (e.role === 'agent') {
+              pendingAnswer = e.content;
+            } else if (e.role === 'user') {
+              pairs.push({ q: e.content, a: pendingAnswer, at: e.created_at });
+              pendingAnswer = null;
+              if (pairs.length >= 3) break;
+            }
+          }
+          setRecentQa(pairs);
+        },
+      )
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
   // フリープラン(音声0分)はテキスト回答のみなので、声の変更
   // オプション自体を出さない。管理者と、依頼で作成されたブレイン
   // (プラン制限外で音声可)は表示を維持する。
@@ -882,13 +926,39 @@ export default function AvatarDetail({ id }: { id: string }) {
   // (将来、別機能として再実装する)。会話内容のサーバー監査記録
   // (audit_logs。質問数カウントの基盤でもある)とローカル保存は、
   // onMessage 経由で従来どおり続ける。
+  // 待機画面の「聞ける事の例」: 学習済み素材のフォルダ・素材名から作る。
+  // 音声UIの定石(何を聞けるか画面で示す)のための材料。
+  const askSuggestions = (() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const m of training_videos) {
+      if (m.status !== 'ready') continue;
+      const label =
+        (m.folder && m.folder.trim()) ||
+        (m.file_name || '').replace(/\.[a-zA-Z0-9]+$/, '').trim();
+      if (!label || seen.has(label)) continue;
+      seen.add(label);
+      out.push(label);
+      if (out.length >= 4) break;
+    }
+    return out;
+  })();
+
   const callView = (
-    <div className="flex min-h-0 flex-1 flex-col sm:min-h-[30rem] sm:rounded-3xl sm:border sm:border-neutral-200 sm:bg-white sm:shadow-sm">
+    <div className="flex min-h-0 flex-1 flex-col p-2 sm:min-h-[30rem] sm:rounded-3xl sm:border sm:border-neutral-200 sm:bg-white sm:p-4 sm:shadow-sm">
       <StreamingStage
+        ref={stageHandleRef}
         avatarId={avatar.id}
         coverUrl={avatar.cover_url}
         avatarName={avatar.name}
         onMessage={handleTranscriptMessage}
+        idleExtras={
+          <IdleExtras
+            suggestions={askSuggestions}
+            recent={recentQa}
+            onAsk={() => stageHandleRef.current?.start()}
+          />
+        }
       />
     </div>
   );
@@ -1532,6 +1602,87 @@ function FolderPickerInline({
 /* ===========================================================
  * Setting rows / pickers
  * =========================================================== */
+
+/**
+ * 待機画面の有用コンテンツ。音声UIの定石(何を聞けるのかを画面で示す=
+ * 発見可能性、履歴の提示=文脈の継続)に合わせ、「聞ける事の例」と
+ * 「最近の会話」を出す。チップのタップは通話開始につながる。
+ */
+function IdleExtras({
+  suggestions,
+  recent,
+  onAsk,
+}: {
+  suggestions: string[];
+  recent: Array<{ q: string; a: string | null; at: string }>;
+  onAsk: () => void;
+}) {
+  return (
+    <div className="space-y-4 pb-4 pt-1">
+      {suggestions.length > 0 && (
+        <section>
+          <h3 className="px-1 text-xs font-bold text-neutral-500">
+            こんなことが聞けます
+          </h3>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {suggestions.map((sug) => (
+              <button
+                key={sug}
+                type="button"
+                onClick={onAsk}
+                className="rounded-full border border-neutral-200 bg-white px-3.5 py-2 text-xs font-medium text-neutral-700 shadow-sm transition hover:border-emerald-400 hover:text-emerald-700 active:scale-95"
+              >
+                {sug}について
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 px-1 text-[10px] text-neutral-400">
+            タップで会話を開始し、そのまま声で質問してください
+          </p>
+        </section>
+      )}
+
+      {recent.length > 0 && (
+        <section>
+          <h3 className="px-1 text-xs font-bold text-neutral-500">
+            最近の会話
+          </h3>
+          <ul className="mt-2 space-y-2">
+            {recent.map((r, i) => (
+              <li
+                key={i}
+                className="rounded-xl border border-neutral-200 bg-white p-3"
+              >
+                <p className="truncate text-xs font-bold text-neutral-800">
+                  Q. {r.q}
+                </p>
+                {r.a && (
+                  <p className="mt-1 truncate text-xs leading-relaxed text-neutral-500">
+                    {r.a}
+                  </p>
+                )}
+                <p className="mt-1 text-[10px] text-neutral-400">
+                  {new Date(r.at).toLocaleString('ja-JP', {
+                    month: 'numeric',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {suggestions.length === 0 && recent.length === 0 && (
+        <p className="px-1 text-xs leading-relaxed text-neutral-400">
+          素材を学習させると、ここに「聞ける事の例」が表示されます。
+        </p>
+      )}
+    </div>
+  );
+}
 
 const SettingRow = forwardRef<
   HTMLButtonElement,
