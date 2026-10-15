@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { storageBucket, supabaseAdmin } from '@/lib/supabase';
 import { clientIp, kioskConfig, kioskKeyMatches } from '@/lib/kioskAuth';
 import { enforceRateLimit } from '@/lib/rateLimit';
+import { extractKotonohaWords } from '@/lib/kotonohaWords';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -36,6 +37,23 @@ export async function GET(req: NextRequest) {
       .createSignedUrl(avatar.cover_image_path as string, 60 * 60 * 12);
     coverUrl = signed?.signedUrl ?? null;
   }
+
+  // コトノハ演出用: 学習素材から語彙を抽出(銀河を泳ぐ文字粒)。
+  // 失敗しても待機画面が出ないと困るので、空配列で続行する。
+  let glyphs: string[] = [];
+  try {
+    const { data: chunks } = await db
+      .from('knowledge_chunks')
+      .select('content')
+      .eq('avatar_id', cfg.avatarId)
+      .limit(60);
+    glyphs = extractKotonohaWords(
+      (chunks ?? []).map((c) => String(c.content ?? '')),
+    );
+  } catch {
+    glyphs = [];
+  }
+
   return NextResponse.json({
     avatar: {
       id: avatar.id,
@@ -43,5 +61,6 @@ export async function GET(req: NextRequest) {
       description: avatar.description ?? null,
       cover_url: coverUrl,
     },
+    glyphs,
   });
 }

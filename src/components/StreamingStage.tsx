@@ -117,6 +117,33 @@ export type StreamingStageHandle = {
   stop: () => void;
 };
 
+/**
+ * headless モードで親へ毎フレーム通知する会話状態のスナップショット。
+ * キオスクの「コトノハ」演出のように、画面描画を完全に独自に行う
+ * 親がセッションの状態・音量・字幕を受け取るために使う。
+ */
+export type StageState = {
+  status:
+    | 'idle'
+    | 'connecting'
+    | 'connected'
+    | 'listening'
+    | 'thinking'
+    | 'searching'
+    | 'speaking'
+    | 'reconnecting'
+    | 'ended'
+    | 'error';
+  /** マイク入力の音量 0..1(聞いている演出用)。 */
+  micLevel: number;
+  /** AI音声の出力音量 0..1(話している演出用)。 */
+  agentLevel: number;
+  /** 発話途中のリアルタイム字幕。 */
+  captionUser: string;
+  captionAgent: string;
+  error: string | null;
+};
+
 type StreamingStageProps = {
   avatarId: string;
   coverUrl: string | null;
@@ -146,11 +173,19 @@ type StreamingStageProps = {
    * 何を聞けるのかを画面で示して発見可能性を上げるための枠。
    */
   idleExtras?: React.ReactNode;
+  /**
+   * 画面を一切描画せず、セッション制御と状態通知だけを行うモード。
+   * キオスクの「コトノハ」演出のように、見た目を親が丸ごと描く場合に
+   * 使う(開始・終了は ref ハンドル、状態は onStageState で受ける)。
+   */
+  headless?: boolean;
+  /** headless 用: 会話状態のスナップショットを変化のたびに通知する。 */
+  onStageState?: (s: StageState) => void;
 };
 
 const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
   function StreamingStage(
-    { avatarId, coverUrl, avatarName, onMessage, kioskKey, onLiveChange, autoEndAfterSilenceMs, idleExtras },
+    { avatarId, coverUrl, avatarName, onMessage, kioskKey, onLiveChange, autoEndAfterSilenceMs, idleExtras, headless, onStageState },
     handleRef,
   ) {
   const [status, setStatus] = useState<Status>('idle');
@@ -828,8 +863,10 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
     }
     manualStopRef.current = false;
     // Ask once for permission so we can ping the user when the agent
-    // speaks while they have the tab buried.
+    // speaks while they have the tab buried. キオスク(無人の展示端末)
+    // では通知許可ダイアログが初回タッチを塞ぐだけなので出さない。
     if (
+      !kioskKey &&
       typeof window !== 'undefined' &&
       'Notification' in window &&
       Notification.permission === 'default'
@@ -1224,6 +1261,23 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
     status === 'searching' ||
     status === 'speaking';
 
+  // headless 用: 会話状態のスナップショットを親へ通知する(音量は
+  // 毎フレーム変わるので、実質アニメーションフレームごとに流れる)。
+  const onStageStateRef = useRef(onStageState);
+  useEffect(() => {
+    onStageStateRef.current = onStageState;
+  }, [onStageState]);
+  useEffect(() => {
+    onStageStateRef.current?.({
+      status,
+      micLevel: level,
+      agentLevel,
+      captionUser,
+      captionAgent,
+      error,
+    });
+  }, [status, level, agentLevel, captionUser, captionAgent, error]);
+
   // 音声セッションの開始・終了の「変化」だけを親へ通知(キオスクの
   // 待機画面の出し入れに使う)。
   const onLiveChangeRef = useRef(onLiveChange);
@@ -1322,6 +1376,9 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
   // 画面。キオスクと通常通話で共通)。待機・終了時は下のコンパクトな
   // 開始ヘッダー+親から渡される有用コンテンツ(聞ける事の例・最近の
   // 会話など)を表示する — 大きな空白で画面を占有しない。
+  // headless: 画面は親(コトノハ等)が描く。ここでは何も出さない。
+  if (headless) return null;
+
   const sceneActive =
     !textOnly &&
     (isLive || status === 'connecting' || status === 'reconnecting');
