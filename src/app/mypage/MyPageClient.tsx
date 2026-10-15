@@ -177,6 +177,7 @@ export default function MyPageClient() {
             <MenuLink href="/admin/avatars" label="ユーザーブレイン管理" />
             <MenuLink href="/admin/users" label="ユーザー管理" />
             <MenuLink href="/admin/orgs" label="組織・シート管理" />
+            <MenuLink href="/admin/kiosk" label="展示モード(キオスクURL発行)" />
           </>
         )}
       </section>

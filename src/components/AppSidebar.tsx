@@ -297,6 +297,12 @@ export default function AppSidebar({ show }: { show: boolean }) {
                 >
                   利用実績レポート
                 </Link>
+                <Link
+                  href="/admin/kiosk"
+                  className={linkCls(pathname.startsWith('/admin/kiosk'))}
+                >
+                  展示モード
+                </Link>
               </>
             )}
           </>
