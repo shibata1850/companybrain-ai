@@ -88,9 +88,9 @@ export default function AvatarScene({
     <div
       className={`fixed inset-0 z-[120] flex flex-col overflow-hidden transition-colors duration-700 ${
         speaking
-          ? 'bg-gradient-to-b from-emerald-50 via-white to-emerald-100/70'
+          ? 'bg-gradient-to-b from-emerald-50 via-white to-emerald-100'
           : busyThinking
-            ? 'bg-gradient-to-b from-indigo-50 via-white to-indigo-100/60'
+            ? 'bg-gradient-to-b from-indigo-50 via-white to-indigo-100'
             : 'bg-gradient-to-b from-neutral-50 via-white to-neutral-100'
       }`}
     >

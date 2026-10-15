@@ -124,7 +124,7 @@ export default function KioskClient() {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col bg-gradient-to-b from-white via-neutral-50 to-emerald-50/40">
+    <div className="fixed inset-0 z-[100] flex flex-col bg-gradient-to-b from-white via-neutral-50 to-emerald-50">
       {/* 会話ステージ。中身はスマホ/PCと同じ共通部品を、展示向けに拡大。
           zoom は Chrome/Edge(展示端末想定)でレイアウトごと拡大される。 */}
       <div className="flex min-h-0 flex-1 items-center justify-center">
@@ -148,7 +148,7 @@ export default function KioskClient() {
           type="button"
           onClick={() => stageRef.current?.start()}
           aria-label={`${avatar.name} と話す`}
-          className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-8 bg-gradient-to-b from-white via-neutral-50 to-emerald-50/60 text-center"
+          className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-8 bg-gradient-to-b from-white via-neutral-50 to-emerald-50 text-center"
         >
           <div className="h-56 w-56 overflow-hidden rounded-full bg-neutral-200 shadow-xl ring-8 ring-white">
             {avatar.cover_url ? (
