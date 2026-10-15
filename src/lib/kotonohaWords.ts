@@ -41,7 +41,8 @@ export function extractKotonohaWords(texts: string[], max = 40): string[] {
 
   // 複数文字の「言葉」: 2回以上出てくるものだけ(偶然の連なりを除く)。
   const wordFreq = new Map<string, number>();
-  const wordRe = /[一-鿿]{2,4}|[゠-ヿー]{2,6}|[A-Z]{2,4}/g;
+  // 英大文字は社名(SOFTDOING)等が途中で割れないよう 10 文字まで取る。
+  const wordRe = /[一-鿿]{2,4}|[゠-ヿー]{2,6}|[A-Z]{2,10}/g;
   for (const m of joined.matchAll(wordRe)) {
     const w = m[0];
     if (STOP_WORDS.has(w)) continue;
