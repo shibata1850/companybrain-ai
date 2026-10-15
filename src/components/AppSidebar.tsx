@@ -33,6 +33,26 @@ export default function AppSidebar({ show }: { show: boolean }) {
   const [brains, setBrains] = useState<SidebarBrain[]>([]);
   const [me, setMe] = useState<Me | null>(null);
   const lastLoadRef = useRef(0);
+  // 折りたたみ(しまう)。会話を広く使いたいときに細いレールへ畳む。
+  // 端末ごとの好みなので localStorage に記憶する。
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      setCollapsed(window.localStorage.getItem('cb-sidebar-collapsed') === '1');
+    } catch {
+      // storage 無効環境では常に展開
+    }
+  }, []);
+  const toggleCollapsed = () => {
+    setCollapsed((v) => {
+      try {
+        window.localStorage.setItem('cb-sidebar-collapsed', v ? '0' : '1');
+      } catch {
+        // ignore
+      }
+      return !v;
+    });
+  };
 
   const loadBrains = useCallback(async (force?: boolean) => {
     // 画面遷移のたびに全件を引き直すと重いので、30秒は再利用する。
@@ -78,14 +98,99 @@ export default function AppSidebar({ show }: { show: boolean }) {
         : 'text-neutral-600 hover:bg-white/70 hover:text-neutral-900'
     }`;
 
+  // 畳んだ状態: 細いレール。ブレインはアイコンだけで切替でき、
+  // ワンクリックで元に戻せる。
+  if (collapsed) {
+    return (
+      <aside className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-14 shrink-0 flex-col items-center gap-2 overflow-y-auto border-r border-neutral-200/70 bg-white/50 py-3 backdrop-blur lg:flex">
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label="サイドバーを開く"
+          title="サイドバーを開く"
+          className="grid h-9 w-9 place-items-center rounded-lg text-neutral-500 transition hover:bg-white hover:text-neutral-900"
+        >
+          <svg width="14" height="14" viewBox="0 0 12 12" aria-hidden>
+            <path
+              d="M4.5 2.5L8 6l-3.5 3.5"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+        <Link
+          href="/avatars/new"
+          aria-label="新しいブレイン"
+          title="新しいブレイン"
+          className="grid h-9 w-9 place-items-center rounded-lg bg-neutral-900 text-sm font-bold text-white transition hover:bg-neutral-700"
+        >
+          ＋
+        </Link>
+        <div className="flex w-full flex-col items-center gap-1.5 pt-1">
+          {brains.slice(0, 12).map((b) => {
+            const active =
+              pathname === `/avatars/${b.id}` ||
+              pathname.startsWith(`/avatars/${b.id}/`);
+            return (
+              <Link
+                key={b.id}
+                href={`/avatars/${b.id}`}
+                title={b.name}
+                className={`h-9 w-9 shrink-0 overflow-hidden rounded-full bg-neutral-200 ring-2 transition ${
+                  active ? 'ring-neutral-900' : 'ring-transparent hover:ring-neutral-300'
+                }`}
+              >
+                {b.cover_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={b.cover_url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="grid h-full w-full place-items-center text-xs font-bold text-neutral-500">
+                    {b.name.slice(0, 1)}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
+        </div>
+      </aside>
+    );
+  }
+
   return (
     <aside className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-60 shrink-0 flex-col overflow-y-auto border-r border-neutral-200/70 bg-white/50 px-3 py-4 backdrop-blur lg:flex">
-      <Link
-        href="/avatars/new"
-        className="mb-3 flex items-center justify-center gap-1.5 rounded-lg bg-neutral-900 py-2 text-sm font-bold text-white transition hover:bg-neutral-700"
-      >
-        ＋ 新しいブレイン
-      </Link>
+      <div className="mb-3 flex items-center gap-2">
+        <Link
+          href="/avatars/new"
+          className="flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg bg-neutral-900 py-2 text-sm font-bold text-white transition hover:bg-neutral-700"
+        >
+          ＋ 新しいブレイン
+        </Link>
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label="サイドバーをしまう"
+          title="サイドバーをしまう"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-neutral-400 transition hover:bg-white hover:text-neutral-900"
+        >
+          <svg width="14" height="14" viewBox="0 0 12 12" aria-hidden>
+            <path
+              d="M7.5 2.5L4 6l3.5 3.5"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      </div>
 
       <p className="mb-1 px-2 text-xs font-bold uppercase tracking-wider text-neutral-400">
         ブレイン

@@ -137,6 +137,46 @@ export default function AvatarDetail({ id }: { id: string }) {
   // ようにするハンドルと、「最近の会話」(自分の監査記録の直近3往復)。
   // 共有相手は履歴を閲覧できない(403)ため、その場合は黙って非表示。
   const stageHandleRef = useRef<StreamingStageHandle>(null);
+
+  // 折りたたみ(しまう): スマホの[学習|会話|設定]タブと、PC大画面の
+  // 右レール(学習・設定)。会話を全幅で使いたいとき用。端末ごとの
+  // 好みなので localStorage に記憶する。
+  const [tabsFolded, setTabsFolded] = useState(false);
+  const [railFolded, setRailFolded] = useState(false);
+  useEffect(() => {
+    try {
+      setTabsFolded(
+        window.localStorage.getItem('cb-brain-tabs-folded') === '1',
+      );
+      setRailFolded(
+        window.localStorage.getItem('cb-brain-rail-folded') === '1',
+      );
+    } catch {
+      // storage 無効環境では常に展開
+    }
+  }, []);
+  const toggleTabsFolded = () => {
+    setTabsFolded((v) => {
+      try {
+        window.localStorage.setItem('cb-brain-tabs-folded', v ? '0' : '1');
+      } catch {
+        // ignore
+      }
+      // 開き直したときにスワイプ面を「会話」中央へ初期化し直す。
+      if (v) paneInitDoneRef.current = false;
+      return !v;
+    });
+  };
+  const toggleRailFolded = () => {
+    setRailFolded((v) => {
+      try {
+        window.localStorage.setItem('cb-brain-rail-folded', v ? '0' : '1');
+      } catch {
+        // ignore
+      }
+      return !v;
+    });
+  };
   const [recentQa, setRecentQa] = useState<
     Array<{ q: string; a: string | null; at: string }>
   >([]);
@@ -1041,12 +1081,37 @@ export default function AvatarDetail({ id }: { id: string }) {
       )}
 
       {isPhone ? (
+        tabsFolded ? (
+          <>
+            {/* タブをしまった状態: 会話のみ全面。右端の小さなボタンで戻す。 */}
+            <div className="flex shrink-0 items-center justify-end">
+              <button
+                type="button"
+                onClick={toggleTabsFolded}
+                className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-3 py-1 text-xs font-bold text-neutral-500 transition active:scale-95"
+              >
+                <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden>
+                  <path
+                    d="M2 4.5l4 4 4-4"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                学習・設定タブ
+              </button>
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col px-0.5">{callView}</div>
+          </>
+        ) : (
         <>
           {/* 3面切替タブ(LINE のタブと同じ)。スワイプでもタップでも動く。 */}
           <div
             role="tablist"
             aria-label="ブレイン画面の切り替え"
-            className="flex shrink-0 rounded-xl bg-neutral-100 p-0.5 text-sm font-bold"
+            className="flex shrink-0 items-center rounded-xl bg-neutral-100 p-0.5 text-sm font-bold"
           >
             {['学習させる', '会話', '設定'].map((label, i) => (
               <button
@@ -1064,6 +1129,23 @@ export default function AvatarDetail({ id }: { id: string }) {
                 {label}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={toggleTabsFolded}
+              aria-label="学習・設定タブをしまう"
+              className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-neutral-400 transition active:scale-95"
+            >
+              <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
+                <path
+                  d="M2 7.5l4-4 4 4"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
           </div>
 
           {/* スワイプ面。スクロールスナップで1面ずつ止まる。 */}
@@ -1087,6 +1169,7 @@ export default function AvatarDetail({ id }: { id: string }) {
             </div>
           </div>
         </>
+        )
       ) : (
         <>
           {/* sm〜lg: 右上メニュー。xl: 右レール(settingsStack)。 */}
@@ -1101,11 +1184,55 @@ export default function AvatarDetail({ id }: { id: string }) {
 
         </div>
 
-        {/* xl 以上の右レール: メニューの中身を常時表示する。PC の広さを
-            使い、素材追加・設定・共有を会話と並べて見えるようにする。 */}
-        {isWideDesktop && (
-          <aside className="w-80 shrink-0 space-y-3">{settingsStack}</aside>
-        )}
+        {/* xl 以上の右レール: 素材追加・設定を会話と並べて表示。
+            「しまう」で細いハンドルに畳み、会話を全幅で使える。 */}
+        {isWideDesktop &&
+          (railFolded ? (
+            <button
+              type="button"
+              onClick={toggleRailFolded}
+              aria-label="学習・設定を開く"
+              title="学習・設定を開く"
+              className="flex h-48 w-9 shrink-0 flex-col items-center justify-center gap-2 self-start rounded-xl border border-neutral-200 bg-white text-neutral-400 shadow-sm transition hover:text-neutral-900"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
+                <path
+                  d="M7.5 2.5L4 6l3.5 3.5"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <span className="text-[10px] font-bold [writing-mode:vertical-rl]">
+                学習・設定
+              </span>
+            </button>
+          ) : (
+            <aside className="w-80 shrink-0 space-y-3">
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={toggleRailFolded}
+                  className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-3 py-1 text-xs font-bold text-neutral-500 transition hover:bg-neutral-200"
+                >
+                  <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden>
+                    <path
+                      d="M4.5 2.5L8 6l-3.5 3.5"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      fill="none"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  しまう
+                </button>
+              </div>
+              {settingsStack}
+            </aside>
+          ))}
       </div>
 
       {/* 写真変更用の hidden input。メニュー開閉と無関係に参照できるよう
