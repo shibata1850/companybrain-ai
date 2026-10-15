@@ -86,16 +86,32 @@ export default function AvatarScene({
   if (!mounted) return null;
   return createPortal(
     <div
-      className={`fixed inset-0 z-[120] flex flex-col overflow-hidden transition-colors duration-700 ${
-        speaking
-          ? 'bg-gradient-to-b from-emerald-50 via-white to-emerald-100'
-          : busyThinking
-            ? 'bg-gradient-to-b from-indigo-50 via-white to-indigo-100'
-            : 'bg-gradient-to-b from-neutral-50 via-white to-neutral-100'
-      }`}
+      className="fixed inset-0 z-[200] flex flex-col overflow-hidden"
+      // 背面が絶対に透けないよう、グラデーションとは独立に白のベタ塗りを
+      // インラインで敷く(クラス未生成・読み込み遅延でも不透過を保証)。
+      style={{ backgroundColor: '#ffffff' }}
     >
+      {/* 状態別の背景色はクロスフェードする不透過レイヤーで重ねる。 */}
+      <div
+        aria-hidden
+        className={`pointer-events-none absolute inset-0 bg-gradient-to-b from-emerald-50 via-white to-emerald-100 transition-opacity duration-700 ${
+          speaking ? 'opacity-100' : 'opacity-0'
+        }`}
+      />
+      <div
+        aria-hidden
+        className={`pointer-events-none absolute inset-0 bg-gradient-to-b from-indigo-50 via-white to-indigo-100 transition-opacity duration-700 ${
+          busyThinking ? 'opacity-100' : 'opacity-0'
+        }`}
+      />
+      <div
+        aria-hidden
+        className={`pointer-events-none absolute inset-0 bg-gradient-to-b from-neutral-50 via-white to-neutral-100 transition-opacity duration-700 ${
+          !speaking && !busyThinking ? 'opacity-100' : 'opacity-0'
+        }`}
+      />
       {/* 上部: 名前・状態・経過時間 */}
-      <div className="flex shrink-0 items-start justify-between px-6 pt-[calc(1.25rem+env(safe-area-inset-top))]">
+      <div className="relative flex shrink-0 items-start justify-between px-6 pt-[calc(1.25rem+env(safe-area-inset-top))]">
         <div>
           <p className="text-2xl font-bold tracking-tight text-neutral-900 sm:text-3xl">
             {name}
@@ -194,7 +210,7 @@ export default function AvatarScene({
       </div>
 
       {/* 下部: 字幕 → 操作 → 注記 */}
-      <div className="flex shrink-0 flex-col items-center gap-4 px-6 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
+      <div className="relative flex shrink-0 flex-col items-center gap-4 px-6 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
         <div
           className="flex min-h-[7.5rem] w-full max-w-2xl flex-col items-center justify-end gap-2 text-center"
           aria-live="polite"
