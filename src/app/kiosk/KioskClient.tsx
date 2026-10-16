@@ -12,6 +12,7 @@ import KotonohaStage, {
   type KotonohaFinish,
 } from '@/components/KotonohaStage';
 import OrbStage from '@/components/OrbStage';
+import PrismStage, { type PrismGround } from '@/components/PrismStage';
 
 /**
  * キオスク(公開ディスプレイ)画面。LEDビジョン・店頭サイネージ用。
@@ -29,7 +30,9 @@ import OrbStage from '@/components/OrbStage';
  *   「会話は記録されます」の掲示を併用すること
  *
  * URL パラメータ(?k= 以外は省略可):
- *   look=orb|sumi|dot  仕上げ。オーブ(ガラス球・既定)/ 墨 / ドット(8bit)
+ *   look=…          仕上げ。prism=収差・闇×RGB(既定)/
+ *                   prism-paper=収差・紙×CMY / orb=ガラス球 /
+ *                   sumi=墨 / dot=ドット(8bit)
  *   brand=…         左上の催事名(既定: NEXT GEN AI SCHOOL)
  *   foot=…          下部の案内(会場・開始日など。記録告知は常に付く)
  *   c=…             銀河の核になる一文字(既定: ブレイン名の名の頭文字)
@@ -119,10 +122,17 @@ export default function KioskClient() {
   const params = useSearchParams();
   const kioskKey = params.get('k') || '';
   const isDemo = params.get('demo') === '1';
-  // 仕上げ: オーブ(Apple風のガラス球)が既定。墨/ドットはコトノハ演出。
+  // 仕上げ: 収差オーブ(闇×RGB)が既定。紙×CMY・ガラス球・コトノハ
+  // (墨/ドット)も URL で選べる。
   const lookParam = params.get('look');
-  const look: 'orb' | KotonohaFinish =
-    lookParam === 'sumi' || lookParam === 'dot' ? lookParam : 'orb';
+  const look: 'prism' | 'prism-paper' | 'orb' | KotonohaFinish =
+    lookParam === 'sumi' ||
+    lookParam === 'dot' ||
+    lookParam === 'orb' ||
+    lookParam === 'prism-paper'
+      ? lookParam
+      : 'prism';
+  const prismGround: PrismGround = look === 'prism-paper' ? 'paper' : 'dark';
   const brand = params.get('brand') ?? 'NEXT GEN AI SCHOOL';
   const footParam = params.get('foot');
   const foot = footParam
@@ -281,7 +291,22 @@ export default function KioskClient() {
     return (
       <FullScreen>
       <div className="fixed inset-0 z-[100] bg-black">
-        {look === 'orb' ? (
+        {look === 'prism' || look === 'prism-paper' ? (
+          <PrismStage
+            ground={prismGround}
+            mode={demo.mode}
+            status={demo.status}
+            levels={levelsRef}
+            captionUser={demo.capUser}
+            captionAgent={demo.capAgent}
+            questions={questions}
+            brand={brand}
+            foot={foot}
+            onStart={() => {}}
+            onEnd={() => {}}
+            simulateLevels
+          />
+        ) : look === 'orb' ? (
           <OrbStage
             mode={demo.mode}
             status={demo.status}
@@ -366,7 +391,22 @@ export default function KioskClient() {
         headless
         onStageState={handleStageState}
       />
-      {look === 'orb' ? (
+      {look === 'prism' || look === 'prism-paper' ? (
+        <PrismStage
+          ground={prismGround}
+          mode={mode}
+          status={stage.status}
+          levels={levelsRef}
+          captionUser={stage.captionUser}
+          captionAgent={stage.captionAgent}
+          questions={questions}
+          brand={brand}
+          foot={foot}
+          error={stage.error}
+          onStart={() => stageRef.current?.start()}
+          onEnd={() => stageRef.current?.stop()}
+        />
+      ) : look === 'orb' ? (
         <OrbStage
           mode={mode}
           status={stage.status}
