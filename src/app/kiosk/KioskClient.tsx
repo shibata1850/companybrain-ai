@@ -11,6 +11,7 @@ import StreamingStage, {
 import KotonohaStage, {
   type KotonohaFinish,
 } from '@/components/KotonohaStage';
+import OrbStage from '@/components/OrbStage';
 
 /**
  * キオスク(公開ディスプレイ)画面。LEDビジョン・店頭サイネージ用。
@@ -28,7 +29,7 @@ import KotonohaStage, {
  *   「会話は記録されます」の掲示を併用すること
  *
  * URL パラメータ(?k= 以外は省略可):
- *   look=sumi|dot   仕上げ。墨(既定)/ ドット(8bit)
+ *   look=orb|sumi|dot  仕上げ。オーブ(ガラス球・既定)/ 墨 / ドット(8bit)
  *   brand=…         左上の催事名(既定: NEXT GEN AI SCHOOL)
  *   foot=…          下部の案内(会場・開始日など。記録告知は常に付く)
  *   c=…             銀河の核になる一文字(既定: ブレイン名の名の頭文字)
@@ -118,7 +119,10 @@ export default function KioskClient() {
   const params = useSearchParams();
   const kioskKey = params.get('k') || '';
   const isDemo = params.get('demo') === '1';
-  const look: KotonohaFinish = params.get('look') === 'dot' ? 'dot' : 'sumi';
+  // 仕上げ: オーブ(Apple風のガラス球)が既定。墨/ドットはコトノハ演出。
+  const lookParam = params.get('look');
+  const look: 'orb' | KotonohaFinish =
+    lookParam === 'sumi' || lookParam === 'dot' ? lookParam : 'orb';
   const brand = params.get('brand') ?? 'NEXT GEN AI SCHOOL';
   const footParam = params.get('foot');
   const foot = footParam
@@ -277,22 +281,38 @@ export default function KioskClient() {
     return (
       <FullScreen>
       <div className="fixed inset-0 z-[100] bg-black">
-        <KotonohaStage
-          finish={look}
-          mode={demo.mode}
-          status={demo.status}
-          levels={levelsRef}
-          captionUser={demo.capUser}
-          captionAgent={demo.capAgent}
-          coreChar={params.get('c') || '綾'}
-          words={DEMO_WORDS}
-          questions={questions}
-          brand={brand}
-          foot={foot}
-          onStart={() => {}}
-          onEnd={() => {}}
-          simulateLevels
-        />
+        {look === 'orb' ? (
+          <OrbStage
+            mode={demo.mode}
+            status={demo.status}
+            levels={levelsRef}
+            captionUser={demo.capUser}
+            captionAgent={demo.capAgent}
+            questions={questions}
+            brand={brand}
+            foot={foot}
+            onStart={() => {}}
+            onEnd={() => {}}
+            simulateLevels
+          />
+        ) : (
+          <KotonohaStage
+            finish={look}
+            mode={demo.mode}
+            status={demo.status}
+            levels={levelsRef}
+            captionUser={demo.capUser}
+            captionAgent={demo.capAgent}
+            coreChar={params.get('c') || '綾'}
+            words={DEMO_WORDS}
+            questions={questions}
+            brand={brand}
+            foot={foot}
+            onStart={() => {}}
+            onEnd={() => {}}
+            simulateLevels
+          />
+        )}
       </div>
       </FullScreen>
     );
@@ -346,22 +366,38 @@ export default function KioskClient() {
         headless
         onStageState={handleStageState}
       />
-      <KotonohaStage
-        finish={look}
-        mode={mode}
-        status={stage.status}
-        levels={levelsRef}
-        captionUser={stage.captionUser}
-        captionAgent={stage.captionAgent}
-        coreChar={params.get('c') || deriveCoreChar(avatar.name)}
-        words={glyphs}
-        questions={questions}
-        brand={brand}
-        foot={foot}
-        error={stage.error}
-        onStart={() => stageRef.current?.start()}
-        onEnd={() => stageRef.current?.stop()}
-      />
+      {look === 'orb' ? (
+        <OrbStage
+          mode={mode}
+          status={stage.status}
+          levels={levelsRef}
+          captionUser={stage.captionUser}
+          captionAgent={stage.captionAgent}
+          questions={questions}
+          brand={brand}
+          foot={foot}
+          error={stage.error}
+          onStart={() => stageRef.current?.start()}
+          onEnd={() => stageRef.current?.stop()}
+        />
+      ) : (
+        <KotonohaStage
+          finish={look}
+          mode={mode}
+          status={stage.status}
+          levels={levelsRef}
+          captionUser={stage.captionUser}
+          captionAgent={stage.captionAgent}
+          coreChar={params.get('c') || deriveCoreChar(avatar.name)}
+          words={glyphs}
+          questions={questions}
+          brand={brand}
+          foot={foot}
+          error={stage.error}
+          onStart={() => stageRef.current?.start()}
+          onEnd={() => stageRef.current?.stop()}
+        />
+      )}
     </div>
     </FullScreen>
   );

@@ -30,7 +30,7 @@ export default function AdminKioskPage() {
   const [origin, setOrigin] = useState('');
 
   // フォーム(すべて省略可。既定値のままなら URL に付けない)
-  const [look, setLook] = useState<'sumi' | 'dot'>('sumi');
+  const [look, setLook] = useState<'orb' | 'sumi' | 'dot'>('orb');
   const [brand, setBrand] = useState(DEFAULT_BRAND);
   const [foot, setFoot] = useState('');
   const [coreChar, setCoreChar] = useState('');
@@ -65,7 +65,7 @@ export default function AdminKioskPage() {
   // 共通のクエリ(既定値は省いて URL を短く保つ)。
   const sharedParams = useMemo(() => {
     const p = new URLSearchParams();
-    if (look !== 'sumi') p.set('look', look);
+    if (look !== 'orb') p.set('look', look);
     if (brand.trim() && brand.trim() !== DEFAULT_BRAND)
       p.set('brand', brand.trim());
     if (foot.trim()) p.set('foot', foot.trim());
@@ -158,6 +158,7 @@ export default function AdminKioskPage() {
           <div className="mt-2 flex gap-2">
             {(
               [
+                ['orb', 'オーブ(ガラス球・既定)'],
                 ['sumi', '墨(漆黒×太明朝)'],
                 ['dot', 'ドット(8bit)'],
               ] as const
