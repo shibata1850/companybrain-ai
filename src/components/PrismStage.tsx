@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { StageState } from './StreamingStage';
+import { useLingeringCaption } from './useLingeringCaption';
 
 /**
  * 収差オーブ — 揺れると色版がズレる、三次元のワイヤー球。
@@ -416,6 +417,9 @@ export default function PrismStage({
   }, [mode, questions.length]);
 
   const stateLabel = STATE_LABELS[status] ?? '';
+  // 字幕の余韻: 言い終わっても2秒は残す(読み切れるように)。
+  const heldUser = useLingeringCaption(captionUser);
+  const heldAgent = useLingeringCaption(captionAgent);
   const sysFont =
     "'Zen Kaku Gothic New', 'Hiragino Sans', -apple-system, sans-serif";
 
@@ -652,10 +656,11 @@ export default function PrismStage({
               fontWeight: 700,
             }}
           >
-            {tail(captionUser, 40)}
+            {tail(heldUser, 40)}
           </p>
+          {/* アヤの発言。読みやすさ優先で、この文字には版ズレを
+              かけない(ズレ演出は球と待機画面の文字のみ)。 */}
           <p
-            className="prism-split"
             style={{
               margin: 0,
               fontWeight: 900,
@@ -666,7 +671,7 @@ export default function PrismStage({
               textWrap: 'balance',
             }}
           >
-            {tail(captionAgent, 60)}
+            {tail(heldAgent, 60)}
           </p>
           <p
             style={{

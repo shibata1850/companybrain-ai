@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { StageState } from './StreamingStage';
+import { useLingeringCaption } from './useLingeringCaption';
 
 /**
  * オーブ — Apple 製品のアシスタントを思わせる、透明感のあるガラスの
@@ -330,6 +331,9 @@ export default function OrbStage({
   }, [mode, questions.length]);
 
   const stateLabel = STATE_LABELS[status] ?? '';
+  // 字幕の余韻: 言い終わっても2秒は残す(読み切れるように)。
+  const heldUser = useLingeringCaption(captionUser);
+  const heldAgent = useLingeringCaption(captionAgent);
   const stateColor =
     status === 'speaking'
       ? '#e06a50'
@@ -579,7 +583,7 @@ export default function OrbStage({
               fontWeight: 700,
             }}
           >
-            {tail(captionUser, 40)}
+            {tail(heldUser, 40)}
           </p>
           <p
             style={{
@@ -592,7 +596,7 @@ export default function OrbStage({
               textWrap: 'balance',
             }}
           >
-            {tail(captionAgent, 60)}
+            {tail(heldAgent, 60)}
             {status === 'speaking' && (
               <span
                 className="orb-anim"

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { StageState } from './StreamingStage';
+import { useLingeringCaption } from './useLingeringCaption';
 
 /**
  * コトノハ — 「アヤは、学んだ言葉でできている」。
@@ -364,6 +365,9 @@ export default function KotonohaStage({
   }, [mode, questions.length]);
 
   const stateLabel = STATE_LABELS[status] ?? '';
+  // 字幕の余韻: 言い終わっても2秒は残す(読み切れるように)。
+  const heldUser = useLingeringCaption(captionUser);
+  const heldAgent = useLingeringCaption(captionAgent);
   const stateColor =
     status === 'speaking'
       ? `rgb(${T.spk})`
@@ -632,7 +636,7 @@ export default function KotonohaStage({
               fontWeight: 700,
             }}
           >
-            {tail(captionUser, 40)}
+            {tail(heldUser, 40)}
           </p>
           <p
             style={{
@@ -645,7 +649,7 @@ export default function KotonohaStage({
               textWrap: 'balance',
             }}
           >
-            {tail(captionAgent, 60)}
+            {tail(heldAgent, 60)}
             {status === 'speaking' && (
               <span
                 className="kotonoha-anim"
