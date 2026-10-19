@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { StageState } from './StreamingStage';
 import { useLingeringCaption } from './useLingeringCaption';
+import { digitizeKanaNumbers } from '@/lib/kanaDigits';
 
 /**
  * 収差オーブ — 揺れると色版がズレる、三次元のワイヤー球。
@@ -656,7 +657,7 @@ export default function PrismStage({
               fontWeight: 700,
             }}
           >
-            {tail(heldUser, 40)}
+            {tail(digitizeKanaNumbers(heldUser), 40)}
           </p>
           {/* アヤの発言。読みやすさ優先で、この文字には版ズレを
               かけない(ズレ演出は球と待機画面の文字のみ)。 */}
@@ -671,7 +672,7 @@ export default function PrismStage({
               textWrap: 'balance',
             }}
           >
-            {tail(heldAgent, 60)}
+            {tail(digitizeKanaNumbers(heldAgent), 60)}
           </p>
           <p
             style={{

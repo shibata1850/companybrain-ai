@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { StageState } from './StreamingStage';
 import { useLingeringCaption } from './useLingeringCaption';
+import { digitizeKanaNumbers } from '@/lib/kanaDigits';
 
 /**
  * コトノハ — 「アヤは、学んだ言葉でできている」。
@@ -636,7 +637,7 @@ export default function KotonohaStage({
               fontWeight: 700,
             }}
           >
-            {tail(heldUser, 40)}
+            {tail(digitizeKanaNumbers(heldUser), 40)}
           </p>
           <p
             style={{
@@ -649,7 +650,7 @@ export default function KotonohaStage({
               textWrap: 'balance',
             }}
           >
-            {tail(heldAgent, 60)}
+            {tail(digitizeKanaNumbers(heldAgent), 60)}
             {status === 'speaking' && (
               <span
                 className="kotonoha-anim"

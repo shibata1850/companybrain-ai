@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { digitizeKanaNumbers } from '@/lib/kanaDigits';
 
 /**
  * 全画面アバターシーン(共通部品)。
@@ -217,12 +218,12 @@ export default function AvatarScene({
         >
           {captionUser && (
             <p className="max-w-full text-sm leading-relaxed text-neutral-400">
-              {tail(captionUser, 48)}
+              {tail(digitizeKanaNumbers(captionUser), 48)}
             </p>
           )}
           {captionAgent && (
             <p className="max-w-full rounded-3xl bg-neutral-900/90 px-6 py-3 text-base font-medium leading-relaxed text-white shadow-lg sm:text-lg">
-              {tail(captionAgent, 90)}
+              {tail(digitizeKanaNumbers(captionAgent), 90)}
             </p>
           )}
         </div>

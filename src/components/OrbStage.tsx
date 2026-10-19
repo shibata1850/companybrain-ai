@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { StageState } from './StreamingStage';
 import { useLingeringCaption } from './useLingeringCaption';
+import { digitizeKanaNumbers } from '@/lib/kanaDigits';
 
 /**
  * オーブ — Apple 製品のアシスタントを思わせる、透明感のあるガラスの
@@ -583,7 +584,7 @@ export default function OrbStage({
               fontWeight: 700,
             }}
           >
-            {tail(heldUser, 40)}
+            {tail(digitizeKanaNumbers(heldUser), 40)}
           </p>
           <p
             style={{
@@ -596,7 +597,7 @@ export default function OrbStage({
               textWrap: 'balance',
             }}
           >
-            {tail(heldAgent, 60)}
+            {tail(digitizeKanaNumbers(heldAgent), 60)}
             {status === 'speaking' && (
               <span
                 className="orb-anim"
