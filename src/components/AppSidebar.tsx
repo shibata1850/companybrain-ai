@@ -303,6 +303,12 @@ export default function AppSidebar({ show }: { show: boolean }) {
                 >
                   展示モード
                 </Link>
+                <Link
+                  href="/admin/maintenance"
+                  className={linkCls(pathname.startsWith('/admin/maintenance'))}
+                >
+                  メンテナンス
+                </Link>
               </>
             )}
           </>
