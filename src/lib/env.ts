@@ -41,4 +41,11 @@ export const env = {
   // Shared secret for the external ingestion API (/api/ingest/*).
   // Empty = ingestion endpoints are disabled.
   ingestApiKey: () => process.env.INGEST_API_KEY || '',
+  // キオスク(展示)の1日あたり音声上限(分)。キオスクはプラン課金の
+  // 外で動くため、張り付き利用でAPI費用が青天井になるのを防ぐ安全弁。
+  // 0以下を設定すると無制限。
+  kioskDailyVoiceMinutes: () => {
+    const raw = Number(process.env.KIOSK_DAILY_VOICE_MINUTES);
+    return Number.isFinite(raw) ? Math.floor(raw) : 120;
+  },
 };

@@ -5,6 +5,7 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 import { mintLiveToken, sanitizeModelOverride } from '@/lib/liveToken';
 import { clientIp, kioskConfig, kioskKeyMatches } from '@/lib/kioskAuth';
 import { reportError } from '@/lib/errorReport';
+import { supabaseAdmin } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -35,6 +36,43 @@ export async function POST(req: NextRequest) {
   };
   if (!kioskKeyMatches(body.key, cfg.key)) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
+
+  // 日次の音声上限(安全弁)。キオスクはプラン課金の外で動くため、
+  // 張り付き利用でAPI費用が青天井になるのを防ぐ。既定120分/日、
+  // env KIOSK_DAILY_VOICE_MINUTES で変更(0以下で無制限)。
+  // 判定はセッション開始時のみ(進行中の会話は無音45秒の自動終了に任せる)。
+  const dailyLimitMin = env.kioskDailyVoiceMinutes();
+  if (dailyLimitMin > 0) {
+    // 日本時間の「今日」の開始時刻。
+    const JST_MS = 9 * 60 * 60 * 1000;
+    const dayStartUtc = new Date(
+      Math.floor((Date.now() + JST_MS) / 86_400_000) * 86_400_000 - JST_MS,
+    );
+    const db = supabaseAdmin();
+    const { data: rows, error: usageErr } = await db
+      .from('voice_sessions')
+      .select('seconds')
+      .eq('actor', 'kiosk')
+      .gte('created_at', dayStartUtc.toISOString())
+      .limit(2000);
+    // 集計に失敗したときは安全側(発行拒否)ではなく通す: 展示が
+    // DBの一時障害で黙って止まる方が被害が大きい。
+    if (!usageErr) {
+      const usedSec = (rows ?? []).reduce(
+        (sum, r) => sum + (Number(r.seconds) || 0),
+        0,
+      );
+      if (usedSec >= dailyLimitMin * 60) {
+        return NextResponse.json(
+          {
+            error:
+              '本日の音声会話の受付は終了しました。また明日お話しください。',
+          },
+          { status: 429 },
+        );
+      }
+    }
   }
 
   try {

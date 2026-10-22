@@ -46,17 +46,14 @@ const MAX_AUTO_RECONNECTS = 3;
 // permanent rejection of the requested model for this API key — retrying
 // the same config can never succeed. Instead we walk this list of known
 // Live-capable models and reconnect with the next candidate.
-// 2026-09 時点の現行ラインナップに更新済み:
-//   - gemini-3.8-live: 2026-09-24 GA の最新 Live モデル(移行先本命。
-//     Live Avatar 映像出力にも対応)
-//   - gemini-3.1-flash-live-preview: 2026-03 リリース
-//   - gemini-2.5-flash-native-audio-*: 2026-10-16 提供終了予定のため
-//     最終フォールバックとしてのみ残す(EOL 後は自然に素通りされる)
+// 現行ラインナップ(2026-10 時点):
+//   - gemini-3.8-live: 2026-09-24 GA の最新 Live モデル(本命)
+//   - gemini-3.1-flash-live-preview: 2026-03 リリース(予備)
+// gemini-2.5-flash-native-audio 系は 2026-10-16 に提供終了したため削除。
+// モデルの死活は 管理者メニュー → メンテナンス → 死活確認 で点検できる。
 const LIVE_MODEL_FALLBACKS = [
   'gemini-3.8-live',
   'gemini-3.1-flash-live-preview',
-  'gemini-2.5-flash-native-audio-latest',
-  'gemini-2.5-flash-native-audio-preview-12-2025',
 ];
 
 const OUTPUT_SAMPLE_RATE = 24000;

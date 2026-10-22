@@ -19,6 +19,13 @@ export type MintedLiveToken = {
   avatar: { id: string; name: string };
 };
 
+// 既知の Live モデル(発行失敗時のフォールバック順)。
+// gemini-2.5 系は 2026-10-16 に提供終了したため一覧から除去した。
+export const KNOWN_LIVE_MODELS = [
+  'gemini-3.8-live',
+  'gemini-3.1-flash-live-preview',
+];
+
 export async function mintLiveToken(
   avatarId: string,
   opts: {
@@ -218,14 +225,9 @@ ${styleSamples || '（参考発言なし。一般的な人柄として自然に�
   // モデルがこのAPIキー/APIバージョンで使えない場合、mint 時点で
   // 弾かれることがある(接続後の 1008 はクライアント側で別途処理)。
   // 音声が全断しないよう、既知の Live モデルを順に試す。
-  const SERVER_LIVE_FALLBACKS = [
-    'gemini-3.8-live',
-    'gemini-3.1-flash-live-preview',
-    'gemini-2.5-flash-native-audio-latest',
-  ];
   const candidates = [
     requestedModel,
-    ...SERVER_LIVE_FALLBACKS.filter((m) => m !== requestedModel),
+    ...KNOWN_LIVE_MODELS.filter((m) => m !== requestedModel),
   ];
 
   let token: unknown = null;
@@ -270,6 +272,47 @@ ${styleSamples || '（参考発言なし。一般的な人柄として自然に�
     voice: voiceName,
     avatar: { id: avatar.id as string, name: avatar.name as string },
   };
+}
+
+/**
+ * モデルの死活確認: 指定モデルで短命トークンが発行できるかを試す。
+ * 実際の通話と同じ経路(authTokens.create)なので、「発行できる=
+ * 少なくとも接続の入口までは生きている」ことの確認になる。
+ * 管理者メニュー → メンテナンス の死活確認ボタンから使う。
+ */
+export async function probeLiveModel(
+  model: string,
+): Promise<{ model: string; ok: boolean; error?: string }> {
+  const ai = new GoogleGenAI({
+    apiKey: env.geminiApiKey(),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    httpOptions: { apiVersion: 'v1alpha' } as any,
+  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const create = (ai as any).authTokens?.create?.bind(ai.authTokens);
+  if (!create) {
+    return { model, ok: false, error: 'SDK が短命トークン未対応' };
+  }
+  try {
+    await create({
+      config: {
+        uses: 1,
+        expireTime: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
+        liveConnectConstraints: {
+          model,
+          config: { responseModalities: [Modality.AUDIO] },
+        },
+        httpOptions: { apiVersion: 'v1alpha' },
+      },
+    });
+    return { model, ok: true };
+  } catch (e) {
+    return {
+      model,
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
 }
 
 /**

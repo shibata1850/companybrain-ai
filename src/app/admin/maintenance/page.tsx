@@ -11,12 +11,17 @@ import { useEffect, useState } from 'react';
  * 回答できるが、言い換え・文脈の一致(意味検索)には乗らない。
  */
 
+type ModelHealth = { model: string; ok: boolean; error?: string };
+
 export default function AdminMaintenancePage() {
   const [role, setRole] = useState<'loading' | 'admin' | 'other'>('loading');
   const [remaining, setRemaining] = useState<number | null>(null);
   const [running, setRunning] = useState(false);
   const [log, setLog] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [health, setHealth] = useState<ModelHealth[] | null>(null);
+  const [healthChecking, setHealthChecking] = useState(false);
+  const [healthError, setHealthError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -72,6 +77,24 @@ export default function AdminMaintenancePage() {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function checkHealth() {
+    setHealthChecking(true);
+    setHealthError(null);
+    try {
+      const res = await fetch('/api/admin/model-health', { cache: 'no-store' });
+      const j = (await res.json()) as {
+        results?: ModelHealth[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setHealth(j.results ?? []);
+    } catch (e) {
+      setHealthError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setHealthChecking(false);
     }
   }
 
@@ -132,6 +155,53 @@ export default function AdminMaintenancePage() {
         {error && (
           <p className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs leading-relaxed text-red-700">
             {error}
+          </p>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+        <p className="text-sm font-bold text-neutral-900">
+          リアルタイム会話モデルの死活確認
+        </p>
+        <p className="mt-1 text-xs leading-relaxed text-neutral-500">
+          音声会話に使うモデルと予備(フォールバック)が、いま実際に
+          使えるかを確認します。モデルは提供終了することがあるため、
+          展示やデモの前に一度押しておくと安心です。
+        </p>
+        <button
+          type="button"
+          onClick={checkHealth}
+          disabled={healthChecking}
+          className="mt-3 rounded-full bg-neutral-900 px-5 py-2 text-sm font-bold text-white transition hover:bg-neutral-700 disabled:opacity-40"
+        >
+          {healthChecking ? '確認しています…' : '死活確認を実行'}
+        </button>
+        {health && (
+          <ul className="mt-3 space-y-1.5">
+            {health.map((h) => (
+              <li key={h.model} className="flex items-start gap-2 text-xs">
+                <span
+                  className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 font-bold ${
+                    h.ok
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-red-100 text-red-700'
+                  }`}
+                >
+                  {h.ok ? '正常' : '不可'}
+                </span>
+                <span className="min-w-0">
+                  <span className="font-mono text-neutral-800">{h.model}</span>
+                  {h.error && (
+                    <span className="block text-neutral-400">{h.error}</span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {healthError && (
+          <p className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs leading-relaxed text-red-700">
+            {healthError}
           </p>
         )}
       </div>
