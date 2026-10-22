@@ -17,6 +17,7 @@ type Avatar = {
   name: string;
   description: string | null;
   persona_prompt: string | null;
+  pronunciations: string | null;
   cover_url: string | null;
   voice: string | null;
   language: string | null;
@@ -634,6 +635,7 @@ export default function AvatarDetail({ id }: { id: string }) {
     voice?: string | null;
     language?: string | null;
     persona_prompt?: string | null;
+    pronunciations?: string | null;
   }) {
     setSavingMeta(true);
     setError(null);
@@ -885,6 +887,13 @@ export default function AvatarDetail({ id }: { id: string }) {
             current={avatar.persona_prompt}
             onSave={async (next) => {
               await saveMeta({ persona_prompt: next });
+            }}
+            disabled={savingMeta}
+          />
+          <PronunciationButton
+            current={avatar.pronunciations}
+            onSave={async (next) => {
+              await saveMeta({ pronunciations: next });
             }}
             disabled={savingMeta}
           />
@@ -1946,6 +1955,120 @@ function PersonaPromptButton({
             <div className="mt-3 flex items-center justify-between">
               <p className="text-xs text-neutral-400">
                 空にして保存すると、標準の振る舞いに戻ります。
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="rounded-full bg-neutral-100 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-200"
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void commit()}
+                  disabled={saving}
+                  className="rounded-full bg-neutral-900 px-3 py-1 text-xs font-medium text-white transition hover:bg-neutral-700 disabled:opacity-50"
+                >
+                  {saving ? '保存中…' : '保存'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function PronunciationButton({
+  current,
+  onSave,
+  disabled,
+}: {
+  current: string | null;
+  onSave: (next: string | null) => void | Promise<void>;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(current ?? '');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) setDraft(current ?? '');
+  }, [open, current]);
+
+  const entryCount = (current ?? '')
+    .split('\n')
+    .filter((l) => l.includes('=') || l.includes('＝')).length;
+
+  async function commit() {
+    setSaving(true);
+    try {
+      const next = draft.trim();
+      await onSave(next || null);
+      setOpen(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <SettingRow
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+        icon={
+          <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden>
+            <path
+              d="M2 12c2-6 4-9 6-9s4 3 6 9M4.5 9h7"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        }
+        title="読み方辞書"
+        subtitle="固有名詞の発音を固定する"
+        value={
+          entryCount > 0 ? (
+            <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-bold text-sky-800">
+              {entryCount}語
+            </span>
+          ) : (
+            <span className="text-neutral-400">未設定</span>
+          )
+        }
+      />
+      {open && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4 anim-fade-in"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setOpen(false);
+          }}
+        >
+          <div className="w-full max-w-xl rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="text-sm font-bold text-neutral-900">
+              読み方辞書の設定
+            </h3>
+            <p className="mt-1 text-xs leading-relaxed text-neutral-500">
+              音声は漢字や英数字の読みを文脈から推測するため、地名・人名・
+              製品名の発音が揺れることがあります。1行に1つ「用語=よみ」の
+              形で書くと、会話のたびに正しい読みが音声へ伝えられます。
+              保存すると次の会話開始から反映されます。
+            </p>
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder={'例:\n北上=きたかみ\nBASE44=ベース フォーティーフォー\n展勝地=てんしょうち'}
+              rows={10}
+              className="mt-3 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+            />
+            <div className="mt-3 flex items-center justify-between">
+              <p className="text-xs text-neutral-400">
+                「=」の無い行は無視されます。最大100語。
               </p>
               <div className="flex gap-2">
                 <button

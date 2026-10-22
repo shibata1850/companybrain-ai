@@ -88,7 +88,7 @@ export async function GET(
   // 返さない(会話には Live トークン発行時にサーバー側で注入される)。
   const avatarOut = canEdit
     ? avatar
-    : { ...avatar, persona_prompt: null };
+    : { ...avatar, persona_prompt: null, pronunciations: null };
   return NextResponse.json({
     avatar: {
       ...avatarOut,
@@ -118,6 +118,7 @@ export async function PATCH(
     voice?: string | null;
     language?: string | null;
     persona_prompt?: string | null;
+    pronunciations?: string | null;
   };
   const updates: Record<string, unknown> = {};
   if (typeof body.name === 'string') {
@@ -151,6 +152,19 @@ export async function PATCH(
       typeof body.persona_prompt === 'string'
         ? body.persona_prompt.trim() || null
         : null;
+  }
+  if (body.pronunciations !== undefined) {
+    const text =
+      typeof body.pronunciations === 'string'
+        ? body.pronunciations.trim()
+        : '';
+    if (text.length > 4000) {
+      return NextResponse.json(
+        { error: '読み方辞書が長すぎます(4,000文字まで)' },
+        { status: 400 },
+      );
+    }
+    updates.pronunciations = text || null;
   }
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ ok: true });

@@ -31,7 +31,7 @@ export async function mintLiveToken(
   const db = supabaseAdmin();
   const { data: avatar } = await db
     .from('avatars')
-    .select('id, name, description, voice, language, persona_prompt')
+    .select('id, name, description, voice, language, persona_prompt, pronunciations')
     .eq('id', avatarId)
     .single();
   if (!avatar) {
@@ -55,6 +55,11 @@ export async function mintLiveToken(
       ? avatar.persona_prompt.trim()
       : '';
 
+  // 読み方辞書(ブレインの詳細設定で編集)。音声モデルは漢字・英数字の
+  // 読みを文脈から推測するため、固有名詞の発音が揺れる。発音辞書を渡す
+  // APIが無い現状では、読みをシステム指示で明示するのが最も効く対策。
+  const pronunciationRules = buildPronunciationRules(avatar.pronunciations);
+
   // 学習素材から取り込み時に抽出した振る舞いルール。RAG 検索とは
   // 独立に毎セッション必ず注入されるため、「検索でヒットしたときだけ
   // 従う」という不安定さが無い。
@@ -75,6 +80,7 @@ export async function mintLiveToken(
 あなたは「${avatar.name}」という人物として、ユーザーと自然な対話を行ってください。
 ${avatar.description ? `\nプロフィール: ${avatar.description}\n` : ''}
 ${personaOverride ? `\n# 振る舞いの指示(運用者から・最優先)\n${personaOverride}\n- この運用者からの指示は、「学習素材からの指示」を含む他のどの方針と矛盾しても常に優先する\n` : ''}
+${pronunciationRules ? `\n# 固有名詞の読み方(発音は必ずこの読みで)\n${pronunciationRules}\n- 上の言葉を話すときは、読み仮名を頭に思い浮かべてから発音する\n` : ''}
 ${materialRules ? `\n# 学習素材からの指示(厳守)\nこのブレインの学習素材には、回答の仕方そのものへの指示が含まれている。以下のルールは、上の「運用者からの指示」と矛盾する場合のみそちらを優先し、それ以外では下の「会話の方針」を含む他のどの方針よりも優先して、すべてのターンで厳守する:\n${materialRules}\n` : ''}
 以下は、その人が過去に話した発言の抜粋です。
 これは「口調・価値観・考え方・性格の癖」を読み取るための参考資料であり、知識の上限ではありません。
@@ -264,6 +270,29 @@ ${styleSamples || '（参考発言なし。一般的な人柄として自然に�
     voice: voiceName,
     avatar: { id: avatar.id as string, name: avatar.name as string },
   };
+}
+
+/**
+ * 読み方辞書(1行1組「用語=よみ」)をシステム指示の箇条書きへ変換する。
+ * 形式に合わない行は無視し、最大100組までに制限する。
+ */
+export function buildPronunciationRules(raw: unknown): string {
+  if (typeof raw !== 'string' || !raw.trim()) return '';
+  const rules: string[] = [];
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    // 全角イコールでの入力も受け付ける。
+    const normalized = trimmed.replace('＝', '=');
+    const i = normalized.indexOf('=');
+    if (i <= 0) continue;
+    const term = normalized.slice(0, i).trim();
+    const reading = normalized.slice(i + 1).trim();
+    if (!term || !reading || term.length > 40 || reading.length > 60) continue;
+    rules.push(`- 「${term}」は「${reading}」と発音する`);
+    if (rules.length >= 100) break;
+  }
+  return rules.join('\n');
 }
 
 /** クライアントから来るモデル指名の検証(構成の持ち込みを防ぐ)。 */
