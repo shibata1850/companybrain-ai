@@ -41,7 +41,10 @@ import PrismStage, { type PrismGround } from '@/components/PrismStage';
  *                   自動再生する(現地の映り確認・社内プレビュー用)
  */
 
-const AUTO_END_SILENCE_MS = 45_000;
+// 無音での自動終了は廃止(ユーザー方針: 会話を途中で止めない)。
+// 来訪者が考えている間に切れる方が体験を損なう。セッションは
+// 「会話を終わる」ボタンか、Gemini 側のセッション上限で閉じる。
+const AUTO_END_SILENCE_MS = undefined;
 
 /** 待機中にローテーションする問いかけ(?q= で差し替え可)。 */
 const DEFAULT_QUESTIONS = [
