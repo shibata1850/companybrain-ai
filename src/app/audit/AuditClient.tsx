@@ -96,7 +96,12 @@ export default function AuditClient() {
                 !brain ? 'font-medium text-neutral-900' : ''
               }`}
             >
-              {me?.role === 'admin' ? user : '自分'}のブレイン
+              {me?.role === 'admin'
+                ? user === 'kiosk'
+                  ? 'キオスク(展示)'
+                  : user
+                : '自分'}
+              のブレイン
             </button>
             {brain && <span className="text-neutral-300">›</span>}
           </>

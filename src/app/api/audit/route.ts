@@ -162,6 +162,17 @@ export async function GET(req: NextRequest) {
       email,
       label: labelByEmail.get(email) ?? null,
     }));
+    // キオスク(展示URL)での会話は actor「kiosk」で記録される。
+    // メール形式ではないため通常の一覧に出ず、せっかくの展示会話が
+    // どこからも読めなくなる。記録が1件でもあれば仮想ユーザーとして
+    // 先頭に出す(管理者のみの画面)。
+    const { count: kioskCount } = await db
+      .from('audit_logs')
+      .select('id', { count: 'exact', head: true })
+      .eq('actor', 'kiosk');
+    if ((kioskCount ?? 0) > 0) {
+      users.unshift({ email: 'kiosk', label: 'キオスク(展示)' });
+    }
     return NextResponse.json({ users });
   }
 
@@ -311,6 +322,54 @@ export async function GET(req: NextRequest) {
 
   // ---- Step 2: that user's owned brains ----
   if (view === 'brains') {
+    // キオスク(仮想ユーザー)はブレインを所有しないので、会話記録から
+    // 対象ブレインを導く(管理者のみ。メンバーは targetUser が常に
+    // 自分のメールなのでここへは来ない)。
+    if (targetUser === 'kiosk' && me.role === 'admin') {
+      const { data: rows } = await db
+        .from('audit_logs')
+        .select('avatar_id, avatar_name, created_at')
+        .eq('actor', 'kiosk')
+        .order('created_at', { ascending: false })
+        .limit(3000);
+      const byBrain = new Map<string, { name: string | null; last: string }>();
+      for (const r of rows ?? []) {
+        const id = r.avatar_id as string | null;
+        if (!id) continue;
+        const cur = byBrain.get(id);
+        if (!cur) {
+          byBrain.set(id, {
+            name: (r.avatar_name as string | null) ?? null,
+            last: r.created_at as string,
+          });
+        } else if (!cur.name && r.avatar_name) {
+          cur.name = r.avatar_name as string;
+        }
+      }
+      // 記録に名前が無いブレインは avatars から補完する。
+      const unnamed = Array.from(byBrain.entries())
+        .filter(([, v]) => !v.name)
+        .map(([id]) => id);
+      if (unnamed.length > 0) {
+        const { data: named } = await db
+          .from('avatars')
+          .select('id, name')
+          .in('id', unnamed.slice(0, 100));
+        for (const a of named ?? []) {
+          const cur = byBrain.get(a.id as string);
+          if (cur) cur.name = a.name as string;
+        }
+      }
+      return NextResponse.json({
+        user: targetUser,
+        brains: Array.from(byBrain.entries()).map(([id, v]) => ({
+          id,
+          name: v.name ?? '(名称不明のブレイン)',
+          last_activity: v.last,
+        })),
+      });
+    }
+
     const { data: brains } = await db
       .from('avatars')
       .select('id, name')
