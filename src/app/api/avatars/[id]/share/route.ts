@@ -26,9 +26,10 @@ async function requireOrgOwner(avatarId: string) {
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const r = await requireOrgOwner(params.id);
+  const routeParams = await params;
+  const r = await requireOrgOwner(routeParams.id);
   if ('error' in r) {
     // 個人アカウント(組織なし)は共有機能自体を持たない。
     return NextResponse.json(
@@ -40,12 +41,12 @@ export async function GET(
   const { data: avatar } = await db
     .from('avatars')
     .select('shared_with_org')
-    .eq('id', params.id)
+    .eq('id', routeParams.id)
     .single();
   const { data: shares } = await db
     .from('avatar_shares')
     .select('shared_with_email')
-    .eq('avatar_id', params.id);
+    .eq('avatar_id', routeParams.id);
 
   // 自社メンバー(自分と会社管理者を除いた候補)。
   const members = (await listOrgMembers(r.me.org_id!))
@@ -63,9 +64,10 @@ export async function GET(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const r = await requireOrgOwner(params.id);
+  const routeParams = await params;
+  const r = await requireOrgOwner(routeParams.id);
   if ('error' in r) {
     return NextResponse.json(
       { error: r.notOrg ? '共有はエンタープライズのみの機能です。' : 'forbidden' },
@@ -82,7 +84,7 @@ export async function POST(
   const { error: upErr } = await db
     .from('avatars')
     .update({ shared_with_org: !!shared_with_org })
-    .eq('id', params.id);
+    .eq('id', routeParams.id);
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
 
   // 個別共有先を、自社メンバーの範囲に限定して置き換える。
@@ -97,10 +99,10 @@ export async function POST(
     ),
   );
 
-  await db.from('avatar_shares').delete().eq('avatar_id', params.id);
+  await db.from('avatar_shares').delete().eq('avatar_id', routeParams.id);
   if (clean.length > 0) {
     const rows = clean.map((email) => ({
-      avatar_id: params.id,
+      avatar_id: routeParams.id,
       shared_with_email: email,
     }));
     const { error: insErr } = await db.from('avatar_shares').insert(rows);

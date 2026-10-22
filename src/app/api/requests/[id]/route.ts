@@ -22,13 +22,14 @@ async function fetchRequest(id: string) {
  */
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const routeParams = await params;
   const me = await getAppUser();
   if (!me) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
-  const r = await fetchRequest(params.id);
+  const r = await fetchRequest(routeParams.id);
   if (!r) return NextResponse.json({ error: 'not found' }, { status: 404 });
   if (
     me.role !== 'admin' &&
@@ -47,13 +48,14 @@ export async function GET(
  */
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const routeParams = await params;
   const me = await getAppUser();
   if (!me) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
-  const current = await fetchRequest(params.id);
+  const current = await fetchRequest(routeParams.id);
   if (!current) {
     return NextResponse.json({ error: 'not found' }, { status: 404 });
   }
@@ -121,7 +123,7 @@ export async function PATCH(
   const { error } = await db
     .from('brain_requests')
     .update(updates)
-    .eq('id', params.id);
+    .eq('id', routeParams.id);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -139,7 +141,7 @@ export async function PATCH(
       kind: 'request_accepted',
       title: 'ブレイン作成依頼を受理しました',
       body: `「${current.title}」の作成を開始します。受理後の取り下げは管理者へメールでご連絡ください。`,
-      link: `/requests/${params.id}`,
+      link: `/requests/${routeParams.id}`,
     });
   }
 
@@ -157,7 +159,7 @@ export async function PATCH(
       body: `「${current.title}」: ${
         (updates.reject_reason as string | null) ?? '（理由未記入）'
       }`,
-      link: `/requests/${params.id}`,
+      link: `/requests/${routeParams.id}`,
     });
   }
 

@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     enforceRateLimit(`login:email:${email.trim().toLowerCase()}`, 8, 60_000);
   if (limited) return limited;
 
-  const supa = supabaseRoute();
+  const supa = await supabaseRoute();
   const { error } = await supa.auth.signInWithPassword({
     email: email.trim(),
     password,

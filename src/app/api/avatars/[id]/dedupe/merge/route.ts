@@ -34,9 +34,10 @@ type Row = {
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await authorizeAvatar(params.id, { requireOwner: true });
+  const routeParams = await params;
+  const auth = await authorizeAvatar(routeParams.id, { requireOwner: true });
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }
@@ -69,7 +70,7 @@ export async function POST(
   const { data: rows } = await db
     .from('training_videos')
     .select('id, file_name, transcript, folder, storage_path, created_at')
-    .eq('avatar_id', params.id)
+    .eq('avatar_id', routeParams.id)
     .in('id', ids)
     .order('created_at', { ascending: true });
   const materials = (rows ?? []) as Row[];
@@ -118,7 +119,7 @@ export async function POST(
     await db.from('knowledge_chunks').delete().eq('video_id', target.id);
     if (chunks.length > 0) {
       const chunkRows = chunks.map((content, i) => ({
-        avatar_id: params.id,
+        avatar_id: routeParams.id,
         video_id: target.id,
         content,
         embedding: embeddings[i],
@@ -157,7 +158,7 @@ export async function POST(
       await db.from('training_videos').delete().in('id', otherIds);
     }
 
-    revalidatePath(`/avatars/${params.id}`);
+    revalidatePath(`/avatars/${routeParams.id}`);
     return NextResponse.json({ ok: true, merged_into: target.id });
   } catch (e) {
     reportError(e, {

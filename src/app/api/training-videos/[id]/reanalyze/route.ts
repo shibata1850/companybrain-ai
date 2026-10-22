@@ -20,14 +20,15 @@ export const maxDuration = 60;
  */
 export async function POST(
   _req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const routeParams = await params;
   const db = supabaseAdmin();
 
   const { data: existing, error: getErr } = await db
     .from('training_videos')
     .select('id, avatar_id, transcript, status')
-    .eq('id', params.id)
+    .eq('id', routeParams.id)
     .single();
   if (getErr || !existing) {
     return NextResponse.json({ error: 'not found' }, { status: 404 });
@@ -67,13 +68,13 @@ export async function POST(
       const { error: sumErr } = await db
         .from('training_videos')
         .update({ summary: understood.summary })
-        .eq('id', params.id);
+        .eq('id', routeParams.id);
       if (sumErr) {
         throw new Error(`要約の保存に失敗しました: ${sumErr.message}`);
       }
     }
     const rulesSaved = await saveExtractedRules(
-      params.id as string,
+      routeParams.id as string,
       understood.rules,
     );
     if (!rulesSaved && understood.rules.length > 0) {

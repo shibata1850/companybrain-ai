@@ -29,9 +29,10 @@ const MAX_DOC_BYTES = 15 * 1024 * 1024;
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await authorizeAvatar(params.id, { requireOwner: true });
+  const routeParams = await params;
+  const auth = await authorizeAvatar(routeParams.id, { requireOwner: true });
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }
@@ -124,7 +125,7 @@ export async function POST(
   const { data: avatar } = await db
     .from('avatars')
     .select('id')
-    .eq('id', params.id)
+    .eq('id', routeParams.id)
     .single();
   if (!avatar) {
     return NextResponse.json({ error: 'avatar not found' }, { status: 404 });
@@ -133,7 +134,7 @@ export async function POST(
   // size_bytes(0021)が未適用の本番では列が無く挿入が失敗するため、
   // その場合は size_bytes を外して再挿入する(容量計上は 0021 適用後に有効)。
   const baseRow = {
-    avatar_id: params.id,
+    avatar_id: routeParams.id,
     storage_path: null,
     file_name: fileName,
     mime_type: mimeType || 'application/octet-stream',
@@ -167,7 +168,7 @@ export async function POST(
     const embeddings = chunks.length > 0 ? await embedTexts(chunks) : [];
     if (chunks.length > 0) {
       const rows = chunks.map((content, i) => ({
-        avatar_id: params.id,
+        avatar_id: routeParams.id,
         video_id: videoId,
         content,
         embedding: embeddings[i],
@@ -209,6 +210,6 @@ export async function POST(
     return NextResponse.json({ error: message }, { status: 500 });
   }
 
-  revalidatePath(`/avatars/${params.id}`);
+  revalidatePath(`/avatars/${routeParams.id}`);
   return NextResponse.json({ id: videoId, chars: text.length });
 }

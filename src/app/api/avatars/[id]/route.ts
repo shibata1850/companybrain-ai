@@ -10,9 +10,10 @@ export const revalidate = 0;
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await authorizeAvatar(params.id);
+  const routeParams = await params;
+  const auth = await authorizeAvatar(routeParams.id);
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }
@@ -27,7 +28,7 @@ export async function GET(
   const { data: avatar, error } = await db
     .from('avatars')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', routeParams.id)
     .single();
   if (error || !avatar) {
     return NextResponse.json({ error: 'not found' }, { status: 404 });
@@ -49,7 +50,7 @@ export async function GET(
     const first = await db
       .from('training_videos')
       .select(cols)
-      .eq('avatar_id', params.id)
+      .eq('avatar_id', routeParams.id)
       .order('created_at', { ascending: false })
       .range(from, from + PAGE - 1);
     let page = first.data as Array<Record<string, unknown>> | null;
@@ -60,7 +61,7 @@ export async function GET(
       const legacy = await db
         .from('training_videos')
         .select(legacyCols)
-        .eq('avatar_id', params.id)
+        .eq('avatar_id', routeParams.id)
         .order('created_at', { ascending: false })
         .range(from, from + PAGE - 1);
       page = legacy.data as Array<Record<string, unknown>> | null;
@@ -106,9 +107,10 @@ export async function GET(
  */
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await authorizeAvatar(params.id, { requireOwner: true });
+  const routeParams = await params;
+  const auth = await authorizeAvatar(routeParams.id, { requireOwner: true });
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }
@@ -174,12 +176,12 @@ export async function PATCH(
   const { error } = await db
     .from('avatars')
     .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('id', params.id);
+    .eq('id', routeParams.id);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   revalidatePath('/');
-  revalidatePath(`/avatars/${params.id}`);
+  revalidatePath(`/avatars/${routeParams.id}`);
   return NextResponse.json({ ok: true });
 }
 
@@ -190,9 +192,10 @@ export async function PATCH(
  */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await authorizeAvatar(params.id, { requireOwner: true });
+  const routeParams = await params;
+  const auth = await authorizeAvatar(routeParams.id, { requireOwner: true });
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }
@@ -202,7 +205,7 @@ export async function DELETE(
 
   if (permanent) {
     try {
-      await permanentlyDeleteAvatars([params.id]);
+      await permanentlyDeleteAvatars([routeParams.id]);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       return NextResponse.json({ error: message }, { status: 500 });
@@ -215,7 +218,7 @@ export async function DELETE(
   const { error } = await db
     .from('avatars')
     .update({ deleted_at: new Date().toISOString() })
-    .eq('id', params.id);
+    .eq('id', routeParams.id);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

@@ -22,9 +22,10 @@ export const maxDuration = 300;
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await authorizeAvatar(params.id, { requireOwner: true });
+  const routeParams = await params;
+  const auth = await authorizeAvatar(routeParams.id, { requireOwner: true });
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }
@@ -39,7 +40,7 @@ export async function POST(
       { status: 403 },
     );
   }
-  const avatarId = params.id;
+  const avatarId = routeParams.id;
   const db = supabaseAdmin();
 
   const { data: avatar } = await db

@@ -14,8 +14,9 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(
   _req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const routeParams = await params;
   const me = await getAppUser();
   if (!me || me.role !== 'admin') {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
@@ -25,7 +26,7 @@ export async function POST(
   const { data: r } = await db
     .from('brain_requests')
     .select('id, requester_email, title, status, result_avatar_id')
-    .eq('id', params.id)
+    .eq('id', routeParams.id)
     .single();
   if (!r) {
     return NextResponse.json({ error: 'not found' }, { status: 404 });
@@ -114,7 +115,7 @@ export async function POST(
       completed_at: now,
       updated_at: now,
     })
-    .eq('id', params.id);
+    .eq('id', routeParams.id);
   if (e2) return NextResponse.json({ error: e2.message }, { status: 500 });
 
   // 3. notify the requester (link to their copy)

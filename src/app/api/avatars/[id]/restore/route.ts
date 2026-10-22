@@ -8,9 +8,10 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(
   _req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await authorizeAvatar(params.id, { requireOwner: true });
+  const routeParams = await params;
+  const auth = await authorizeAvatar(routeParams.id, { requireOwner: true });
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }
@@ -18,7 +19,7 @@ export async function POST(
   const { error } = await db
     .from('avatars')
     .update({ deleted_at: null })
-    .eq('id', params.id);
+    .eq('id', routeParams.id);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

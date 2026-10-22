@@ -33,9 +33,10 @@ type Material = {
  */
 export async function POST(
   _req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await authorizeAvatar(params.id, { requireOwner: true });
+  const routeParams = await params;
+  const auth = await authorizeAvatar(routeParams.id, { requireOwner: true });
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }
@@ -52,7 +53,7 @@ export async function POST(
   const { data: rows } = await db
     .from('training_videos')
     .select('id, file_name, summary, transcript, folder')
-    .eq('avatar_id', params.id)
+    .eq('avatar_id', routeParams.id)
     .eq('status', 'ready')
     .order('created_at', { ascending: true })
     .limit(200);

@@ -14,9 +14,10 @@ export const maxDuration = 60;
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await authorizeAvatar(params.id, { requireOwner: true });
+  const routeParams = await params;
+  const auth = await authorizeAvatar(routeParams.id, { requireOwner: true });
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }
@@ -33,7 +34,7 @@ export async function POST(
   const { data: avatar } = await db
     .from('avatars')
     .select('id')
-    .eq('id', params.id)
+    .eq('id', routeParams.id)
     .single();
   if (!avatar) {
     return NextResponse.json({ error: 'avatar not found' }, { status: 404 });
@@ -41,7 +42,7 @@ export async function POST(
 
   const bytes = Buffer.from(await file.arrayBuffer());
   // Always overwrite a stable filename so signed URLs cycle predictably.
-  const coverPath = `${params.id}/cover.jpg`;
+  const coverPath = `${routeParams.id}/cover.jpg`;
   const { error: upErr } = await db.storage
     .from(storageBucket())
     .upload(coverPath, bytes, {
@@ -55,9 +56,9 @@ export async function POST(
   await db
     .from('avatars')
     .update({ cover_image_path: coverPath })
-    .eq('id', params.id);
+    .eq('id', routeParams.id);
 
   revalidatePath('/');
-  revalidatePath(`/avatars/${params.id}`);
+  revalidatePath(`/avatars/${routeParams.id}`);
   return NextResponse.json({ ok: true });
 }

@@ -28,9 +28,10 @@ export const maxDuration = 60;
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const avatarId = params.id;
+  const routeParams = await params;
+  const avatarId = routeParams.id;
 
   // Auth + brain ownership.
   const auth = await authorizeAvatar(avatarId);

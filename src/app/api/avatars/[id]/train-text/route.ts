@@ -18,9 +18,10 @@ export const maxDuration = 120;
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await authorizeAvatar(params.id, { requireOwner: true });
+  const routeParams = await params;
+  const auth = await authorizeAvatar(routeParams.id, { requireOwner: true });
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }
@@ -52,7 +53,7 @@ export async function POST(
   const { data: avatar } = await db
     .from('avatars')
     .select('id')
-    .eq('id', params.id)
+    .eq('id', routeParams.id)
     .single();
   if (!avatar) {
     return NextResponse.json({ error: 'avatar not found' }, { status: 404 });
@@ -62,7 +63,7 @@ export async function POST(
   const { data: tv, error: tvErr } = await db
     .from('training_videos')
     .insert({
-      avatar_id: params.id,
+      avatar_id: routeParams.id,
       storage_path: null,
       file_name: title ?? 'テキスト学習',
       mime_type: 'text/plain',
@@ -85,7 +86,7 @@ export async function POST(
     const embeddings = chunks.length > 0 ? await embedTexts(chunks) : [];
     if (chunks.length > 0) {
       const rows = chunks.map((content, i) => ({
-        avatar_id: params.id,
+        avatar_id: routeParams.id,
         video_id: videoId,
         content,
         embedding: embeddings[i],
@@ -127,6 +128,6 @@ export async function POST(
     return NextResponse.json({ error: message }, { status: 500 });
   }
 
-  revalidatePath(`/avatars/${params.id}`);
+  revalidatePath(`/avatars/${routeParams.id}`);
   return NextResponse.json({ id: videoId });
 }

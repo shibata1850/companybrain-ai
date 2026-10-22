@@ -17,9 +17,10 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await authorizeAvatar(params.id, { requireOwner: true });
+  const routeParams = await params;
+  const auth = await authorizeAvatar(routeParams.id, { requireOwner: true });
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }
@@ -65,14 +66,14 @@ export async function POST(
   const { data, error } = await db
     .from('training_videos')
     .update({ folder: to })
-    .eq('avatar_id', params.id)
+    .eq('avatar_id', routeParams.id)
     .eq('folder', from)
     .select('id');
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  revalidatePath(`/avatars/${params.id}`);
-  revalidatePath(`/avatars/${params.id}/training`);
+  revalidatePath(`/avatars/${routeParams.id}`);
+  revalidatePath(`/avatars/${routeParams.id}/training`);
   return NextResponse.json({ ok: true, moved: data?.length ?? 0 });
 }

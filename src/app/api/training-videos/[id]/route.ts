@@ -23,15 +23,16 @@ type Body = {
  */
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const routeParams = await params;
   const body = (await req.json().catch(() => ({}))) as Body;
   const db = supabaseAdmin();
 
   const { data: existing, error: getErr } = await db
     .from('training_videos')
     .select('id, avatar_id, transcript')
-    .eq('id', params.id)
+    .eq('id', routeParams.id)
     .single();
   if (getErr || !existing) {
     return NextResponse.json({ error: 'not found' }, { status: 404 });
@@ -66,21 +67,21 @@ export async function PATCH(
   const { error: updErr } = await db
     .from('training_videos')
     .update(updates)
-    .eq('id', params.id);
+    .eq('id', routeParams.id);
   if (updErr) {
     return NextResponse.json({ error: updErr.message }, { status: 500 });
   }
 
   if (transcriptChanged) {
     try {
-      await db.from('knowledge_chunks').delete().eq('video_id', params.id);
+      await db.from('knowledge_chunks').delete().eq('video_id', routeParams.id);
       const newText = (updates.transcript as string) || '';
       const chunks = chunkTranscript(newText);
       if (chunks.length > 0) {
         const embeddings = await embedTexts(chunks);
         const rows = chunks.map((content, i) => ({
           avatar_id: existing.avatar_id,
-          video_id: params.id,
+          video_id: routeParams.id,
           content,
           embedding: embeddings[i],
         }));
@@ -97,9 +98,9 @@ export async function PATCH(
           await db
             .from('training_videos')
             .update({ summary: understood.summary })
-            .eq('id', params.id);
+            .eq('id', routeParams.id);
         }
-        await saveExtractedRules(params.id, understood.rules);
+        await saveExtractedRules(routeParams.id, understood.rules);
       } catch (understandErr) {
         console.warn(
           '[training-videos PATCH] understandMaterial failed — 旧ルールを失効:',
@@ -107,12 +108,12 @@ export async function PATCH(
             ? understandErr.message
             : String(understandErr),
         );
-        await saveExtractedRules(params.id, []);
+        await saveExtractedRules(routeParams.id, []);
       }
       await db
         .from('training_videos')
         .update({ status: 'ready' })
-        .eq('id', params.id);
+        .eq('id', routeParams.id);
     } catch (e) {
       reportError(e, {
         route: 'PATCH /api/training-videos/[id]',
@@ -122,7 +123,7 @@ export async function PATCH(
       await db
         .from('training_videos')
         .update({ status: 'error', error_message: message })
-        .eq('id', params.id);
+        .eq('id', routeParams.id);
       return NextResponse.json({ error: message }, { status: 500 });
     }
   }
@@ -137,13 +138,14 @@ export async function PATCH(
  */
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const routeParams = await params;
   const db = supabaseAdmin();
   const { data: existing, error: getErr } = await db
     .from('training_videos')
     .select('id, avatar_id, storage_path')
-    .eq('id', params.id)
+    .eq('id', routeParams.id)
     .single();
   if (getErr || !existing) {
     return NextResponse.json({ error: 'not found' }, { status: 404 });
@@ -160,7 +162,7 @@ export async function DELETE(
   const { error } = await db
     .from('training_videos')
     .delete()
-    .eq('id', params.id);
+    .eq('id', routeParams.id);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

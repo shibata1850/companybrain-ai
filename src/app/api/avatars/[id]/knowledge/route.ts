@@ -13,9 +13,10 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await authorizeAvatar(params.id);
+  const routeParams = await params;
+  const auth = await authorizeAvatar(routeParams.id);
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
   }
@@ -28,7 +29,7 @@ export async function POST(
   try {
     // ハイブリッド検索(キーワード + 意味)。定型文の多い規程で、固有語を
     // 含むチャンクが意味検索だけでは上位に入らない事象への対応。
-    const hits = await searchKnowledge(params.id, query, 8);
+    const hits = await searchKnowledge(routeParams.id, query, 8);
     return NextResponse.json({
       // モデルには素材名を添えて渡す。どの資料に基づくかを回答内で示せる。
       results: hits.map((h) =>

@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   // Verify the current password by attempting a sign-in. This uses a
   // request-scoped client; it refreshes the session cookie as a side
   // effect, which is fine since it's the same user.
-  const supa = supabaseRoute();
+  const supa = await supabaseRoute();
   const { error: verifyErr } = await supa.auth.signInWithPassword({
     email: me.email,
     password: current_password,

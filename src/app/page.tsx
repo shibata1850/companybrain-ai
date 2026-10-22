@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
  * straight in the app instead of seeing the LP again.
  */
 export default async function RootPage() {
-  const store = cookies();
+  const store = await cookies();
   const supa = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,

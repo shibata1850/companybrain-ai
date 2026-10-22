@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Sign them in so the session cookie is set for the redirect.
-  const supa = supabaseRoute();
+  const supa = await supabaseRoute();
   const { error: signErr } = await supa.auth.signInWithPassword({
     email: cleanEmail,
     password,

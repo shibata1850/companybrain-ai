@@ -8,8 +8,8 @@ import { supabaseAdmin } from './supabase';
  * server components. Reads/writes the auth session cookie so login
  * state persists across requests.
  */
-export function supabaseRoute() {
-  const cookieStore = cookies();
+export async function supabaseRoute() {
+  const cookieStore = await cookies();
   return createServerClient(env.supabaseUrl(), env.supabaseAnonKey(), {
     cookies: {
       getAll() {
@@ -50,7 +50,7 @@ export type AppUser = {
  * app_users (the invite allowlist).
  */
 export async function getAppUser(): Promise<AppUser | null> {
-  const supa = supabaseRoute();
+  const supa = await supabaseRoute();
   const {
     data: { user },
   } = await supa.auth.getUser();
