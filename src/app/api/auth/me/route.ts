@@ -6,6 +6,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  console.info('[runtime-audit 2026-10-23] Node.js ' + process.version);
   const user = await getAppUser();
   if (!user) {
     return NextResponse.json({ user: null }, { status: 200 });
