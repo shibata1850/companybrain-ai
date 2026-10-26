@@ -8,8 +8,8 @@ FROM base AS build
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-ARG NEXT_PUBLIC_SUPABASE_URL
-ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ARG NEXT_PUBLIC_SUPABASE_URL=https://container-public-supabase.invalid
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY=__CONTAINER_PUBLIC_NEXT_PUBLIC_SUPABASE_ANON_KEY__
 RUN test -n "$NEXT_PUBLIC_SUPABASE_URL" && test -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY" && mkdir -p public && npm run build
 
 FROM base AS runtime
@@ -19,6 +19,7 @@ ENV PORT=80
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
 COPY --from=build --chown=node:node /app/public ./public
+COPY --chown=node:node container-public-env.mjs ./
 USER node
 EXPOSE 80
-CMD ["sh", "-c", "node -e \"if(process.version !== 'v22.23.4') process.exit(1); console.info('[container-runtime-audit] Node.js ' + process.version)\" && exec node server.js"]
+CMD ["sh", "-c", "node -e \"if(process.version !== 'v22.23.4') process.exit(1); console.info('[container-runtime-audit] Node.js ' + process.version)\" && node container-public-env.mjs NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY && exec node server.js"]
