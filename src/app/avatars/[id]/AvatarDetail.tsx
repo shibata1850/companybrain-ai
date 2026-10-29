@@ -178,12 +178,16 @@ export default function AvatarDetail({ id }: { id: string }) {
       return !v;
     });
   };
+  // 待機画面の「最近の会話」。初回は監査記録から読み、会話中は
+  // onMessage から即時反映する(終話した瞬間に今の会話が並ぶ)。
+  // 表示は直近5往復(記録自体は監査ログに全件残る)。
+  const RECENT_QA_LIMIT = 5;
   const [recentQa, setRecentQa] = useState<
     Array<{ q: string; a: string | null; at: string }>
   >([]);
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/audit?view=entries&avatar=${id}&limit=12`)
+    fetch(`/api/audit?view=entries&avatar=${id}&limit=24`)
       .then((r) => (r.ok ? r.json() : null))
       .then(
         (
@@ -205,7 +209,7 @@ export default function AvatarDetail({ id }: { id: string }) {
             } else if (e.role === 'user') {
               pairs.push({ q: e.content, a: pendingAnswer, at: e.created_at });
               pendingAnswer = null;
-              if (pairs.length >= 3) break;
+              if (pairs.length >= RECENT_QA_LIMIT) break;
             }
           }
           setRecentQa(pairs);
@@ -296,6 +300,22 @@ export default function AvatarDetail({ id }: { id: string }) {
       pendingEscalationRef.current = null;
     }
     logAudit(enriched);
+    // 「最近の会話」へ即時反映: 待機画面に戻った瞬間、いま話した内容が
+    // 先頭に並ぶ(サーバーからの再取得を待たない)。
+    setRecentQa((prev) => {
+      if (enriched.role === 'user') {
+        return [
+          { q: enriched.text, a: null, at: new Date().toISOString() },
+          ...prev,
+        ].slice(0, RECENT_QA_LIMIT);
+      }
+      // 回答: 直近の未回答の質問に埋める(無ければ表示は変えない)
+      const idx = prev.findIndex((p) => p.a === null);
+      if (idx === -1) return prev;
+      const next = prev.slice();
+      next[idx] = { ...next[idx], a: enriched.text };
+      return next;
+    });
     setChatStore((prev) => {
       let store = prev;
       // No active thread yet — open one implicitly on the first message.
@@ -975,24 +995,6 @@ export default function AvatarDetail({ id }: { id: string }) {
   // (将来、別機能として再実装する)。会話内容のサーバー監査記録
   // (audit_logs。質問数カウントの基盤でもある)とローカル保存は、
   // onMessage 経由で従来どおり続ける。
-  // 待機画面の「聞ける事の例」: 学習済み素材のフォルダ・素材名から作る。
-  // 音声UIの定石(何を聞けるか画面で示す)のための材料。
-  const askSuggestions = (() => {
-    const seen = new Set<string>();
-    const out: string[] = [];
-    for (const m of training_videos) {
-      if (m.status !== 'ready') continue;
-      const label =
-        (m.folder && m.folder.trim()) ||
-        (m.file_name || '').replace(/\.[a-zA-Z0-9]+$/, '').trim();
-      if (!label || seen.has(label)) continue;
-      seen.add(label);
-      out.push(label);
-      if (out.length >= 4) break;
-    }
-    return out;
-  })();
-
   const callView = (
     <div className="flex min-h-0 flex-1 flex-col p-2 sm:min-h-[30rem] sm:rounded-3xl sm:border sm:border-neutral-200 sm:bg-white sm:p-4 sm:shadow-sm">
       <StreamingStage
@@ -1001,13 +1003,7 @@ export default function AvatarDetail({ id }: { id: string }) {
         coverUrl={avatar.cover_url}
         avatarName={avatar.name}
         onMessage={handleTranscriptMessage}
-        idleExtras={
-          <IdleExtras
-            suggestions={askSuggestions}
-            recent={recentQa}
-            onAsk={() => stageHandleRef.current?.start()}
-          />
-        }
+        idleExtras={<IdleExtras recent={recentQa} />}
       />
     </div>
   );
@@ -1740,44 +1736,17 @@ function FolderPickerInline({
  * =========================================================== */
 
 /**
- * 待機画面の有用コンテンツ。音声UIの定石(何を聞けるのかを画面で示す=
- * 発見可能性、履歴の提示=文脈の継続)に合わせ、「聞ける事の例」と
- * 「最近の会話」を出す。チップのタップは通話開始につながる。
+ * 待機画面の有用コンテンツ。「最近の会話」(直近5往復)を出し、会話を
+ * 終えた直後も即時反映される(onMessage から直接更新)。
+ * 「こんなことが聞けます」はユーザー判断で廃止した。
  */
 function IdleExtras({
-  suggestions,
   recent,
-  onAsk,
 }: {
-  suggestions: string[];
   recent: Array<{ q: string; a: string | null; at: string }>;
-  onAsk: () => void;
 }) {
   return (
     <div className="space-y-4 pb-4 pt-1">
-      {suggestions.length > 0 && (
-        <section>
-          <h3 className="px-1 text-xs font-bold text-neutral-500">
-            こんなことが聞けます
-          </h3>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {suggestions.map((sug) => (
-              <button
-                key={sug}
-                type="button"
-                onClick={onAsk}
-                className="rounded-full border border-neutral-200 bg-white px-3.5 py-2 text-xs font-medium text-neutral-700 shadow-sm transition hover:border-emerald-400 hover:text-emerald-700 active:scale-95"
-              >
-                {sug}について
-              </button>
-            ))}
-          </div>
-          <p className="mt-1.5 px-1 text-[10px] text-neutral-400">
-            タップで会話を開始し、そのまま声で質問してください
-          </p>
-        </section>
-      )}
-
       {recent.length > 0 && (
         <section>
           <h3 className="px-1 text-xs font-bold text-neutral-500">
@@ -1811,9 +1780,9 @@ function IdleExtras({
         </section>
       )}
 
-      {suggestions.length === 0 && recent.length === 0 && (
+      {recent.length === 0 && (
         <p className="px-1 text-xs leading-relaxed text-neutral-400">
-          素材を学習させると、ここに「聞ける事の例」が表示されます。
+          会話をすると、ここに最近の会話が表示されます。
         </p>
       )}
     </div>
