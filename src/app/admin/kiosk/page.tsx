@@ -29,13 +29,10 @@ export default function AdminKioskPage() {
   const [info, setInfo] = useState<KioskAdminInfo | null>(null);
   const [origin, setOrigin] = useState('');
 
-  // フォーム(すべて省略可。既定値のままなら URL に付けない)
-  const [look, setLook] = useState<
-    'prism' | 'prism-paper' | 'orb' | 'sumi' | 'dot'
-  >('prism');
+  // フォーム(すべて省略可。既定値のままなら URL に付けない)。
+  // 仕上げは「収差・闇」に固定したため選択欄は無い。
   const [brand, setBrand] = useState(DEFAULT_BRAND);
   const [foot, setFoot] = useState('');
-  const [coreChar, setCoreChar] = useState('');
   const [questionsText, setQuestionsText] = useState(
     DEFAULT_QUESTIONS.join('\n'),
   );
@@ -67,11 +64,9 @@ export default function AdminKioskPage() {
   // 共通のクエリ(既定値は省いて URL を短く保つ)。
   const sharedParams = useMemo(() => {
     const p = new URLSearchParams();
-    if (look !== 'prism') p.set('look', look);
     if (brand.trim() && brand.trim() !== DEFAULT_BRAND)
       p.set('brand', brand.trim());
     if (foot.trim()) p.set('foot', foot.trim());
-    if (coreChar.trim()) p.set('c', [...coreChar.trim()][0]);
     const qs = questionsText
       .split('\n')
       .map((s) => s.trim())
@@ -79,7 +74,7 @@ export default function AdminKioskPage() {
     if (qs.length > 0 && qs.join('|') !== DEFAULT_QUESTIONS.join('|'))
       p.set('q', qs.join('|'));
     return p;
-  }, [look, brand, foot, coreChar, questionsText]);
+  }, [brand, foot, questionsText]);
 
   const demoUrl = useMemo(() => {
     const p = new URLSearchParams(sharedParams);
@@ -153,35 +148,8 @@ export default function AdminKioskPage() {
         </p>
       </div>
 
-      {/* 表示設定 */}
+      {/* 表示設定(仕上げは「収差・闇」に固定) */}
       <div className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
-        <div>
-          <p className={labelCls}>仕上げ</p>
-          <div className="mt-2 flex gap-2">
-            {(
-              [
-                ['prism', '収差・闇×RGB(既定)'],
-                ['prism-paper', '収差・紙×CMY'],
-                ['orb', 'ガラス球'],
-                ['sumi', '墨(太明朝)'],
-                ['dot', 'ドット(8bit)'],
-              ] as const
-            ).map(([v, label]) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setLook(v)}
-                className={`rounded-full border px-4 py-2 text-sm font-bold transition ${
-                  look === v
-                    ? 'border-neutral-900 bg-neutral-900 text-white'
-                    : 'border-neutral-300 bg-white text-neutral-600 hover:border-neutral-400'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
         <div>
           <label className={labelCls} htmlFor="kioskBrand">
             催事名(左上の表示)
@@ -210,21 +178,8 @@ export default function AdminKioskPage() {
           </p>
         </div>
         <div>
-          <label className={labelCls} htmlFor="kioskCore">
-            中央の一文字(任意。空欄ならブレイン名から自動)
-          </label>
-          <input
-            id="kioskCore"
-            className={`mt-1 ${inputCls}`}
-            value={coreChar}
-            onChange={(e) => setCoreChar(e.target.value)}
-            maxLength={2}
-            placeholder="例: 綾"
-          />
-        </div>
-        <div>
           <label className={labelCls} htmlFor="kioskQs">
-            待機中の問いかけ(1行に1つ。縦書きでローテーション)
+            待機中の問いかけ(1行に1つ。ローテーション表示)
           </label>
           <textarea
             id="kioskQs"

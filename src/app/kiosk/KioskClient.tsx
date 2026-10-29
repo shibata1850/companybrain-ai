@@ -8,35 +8,27 @@ import StreamingStage, {
   type StreamingStageHandle,
   type TranscriptMessage,
 } from '@/components/StreamingStage';
-import KotonohaStage, {
-  type KotonohaFinish,
-} from '@/components/KotonohaStage';
-import OrbStage from '@/components/OrbStage';
-import PrismStage, { type PrismGround } from '@/components/PrismStage';
+import PrismStage from '@/components/PrismStage';
 
 /**
  * キオスク(公開ディスプレイ)画面。LEDビジョン・店頭サイネージ用。
  *
- * 見た目は「コトノハ」演出(学習した文字たちの銀河)に一本化した。
- * 音声セッションは StreamingStage の headless モードが裏で駆動し、
- * この画面は状態を受け取って KotonohaStage に流すだけ。
+ * 見た目は「収差オーブ(闇×RGB)」に固定(ユーザー決定。旧仕上げの
+ * コトノハ・ガラス球・紙×CMY は撤去した。復元する場合は git 履歴の
+ * KotonohaStage / OrbStage を参照)。音声セッションは StreamingStage の
+ * headless モードが裏で駆動し、この画面は状態を PrismStage に流すだけ。
  *
  * - URL の ?k=<アクセスキー> とサーバー環境変数の照合だけで動く
  *   (ログイン画面を出さない。会話できるのは環境変数で固定された
  *   1ブレインのみ)
- * - 待機ループ(文字の銀河+縦書きの問いかけ)→ タッチで会話開始 →
- *   無音が続くと自動終了して待機へ戻る、の無人運転
+ * - 待機ループ(問いかけ)→ タッチで会話開始 → 「会話を終わる」で待機へ
  * - 会話は actor「kiosk」として監査ログへ記録する。現地に
  *   「会話は記録されます」の掲示を併用すること
  *
  * URL パラメータ(?k= 以外は省略可):
- *   look=…          仕上げ。prism=収差・闇×RGB(既定)/
- *                   prism-paper=収差・紙×CMY / orb=ガラス球 /
- *                   sumi=墨 / dot=ドット(8bit)
  *   brand=…         左上の催事名(既定: NEXT GEN AI SCHOOL)
  *   foot=…          下部の案内(会場・開始日など。記録告知は常に付く)
- *   c=…             銀河の核になる一文字(既定: ブレイン名の名の頭文字)
- *   q=…|…|…        待機中の縦書き問いかけ(| 区切りで差し替え)
+ *   q=…|…|…        待機中の問いかけ(| 区切りで差し替え)
  *   demo=1          リハーサルモード。キー・API・音声なしで演出だけを
  *                   自動再生する(現地の映り確認・社内プレビュー用)
  */
@@ -51,14 +43,6 @@ const DEFAULT_QUESTIONS = [
   '「AIって、なに?」',
   '「何を持ち帰れるの?」',
   '「あなたは人間?」',
-];
-
-/** リハーサルモード用の語彙(本番は学習素材から自動抽出)。 */
-const DEMO_WORDS = [
-  '学', '問', '声', '知', '手', '作', '話', '言', '葉', '考',
-  '答', '数', '図', '工', '規', '程', '桜', '駅', '川', '北',
-  '上', '岩', '未', '来', '仕', '組', '道', '具', 'AI',
-  '展勝地', '鬼剣舞', '北上川', 'つまずき', '定時',
 ];
 
 /** リハーサルモードで自動再生する会話(表示のみ・音は出ない)。 */
@@ -111,31 +95,11 @@ function FullScreen({ children }: { children: React.ReactNode }) {
   return createPortal(children, document.body);
 }
 
-/**
- * ブレイン名から銀河の核になる一文字を導く。「北上 綾」のような
- * 姓名なら名の頭文字(綾)、空白が無ければ先頭の一文字。
- */
-function deriveCoreChar(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  const given = parts[parts.length - 1] || name.trim();
-  return [...given][0] ?? '脳';
-}
-
 export default function KioskClient() {
   const params = useSearchParams();
   const kioskKey = params.get('k') || '';
   const isDemo = params.get('demo') === '1';
-  // 仕上げ: 収差オーブ(闇×RGB)が既定。紙×CMY・ガラス球・コトノハ
-  // (墨/ドット)も URL で選べる。
-  const lookParam = params.get('look');
-  const look: 'prism' | 'prism-paper' | 'orb' | KotonohaFinish =
-    lookParam === 'sumi' ||
-    lookParam === 'dot' ||
-    lookParam === 'orb' ||
-    lookParam === 'prism-paper'
-      ? lookParam
-      : 'prism';
-  const prismGround: PrismGround = look === 'prism-paper' ? 'paper' : 'dark';
+  // 仕上げは「収差オーブ(闇×RGB)」に固定(?look= は廃止)。
   const brand = params.get('brand') ?? 'NEXT GEN AI SCHOOL';
   const footParam = params.get('foot');
   const foot = footParam
@@ -151,7 +115,6 @@ export default function KioskClient() {
   }, [qParam]);
 
   const [avatar, setAvatar] = useState<KioskAvatar | null>(null);
-  const [glyphs, setGlyphs] = useState<string[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const stageRef = useRef<StreamingStageHandle>(null);
   const sessionIdRef = useRef<string>(newSessionId());
@@ -183,7 +146,7 @@ export default function KioskClient() {
     );
   }, []);
 
-  // 表示するブレインの情報(名前・コトノハ語彙)を取得。
+  // 表示するブレインの情報(名前)を取得。
   useEffect(() => {
     if (!kioskKey || isDemo) return;
     let cancelled = false;
@@ -191,7 +154,6 @@ export default function KioskClient() {
       .then(async (r) => {
         const json = (await r.json()) as {
           avatar?: KioskAvatar;
-          glyphs?: string[];
           error?: string;
         };
         if (cancelled) return;
@@ -199,7 +161,6 @@ export default function KioskClient() {
           setLoadError(json.error || `HTTP ${r.status}`);
         } else {
           setAvatar(json.avatar);
-          setGlyphs(Array.isArray(json.glyphs) ? json.glyphs : []);
         }
       })
       .catch((e) => {
@@ -294,53 +255,20 @@ export default function KioskClient() {
     return (
       <FullScreen>
       <div className="fixed inset-0 z-[100] bg-black">
-        {look === 'prism' || look === 'prism-paper' ? (
-          <PrismStage
-            ground={prismGround}
-            mode={demo.mode}
-            status={demo.status}
-            levels={levelsRef}
-            captionUser={demo.capUser}
-            captionAgent={demo.capAgent}
-            questions={questions}
-            brand={brand}
-            foot={foot}
-            onStart={() => {}}
-            onEnd={() => {}}
-            simulateLevels
-          />
-        ) : look === 'orb' ? (
-          <OrbStage
-            mode={demo.mode}
-            status={demo.status}
-            levels={levelsRef}
-            captionUser={demo.capUser}
-            captionAgent={demo.capAgent}
-            questions={questions}
-            brand={brand}
-            foot={foot}
-            onStart={() => {}}
-            onEnd={() => {}}
-            simulateLevels
-          />
-        ) : (
-          <KotonohaStage
-            finish={look}
-            mode={demo.mode}
-            status={demo.status}
-            levels={levelsRef}
-            captionUser={demo.capUser}
-            captionAgent={demo.capAgent}
-            coreChar={params.get('c') || '綾'}
-            words={DEMO_WORDS}
-            questions={questions}
-            brand={brand}
-            foot={foot}
-            onStart={() => {}}
-            onEnd={() => {}}
-            simulateLevels
-          />
-        )}
+        <PrismStage
+          ground="dark"
+          mode={demo.mode}
+          status={demo.status}
+          levels={levelsRef}
+          captionUser={demo.capUser}
+          captionAgent={demo.capAgent}
+          questions={questions}
+          brand={brand}
+          foot={foot}
+          onStart={() => {}}
+          onEnd={() => {}}
+          simulateLevels
+        />
       </div>
       </FullScreen>
     );
@@ -394,53 +322,20 @@ export default function KioskClient() {
         headless
         onStageState={handleStageState}
       />
-      {look === 'prism' || look === 'prism-paper' ? (
-        <PrismStage
-          ground={prismGround}
-          mode={mode}
-          status={stage.status}
-          levels={levelsRef}
-          captionUser={stage.captionUser}
-          captionAgent={stage.captionAgent}
-          questions={questions}
-          brand={brand}
-          foot={foot}
-          error={stage.error}
-          onStart={() => stageRef.current?.start()}
-          onEnd={() => stageRef.current?.stop()}
-        />
-      ) : look === 'orb' ? (
-        <OrbStage
-          mode={mode}
-          status={stage.status}
-          levels={levelsRef}
-          captionUser={stage.captionUser}
-          captionAgent={stage.captionAgent}
-          questions={questions}
-          brand={brand}
-          foot={foot}
-          error={stage.error}
-          onStart={() => stageRef.current?.start()}
-          onEnd={() => stageRef.current?.stop()}
-        />
-      ) : (
-        <KotonohaStage
-          finish={look}
-          mode={mode}
-          status={stage.status}
-          levels={levelsRef}
-          captionUser={stage.captionUser}
-          captionAgent={stage.captionAgent}
-          coreChar={params.get('c') || deriveCoreChar(avatar.name)}
-          words={glyphs}
-          questions={questions}
-          brand={brand}
-          foot={foot}
-          error={stage.error}
-          onStart={() => stageRef.current?.start()}
-          onEnd={() => stageRef.current?.stop()}
-        />
-      )}
+      <PrismStage
+        ground="dark"
+        mode={mode}
+        status={stage.status}
+        levels={levelsRef}
+        captionUser={stage.captionUser}
+        captionAgent={stage.captionAgent}
+        questions={questions}
+        brand={brand}
+        foot={foot}
+        error={stage.error}
+        onStart={() => stageRef.current?.start()}
+        onEnd={() => stageRef.current?.stop()}
+      />
     </div>
     </FullScreen>
   );
