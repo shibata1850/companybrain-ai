@@ -194,6 +194,12 @@ ${styleSamples || '（参考発言なし。一般的な人柄として自然に�
     // can render captions / audit entries.
     inputAudioTranscription: {},
     outputAudioTranscription: {},
+    // セッション再開: 接続の寿命(約10分)でサーバーが切る前に再開
+    // ハンドルが届き、クライアントが同じ会話として繋ぎ直せる。
+    sessionResumption: {},
+    // コンテキスト圧縮: これが無いと音声セッションは15分で打ち切られる。
+    // 有効にすると古い文脈を圧縮しながら時間無制限で会話を続けられる。
+    contextWindowCompression: { slidingWindow: {} },
     // The native-audio variants reason before speaking, which leaks
     // into the transcript ("Let me check"). Disable thinking budget.
     thinkingConfig: { thinkingBudget: 0 },
@@ -233,27 +239,46 @@ ${styleSamples || '（参考発言なし。一般的な人柄として自然に�
   let token: unknown = null;
   let liveModel = requestedModel;
   let lastErr: unknown = null;
-  for (const m of candidates) {
-    try {
-      token = await create({
-        config: {
-          uses: 5,
-          expireTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-          newSessionExpireTime: new Date(
-            Date.now() + 10 * 60 * 1000,
-          ).toISOString(),
-          liveConnectConstraints: {
-            model: m,
-            config: configFor(m),
+  // 再開・圧縮の設定がこのAPIバージョンで拒否された場合でも音声が
+  // 全断しないよう、まず新設定で全モデルを試し、だめなら設定を
+  // 旧来どおりに落として(再開なし)もう一周する。
+  const stripResume = (cfg: Record<string, unknown>) => {
+    const {
+      sessionResumption: _sr,
+      contextWindowCompression: _cwc,
+      ...rest
+    } = cfg;
+    return rest;
+  };
+  outer: for (const variant of ['full', 'legacy'] as const) {
+    for (const m of candidates) {
+      try {
+        const cfg = configFor(m);
+        token = await create({
+          config: {
+            uses: 5,
+            expireTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+            newSessionExpireTime: new Date(
+              Date.now() + 10 * 60 * 1000,
+            ).toISOString(),
+            liveConnectConstraints: {
+              model: m,
+              config: variant === 'full' ? cfg : stripResume(cfg),
+            },
+            httpOptions: { apiVersion: 'v1alpha' },
           },
-          httpOptions: { apiVersion: 'v1alpha' },
-        },
-      });
-      liveModel = m;
-      break;
-    } catch (e) {
-      lastErr = e;
-      token = null;
+        });
+        liveModel = m;
+        if (variant === 'legacy') {
+          console.warn(
+            '[liveToken] sessionResumption/contextWindowCompression が拒否されたため、再開なしの旧設定で発行した',
+          );
+        }
+        break outer;
+      } catch (e) {
+        lastErr = e;
+        token = null;
+      }
     }
   }
   if (!token) throw lastErr ?? new Error('authTokens.create failed');

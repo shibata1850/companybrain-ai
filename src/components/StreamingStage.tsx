@@ -230,6 +230,14 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
   const manualStopRef = useRef(false);
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // セッション再開(接続の約10分上限対策)。サーバーが随時発行する
+  // 再開ハンドルを控えておき、接続が切れても同じ会話として継ぎ足す。
+  // 文脈・経過時間・字幕は維持され、利用者には切れ目が見えない。
+  const resumeHandleRef = useRef<string | null>(null);
+  // 切断予告(goAway)からの繋ぎ直しが進行中か。進行中は onclose の
+  // 「正常終了」扱いを抑止する。
+  const resumingRef = useRef(false);
+  const resumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Model-fallback state for 1008 rejections. modelOverrideRef is the
   // model we'll request from the token endpoint (null = server default);
   // triedModelsRef tracks what already got rejected this session.
@@ -304,18 +312,13 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
 
 
 
-  const stop = useCallback(async () => {
-    manualStopRef.current = true;
-    sessionOpenRef.current = false;
-    if (reconnectTimerRef.current) {
-      clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
-    }
-    if (thinkingTimerRef.current) {
-      clearTimeout(thinkingTimerRef.current);
-      thinkingTimerRef.current = null;
-    }
-    userTalkingRef.current = false;
+  /**
+   * マイク・スピーカーの音声グラフを解放する。終了時(stop)と、
+   * セッション再開の繋ぎ直しで新しい接続を張る前(start)の共通処理。
+   * これを start 側でも呼ばないと、再接続のたびに古いマイク取り込みが
+   * 生き残り、同じ音声が二重に送られる。
+   */
+  const releaseAudio = useCallback(async () => {
     try {
       processorRef.current?.disconnect();
     } catch {
@@ -343,17 +346,40 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
       // ignore
     }
     outputCtxRef.current = null;
+    outputAnalyserRef.current = null;
+    playheadRef.current = 0;
+    activeSourcesRef.current.clear();
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+  }, []);
+
+  const stop = useCallback(async () => {
+    manualStopRef.current = true;
+    sessionOpenRef.current = false;
+    resumeHandleRef.current = null;
+    resumingRef.current = false;
+    if (resumeTimerRef.current) {
+      clearTimeout(resumeTimerRef.current);
+      resumeTimerRef.current = null;
+    }
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    if (thinkingTimerRef.current) {
+      clearTimeout(thinkingTimerRef.current);
+      thinkingTimerRef.current = null;
+    }
+    userTalkingRef.current = false;
+    await releaseAudio();
     try {
       sessionRef.current?.close();
     } catch {
       // ignore
     }
     sessionRef.current = null;
-    playheadRef.current = 0;
-    if (rafRef.current !== null) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
     speakingRef.current = false;
     pendingFlushRef.current = false;
     if (pendingFlushTimerRef.current) {
@@ -392,7 +418,7 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
     setElapsedSec(0);
     setStatus((s) => (s === 'error' ? s : 'ended'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [avatarId, kioskKey]);
+  }, [avatarId, kioskKey, releaseAudio]);
 
   useEffect(() => {
     return () => {
@@ -721,6 +747,32 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
       scheduleFlushPoll();
     }
 
+    // セッション再開ハンドル: 接続の寿命(約10分)を越えて同じ会話を
+    // 続けるための切符。サーバーが随時更新してくる。
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sru = (message as any).sessionResumptionUpdate as
+      | { newHandle?: string; resumable?: boolean }
+      | undefined;
+    if (sru?.resumable && sru.newHandle) {
+      resumeHandleRef.current = sru.newHandle;
+    }
+
+    // goAway: サーバーからの切断予告(残り時間つき)。放置すると接続が
+    // 正常終了コードで切られ会話が終わって見えるため、残り時間の少し
+    // 手前で自分から繋ぎ直す。
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const goAway = (message as any).goAway as
+      | { timeLeft?: string | number }
+      | undefined;
+    if (goAway && !resumeTimerRef.current && !manualStopRef.current) {
+      const secs = Number.parseFloat(String(goAway.timeLeft ?? '')) || 10;
+      const waitMs = Math.max(0, (secs - 5) * 1000);
+      resumeTimerRef.current = setTimeout(() => {
+        resumeTimerRef.current = null;
+        void resumeReconnect();
+      }, waitMs);
+    }
+
     // Tool call — search the knowledge base and feed results back.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const toolCall = (message as any).toolCall as
@@ -849,6 +901,26 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
     setStatus((s) => (s === 'searching' ? 'thinking' : s));
   }
 
+  /**
+   * 接続だけを張り替えて同じ会話を続ける(セッション再開)。
+   * goAway(切断予告)受信時と、再開ハンドルを持ったまま接続が切れた
+   * 時に呼ぶ。会話の文脈・経過時間・字幕・利用秒数の計測は維持される。
+   */
+  async function resumeReconnect() {
+    if (manualStopRef.current || !resumeHandleRef.current) return;
+    if (resumingRef.current) return;
+    resumingRef.current = true;
+    sessionOpenRef.current = false;
+    setStatus('reconnecting');
+    try {
+      sessionRef.current?.close();
+    } catch {
+      // ignore
+    }
+    sessionRef.current = null;
+    void start();
+  }
+
   async function start() {
     setError(null);
     // Manual start (user clicked the button) — clear the reconnect
@@ -859,6 +931,9 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
       reconnectTimerRef.current = null;
     }
     manualStopRef.current = false;
+    // 前の接続の音声グラフが残っていれば解放する(再接続・セッション
+    // 再開時のマイク二重取り込み防止。初回起動では何もしない)。
+    await releaseAudio();
     // Ask once for permission so we can ping the user when the agent
     // speaks while they have the tab buried. キオスク(無人の展示端末)
     // では通知許可ダイアログが初回タッチを塞ぐだけなので出さない。
@@ -937,11 +1012,21 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
         model: usedModel,
         config: {
           responseModalities: [Modality.AUDIO],
-        },
+          // 再開ハンドルがあれば、同じ会話の続きとして接続する
+          // (接続の約10分上限を越えて会話を継ぐ)。
+          ...(resumeHandleRef.current
+            ? { sessionResumption: { handle: resumeHandleRef.current } }
+            : {}),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
         callbacks: {
           onopen: () => {
-            console.log('[live] session open', { model: usedModel });
+            console.log('[live] session open', {
+              model: usedModel,
+              resumed: !!resumeHandleRef.current,
+            });
             sessionOpenRef.current = true;
+            resumingRef.current = false;
             reconnectAttemptsRef.current = 0;
             lastActivityRef.current = Date.now();
             // Keep the working model in memory for this session's
@@ -981,6 +1066,10 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
               `[live] session closed — code=${code ?? '?'} reason="${reason}"`,
             );
 
+            // 自前の繋ぎ直し(セッション再開)で閉じた接続。新しい接続の
+            // 確立が進行中なので、ここでは何もしない。
+            if (resumingRef.current) return;
+
             // Clean shutdown / user clicked end / dev unmount.
             if (
               manualStopRef.current ||
@@ -988,7 +1077,35 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
               code === 1000 ||
               code === 1005
             ) {
+              // 再開ハンドルを持ったまま、こちらから止めていないのに
+              // 正常終了コードで切れた=接続の寿命(約10分)でサーバーが
+              // 閉じたということ(goAway を取り逃がした場合もここに来る)。
+              // 同じ会話として繋ぎ直す。
+              if (!manualStopRef.current && resumeHandleRef.current) {
+                void resumeReconnect();
+                return;
+              }
               setStatus((s) => (s === 'error' ? s : 'ended'));
+              return;
+            }
+
+            // 1007: 構成が受理されない。再開ハンドル付きで繋いだ場合は
+            // ハンドルの期限切れ・不整合の可能性が高いので、ハンドルを
+            // 捨てて新規セッションとして繋ぎ直す(再試行1回分を消費)。
+            if (
+              code === 1007 &&
+              resumeHandleRef.current &&
+              reconnectAttemptsRef.current < MAX_AUTO_RECONNECTS
+            ) {
+              console.warn(
+                '[live] resume handle rejected (1007) — starting a fresh session',
+              );
+              resumeHandleRef.current = null;
+              reconnectAttemptsRef.current += 1;
+              setStatus('reconnecting');
+              reconnectTimerRef.current = setTimeout(() => {
+                void start();
+              }, 500);
               return;
             }
 
@@ -1245,6 +1362,7 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
         message =
           'このブラウザではマイクを使えません。Safari か Chrome で開き直してください(アプリ内ブラウザは非対応のことがあります)。';
       }
+      resumingRef.current = false;
       setError(message);
       setStatus('error');
       await stop();
