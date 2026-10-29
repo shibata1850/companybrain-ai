@@ -36,3 +36,7 @@ yarn-error.log*
 # local uploads / temp
 /tmp
 /uploads
+
+# Playwright
+/test-results/
+/playwright-report/
