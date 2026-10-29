@@ -447,6 +447,10 @@ export default function PrismStage({
             var(--sx, 1px) 0 var(--splitA),
             calc(-1 * var(--sx, 1px)) 0 var(--splitB);
         }
+        @keyframes prism-spin { to { transform: rotate(360deg); } }
+        @media (prefers-reduced-motion: reduce) {
+          .prism-spin { animation: none !important; }
+        }
       `}</style>
 
       <canvas
@@ -617,6 +621,54 @@ export default function PrismStage({
             )}
           </span>
         </button>
+      )}
+
+      {/* 接続中・繋ぎなおし中: マイクがまだ使えないことが分かるよう、
+          画面中央にローディングを出す。 */}
+      {(status === 'connecting' || status === 'reconnecting') && (
+        <div
+          role="status"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 3,
+            display: 'grid',
+            placeItems: 'center',
+            pointerEvents: 'none',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '2.4vmin',
+            }}
+          >
+            <span
+              className="prism-spin"
+              aria-hidden
+              style={{
+                width: '9vmin',
+                height: '9vmin',
+                borderRadius: '50%',
+                border: `2px solid ${G.dim}`,
+                borderTopColor: G.ink,
+                animation: 'prism-spin 0.9s linear infinite',
+              }}
+            />
+            <span
+              style={{
+                fontSize: 'clamp(13px, 2.4vmin, 32px)',
+                fontWeight: 900,
+                letterSpacing: '.3em',
+                color: G.ink,
+              }}
+            >
+              {STATE_LABELS[status]}
+            </span>
+          </div>
+        </div>
       )}
 
       {/* 会話: 状態ライン+両者の字幕(左寄せのポスター組み)。 */}

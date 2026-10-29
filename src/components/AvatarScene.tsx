@@ -167,6 +167,26 @@ export default function AvatarScene({
           />
         )}
 
+        {/* 接続中・再接続中: マイクがまだ使えないことが分かるよう、
+            アバターの周りに回転リング+中央下にラベルを出す。 */}
+        {connecting && (
+          <>
+            <span
+              aria-hidden
+              className="pointer-events-none absolute h-60 w-60 rounded-full border-4 border-neutral-300 border-t-neutral-800 motion-safe:animate-spin sm:h-72 sm:w-72"
+            />
+            <p
+              role="status"
+              className="pointer-events-none absolute rounded-full bg-neutral-900/80 px-4 py-1.5 text-sm font-bold text-white"
+              style={{ transform: 'translateY(10.5rem)' }}
+            >
+              {status === 'connecting'
+                ? '接続しています…'
+                : 'つなぎなおしています…'}
+            </p>
+          </>
+        )}
+
         {/* 思考中の周回ドット。 */}
         {busyThinking && (
           <span className="pointer-events-none absolute h-64 w-64 motion-safe:animate-[cb-orbit_2.4s_linear_infinite] sm:h-80 sm:w-80">
