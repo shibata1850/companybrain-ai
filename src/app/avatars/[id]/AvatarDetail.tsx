@@ -5,7 +5,6 @@ import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import StreamingStage, {
   type StreamingStageHandle,
   type TranscriptMessage,
-  type TranscriptSource,
 } from '@/components/StreamingStage';
 import { detectEscalation } from '@/lib/escalation';
 import useIsMobile from '@/lib/useIsMobile';
@@ -483,6 +482,24 @@ export default function AvatarDetail({ id }: { id: string }) {
   // Photo cropping flow — the round avatar thumbnail.
   // (背景写真(stage)は通話UIの一本化で廃止した)
   const [cropperSrc, setCropperSrc] = useState<string | null>(null);
+  // クロッパーを開いたまま画面を離れても ObjectURL を漏らさない
+  // (差し替え時も古い URL をここで破棄する)。
+  useEffect(() => {
+    return () => {
+      if (cropperSrc) URL.revokeObjectURL(cropperSrc);
+    };
+  }, [cropperSrc]);
+  // 監査ロガー([]-deps のコールバック)が読む名前の控えを、レンダー中の
+  // 代入ではなく effect で同期する(並行レンダリングでの純粋性を守る)。
+  useEffect(() => {
+    if (data?.avatar?.name) avatarNameRef.current = data.avatar.name;
+  }, [data?.avatar?.name]);
+  // 「学習が完了しました」の自動消去タイマーはアンマウント時に止める。
+  useEffect(() => {
+    return () => {
+      if (learnedTimerRef.current) window.clearTimeout(learnedTimerRef.current);
+    };
+  }, []);
   const [cropperBusy, setCropperBusy] = useState(false);
   const coverFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -634,8 +651,8 @@ export default function AvatarDetail({ id }: { id: string }) {
       });
       const json = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-      if (cropperSrc) URL.revokeObjectURL(cropperSrc);
-      setCropperSrc(null);
+      setCropperSrc(null); // ObjectURL は effect 側で破棄される
+
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -645,8 +662,7 @@ export default function AvatarDetail({ id }: { id: string }) {
   }
 
   function cancelCrop() {
-    if (cropperSrc) URL.revokeObjectURL(cropperSrc);
-    setCropperSrc(null);
+    setCropperSrc(null); // ObjectURL は effect 側で破棄される
   }
 
   async function saveMeta(updates: {
@@ -727,8 +743,6 @@ export default function AvatarDetail({ id }: { id: string }) {
   // 共有された(閲覧・会話のみの)ブレインは編集不可。旧レスポンスとの
   // 後方互換のため、can_edit が明示的に false のときだけ編集を隠す。
   const canEdit = avatar.can_edit !== false;
-  // Keep the audit logger's name copy current (read by a []-deps cb).
-  avatarNameRef.current = avatar.name;
   // 声の変更を出すか: プランで音声が使えるユーザー、または依頼で
   // 作成されたブレイン(プラン制限外で音声可)のときだけ。
   const showVoiceOption = planVoiceAllowed || avatar.request_id != null;

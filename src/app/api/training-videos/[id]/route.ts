@@ -54,6 +54,18 @@ export async function PATCH(
   const transcriptChanged =
     typeof body.transcript === 'string' &&
     body.transcript !== existing.transcript;
+  // 依頼ブレインは素材ロック(追加系ルートと同じ扱い)。本文の編集は
+  // 実質「任意テキストの再学習」なのでここでも塞ぐ。名前変更・
+  // フォルダ整理は学習内容を変えないため許可する。
+  if (transcriptChanged && auth.fromRequest) {
+    return NextResponse.json(
+      {
+        error: '依頼で作成されたブレインの素材は編集できません。',
+        code: 'request_brain_locked',
+      },
+      { status: 403 },
+    );
+  }
   if (transcriptChanged) {
     const next = body.transcript || '';
     updates.transcript = next;
@@ -153,6 +165,16 @@ export async function DELETE(
   const auth = await authorizeAvatar(existing.avatar_id as string, { requireOwner: true });
   if (!auth.ok) {
     return NextResponse.json({ error: 'forbidden' }, { status: auth.status });
+  }
+  // 依頼ブレインは素材ロック: 学習素材の削除も不可(追加系と同じ扱い)。
+  if (auth.fromRequest) {
+    return NextResponse.json(
+      {
+        error: '依頼で作成されたブレインの素材は削除できません。',
+        code: 'request_brain_locked',
+      },
+      { status: 403 },
+    );
   }
 
   if (existing.storage_path) {

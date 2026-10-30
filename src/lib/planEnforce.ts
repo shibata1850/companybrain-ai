@@ -1,5 +1,6 @@
 import { ENTERPRISE_PLAN, PLANS, type Plan, type PlanId } from './plans';
 import { supabaseAdmin } from './supabase';
+import { fetchAllPages } from './pageAll';
 import { quotaMonthStart } from './quota';
 import type { AppUser } from './authServer';
 
@@ -110,10 +111,10 @@ export async function getPlanUsage(user: AppUser): Promise<PlanUsage> {
     .eq('actor', user.email)
     .gte('created_at', since.toISOString());
   if (requestBrainIds.length > 0) {
-    questionsQuery = questionsQuery.not(
-      'avatar_id',
-      'in',
-      `(${requestBrainIds.join(',')})`,
+    // NOT IN は NULL 行を落としてしまう(avatar_id が null の質問が
+    // 無課金になる)ため、`null または 依頼ブレイン以外` で数える。
+    questionsQuery = questionsQuery.or(
+      `avatar_id.is.null,avatar_id.not.in.(${requestBrainIds.join(',')})`,
     );
   }
   const { count: questionCount } = await questionsQuery;
@@ -153,10 +154,18 @@ export async function getMaterialBytesUsed(user: AppUser): Promise<number> {
     .is('request_id', null);
   const brainIds = (ownedBrains ?? []).map((b) => b.id as string);
   if (brainIds.length === 0) return 0;
-  const { data } = await db
-    .from('training_videos')
-    .select('size_bytes')
-    .in('avatar_id', brainIds);
+  // 素材が1,000行を超えると PostgREST の既定上限で黙って切り捨てられ、
+  // 容量上限が実質無効化する(法令同期などで現実に到達する)ため、
+  // 明示ページングで全行を集計する。
+  const { rows: data } = await fetchAllPages<{ size_bytes: number | null }>(
+    (from, to) =>
+      db
+        .from('training_videos')
+        .select('size_bytes')
+        .in('avatar_id', brainIds)
+        .order('id', { ascending: true })
+        .range(from, to),
+  );
   return (data ?? []).reduce(
     (sum, r) => sum + Number(r.size_bytes ?? 0),
     0,
@@ -168,12 +177,36 @@ export async function getMaterialBytesUsed(user: AppUser): Promise<number> {
 export async function getVoiceSecondsThisMonth(user: AppUser): Promise<number> {
   const db = supabaseAdmin();
   const monthStart = quotaMonthStart();
-  const { data } = await db
-    .from('voice_sessions')
-    .select('seconds')
-    .eq('actor', user.email)
-    .gte('created_at', monthStart.toISOString());
-  return (data ?? []).reduce((sum, r) => sum + Number(r.seconds ?? 0), 0);
+  // 月1,000セッション超でも黙って欠落しないよう明示ページング。
+  const { rows } = await fetchAllPages<{
+    seconds: number | null;
+    started_at: string | null;
+    ended_at: string | null;
+  }>((from, to) =>
+    db
+      .from('voice_sessions')
+      .select('seconds, started_at, ended_at')
+      .eq('actor', user.email)
+      .gte('created_at', monthStart.toISOString())
+      .order('created_at', { ascending: true })
+      .range(from, to),
+  );
+  const now = Date.now();
+  return rows.reduce((sum, r) => {
+    const reported = Number(r.seconds ?? 0);
+    // 終了報告が届いていない行(0032: サーバーがトークン発行時に開始を
+    // 記録)は、実経過を上限10分で見なし計上する。報告を止めるだけで
+    // 無制限に使えるバイパスを塞ぎつつ、クラッシュした正直な利用者に
+    // 接続寿命(約10分)以上を課金しない。
+    if (!r.ended_at && r.started_at) {
+      const elapsed = Math.max(
+        0,
+        Math.floor((now - new Date(r.started_at).getTime()) / 1000),
+      );
+      return sum + Math.max(reported, Math.min(elapsed, 600));
+    }
+    return sum + reported;
+  }, 0);
 }
 
 /** Plan allows voice (binary check before any session opens). */
@@ -194,7 +227,9 @@ export function canAddMaterial(
 ): boolean {
   const limit = plan.limits.materialMb;
   if (limit === 'unlimited') return true;
-  return existingBytes + newBytes < limit * 1024 * 1024;
+  // ちょうど上限に達するアップロードは許可する(<= が正。strict less-than
+  // だと free 1MB プランで 1MB ちょうどのファイルが使用0でも拒否される)。
+  return existingBytes + newBytes <= limit * 1024 * 1024;
 }
 
 /** Shape the upgrade nudge into a consistent response across routes. */
@@ -228,7 +263,7 @@ export function planLimitResponse(
 }
 
 function nextPlanId(current: PlanId): PlanId {
-  const order: PlanId[] = ['free', 'starter', 'standard', 'pro'];
+  const order: PlanId[] = ['free', 'starter', 'basic', 'standard', 'pro'];
   const i = order.indexOf(current);
   return order[Math.min(i + 1, order.length - 1)];
 }

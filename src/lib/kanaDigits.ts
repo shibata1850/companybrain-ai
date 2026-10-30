@@ -39,19 +39,32 @@ const DIGIT_TOKENS: Array<[string, string]> = [
 
 /** カタカナ連続を数字へ。完全に分解できなければ null。 */
 function parseKanaRun(run: string): string | null {
-  let out = '';
+  const digits: string[] = [];
+  const tokens: string[] = [];
   let i = 0;
   outer: while (i < run.length) {
     for (const [kana, digit] of DIGIT_TOKENS) {
       if (run.startsWith(kana, i)) {
-        out += digit;
+        digits.push(digit);
+        tokens.push(kana);
         i += kana.length;
         continue outer;
       }
     }
     return null; // 数字の読み以外が混ざっている
   }
-  return out.length >= 3 ? out : null;
+  if (digits.length < 3) return null;
+  // 誤変換ガード(「ゴクゴク」→5959、「サンマルク」→309 のような
+  // 普通語の数字化を防ぐ):
+  //  - 1文字の曖昧トークン(ニ・ゴ・ク)は、数字読みの間に挟まれて
+  //    いる時だけ数字と見なす。先頭・末尾に来る分解は普通語の可能性が
+  //    高いので変換しない(電話番号の読みは ニー・ゴー・キュー が基本)。
+  //  - 全トークンが同じ(「ゴーゴーゴー」等の掛け声)も変換しない。
+  if (tokens[0].length === 1 || tokens[tokens.length - 1].length === 1) {
+    return null;
+  }
+  if (tokens.every((t) => t === tokens[0])) return null;
+  return digits.join('');
 }
 
 export function digitizeKanaNumbers(text: string): string {
@@ -62,5 +75,11 @@ export function digitizeKanaNumbers(text: string): string {
     return digits ?? run;
   });
   // 数字列が読点・中点・空白で続いていたら電話番号らしくハイフンでつなぐ。
-  return replaced.replace(/(\d{2,})[、・\s]+(?=\d{2,})/g, '$1-');
+  // 日本の電話番号は 0 始まりなので、0 で始まる並びだけを対象にする
+  // (「2024、2025年」のような年の列挙を 2024-2025 にしない)。
+  return replaced.replace(
+    /(^|[^\d-])(0\d{1,3})((?:[、・\s]+\d{2,4}){1,4})(?!\d)/g,
+    (_m, pre: string, head: string, rest: string) =>
+      pre + head + rest.replace(/[、・\s]+/g, '-'),
+  );
 }

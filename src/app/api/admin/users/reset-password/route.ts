@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { getAppUser } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabase';
+import { findAuthUserByEmail } from '@/lib/authAdminLookup';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -52,10 +53,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { data: list } = await db.auth.admin.listUsers();
-  const target = list?.users?.find(
-    (u) => u.email?.toLowerCase() === cleanEmail,
-  );
+  // 全ページを探す(1ページ目だけだと51人目以降が永遠に 404 になる)。
+  const target = await findAuthUserByEmail(db, cleanEmail).catch(() => null);
   if (!target) {
     return NextResponse.json(
       { error: 'Supabase Auth にアカウントが見つかりません' },

@@ -8,25 +8,25 @@
  */
 
 type DemoCard = {
-  emoji: string;
+  initial: string; // 丸アイコンに出す頭文字(アプリ内UIは絵文字アイコン禁止)
   name: string;
   line: string;
   grad: string; // tailwind gradient for the avatar + accent
 };
 
 const CARDS: DemoCard[] = [
-  { emoji: '💼', name: '経理ヘルプデスク', line: '出張交通費の上限は新幹線が普通車指定席まで…', grad: 'from-indigo-500 to-violet-600' },
-  { emoji: '🚀', name: '営業 トップセールス', line: '値引きには必ず条件交換をぶつけるんだ。', grad: 'from-rose-500 to-orange-500' },
-  { emoji: '⚡', name: 'シニアエンジニア', line: '命名 > テスト > 構造、の順で見ることが多い。', grad: 'from-emerald-500 to-teal-500' },
-  { emoji: '🏗️', name: '建築法務ブレイン', line: '建築基準法 第42条の道路の定義について…', grad: 'from-amber-500 to-yellow-500' },
-  { emoji: '⚖️', name: '顧問税理士', line: '交際費は1人10,000円以下なら会議費に…', grad: 'from-sky-500 to-cyan-500' },
-  { emoji: '🏥', name: '院内ルール', line: '夜勤帯の薬剤受け渡しは二名確認が原則です。', grad: 'from-pink-500 to-fuchsia-600' },
-  { emoji: '🚚', name: '配車マネージャー', line: '長距離便の休憩は4時間ごとに必須です。', grad: 'from-lime-500 to-green-600' },
-  { emoji: '🛍️', name: '店舗 FAQ', line: '返品はレシートがあれば14日以内で対応可能。', grad: 'from-violet-500 to-purple-600' },
-  { emoji: '📊', name: '経営企画ブレイン', line: '前年同月比で粗利率は2.3pt改善しています。', grad: 'from-blue-500 to-indigo-600' },
-  { emoji: '🧑‍🏫', name: '新人研修トレーナー', line: 'まずは名刺交換の所作から確認しましょう。', grad: 'from-orange-500 to-red-500' },
-  { emoji: '🏭', name: '保守マニュアル', line: '3号機のエラーE07はベルト張力を確認。', grad: 'from-cyan-500 to-blue-500' },
-  { emoji: '📝', name: '議事録要約', line: '本日の決定事項は3点、担当と期日は以下に…', grad: 'from-teal-500 to-emerald-600' },
+  { initial: '経', name: '経理ヘルプデスク', line: '出張交通費の上限は新幹線が普通車指定席まで…', grad: 'from-indigo-500 to-violet-600' },
+  { initial: '営', name: '営業 トップセールス', line: '値引きには必ず条件交換をぶつけるんだ。', grad: 'from-rose-500 to-orange-500' },
+  { initial: 'シ', name: 'シニアエンジニア', line: '命名 > テスト > 構造、の順で見ることが多い。', grad: 'from-emerald-500 to-teal-500' },
+  { initial: '建', name: '建築法務ブレイン', line: '建築基準法 第42条の道路の定義について…', grad: 'from-amber-500 to-yellow-500' },
+  { initial: '顧', name: '顧問税理士', line: '交際費は1人10,000円以下なら会議費に…', grad: 'from-sky-500 to-cyan-500' },
+  { initial: '院', name: '院内ルール', line: '夜勤帯の薬剤受け渡しは二名確認が原則です。', grad: 'from-pink-500 to-fuchsia-600' },
+  { initial: '配', name: '配車マネージャー', line: '長距離便の休憩は4時間ごとに必須です。', grad: 'from-lime-500 to-green-600' },
+  { initial: '店', name: '店舗 FAQ', line: '返品はレシートがあれば14日以内で対応可能。', grad: 'from-violet-500 to-purple-600' },
+  { initial: '経', name: '経営企画ブレイン', line: '前年同月比で粗利率は2.3pt改善しています。', grad: 'from-blue-500 to-indigo-600' },
+  { initial: '新', name: '新人研修トレーナー', line: 'まずは名刺交換の所作から確認しましょう。', grad: 'from-orange-500 to-red-500' },
+  { initial: '保', name: '保守マニュアル', line: '3号機のエラーE07はベルト張力を確認。', grad: 'from-cyan-500 to-blue-500' },
+  { initial: '議', name: '議事録要約', line: '本日の決定事項は3点、担当と期日は以下に…', grad: 'from-teal-500 to-emerald-600' },
 ];
 
 function Card({ c }: { c: DemoCard }) {
@@ -36,7 +36,7 @@ function Card({ c }: { c: DemoCard }) {
         <span
           className={`grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br ${c.grad} text-sm text-white shadow`}
         >
-          {c.emoji}
+          {c.initial}
         </span>
         <span className="text-xs font-medium text-neutral-900">{c.name}</span>
       </div>
@@ -47,7 +47,17 @@ function Card({ c }: { c: DemoCard }) {
         <span
           className={`rounded-full bg-gradient-to-r ${c.grad} px-2.5 py-1 text-[10px] text-white`}
         >
-          🎙 音声で質問
+          <svg
+            className="mr-1 inline-block align-[-2px]"
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            aria-hidden
+          >
+            <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z" />
+          </svg>
+          音声で質問
         </span>
       </div>
     </div>

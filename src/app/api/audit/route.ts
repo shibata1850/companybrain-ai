@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getAppUser } from '@/lib/authServer';
+import { authorizeAvatar, getAppUser } from '@/lib/authServer';
+import { enforceRateLimit } from '@/lib/rateLimit';
 import { getPlanUsage } from '@/lib/planEnforce';
 import { fetchAllPages } from '@/lib/pageAll';
 
@@ -32,6 +33,10 @@ export async function POST(req: NextRequest) {
   if (!me) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
+  // 洪水ガード(キオスクの /api/kiosk/audit と同等)。通常の会話は
+  // メッセージ確定ごとに1〜2件なので、この上限に正規の利用は当たらない。
+  const limited = enforceRateLimit(`audit:${me.email}`, 120, 60_000);
+  if (limited) return limited;
   const body = (await req.json().catch(() => null)) as
     | { entries?: AuditEntry[] }
     | AuditEntry
@@ -44,15 +49,38 @@ export async function POST(req: NextRequest) {
   )
     ? (body as { entries: AuditEntry[] }).entries
     : [body as AuditEntry];
+  if (rawEntries.length > 50) {
+    return NextResponse.json(
+      { error: 'too many entries (max 50 per request)' },
+      { status: 400 },
+    );
+  }
 
   // Actor is taken from the authenticated session, not the client
   // payload — that's the whole point of an audit trail.
   const actor = me.email;
 
+  // avatar_id もクライアント値を鵜呑みにしない: 自分が使えるブレイン
+  // (所有・共有)以外の ID は null に落とす。これを許すと、他人の
+  // ブレインへ偽の活動を注入したり、依頼ブレインへ付け替えて質問数の
+  // 課金を逃れたりできてしまう。
+  const claimedIds = Array.from(
+    new Set(
+      rawEntries
+        .map((e) => e?.avatar_id)
+        .filter((v): v is string => typeof v === 'string' && v.length > 0),
+    ),
+  ).slice(0, 20);
+  const usableIds = new Set<string>();
+  for (const id of claimedIds) {
+    const auth = await authorizeAvatar(id);
+    if (auth.ok) usableIds.add(id);
+  }
+
   const rows = rawEntries
     .filter((e) => e && typeof e.content === 'string' && e.content.trim())
     .map((e) => ({
-      avatar_id: e.avatar_id || null,
+      avatar_id: e.avatar_id && usableIds.has(e.avatar_id) ? e.avatar_id : null,
       avatar_name: e.avatar_name ?? null,
       session_id: e.session_id ?? null,
       actor,

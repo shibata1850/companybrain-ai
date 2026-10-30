@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAppUser } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabase';
+import { fetchAllPages } from '@/lib/pageAll';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -38,9 +39,17 @@ export async function GET(req: NextRequest) {
 
   // Decorate with the admin's label per requester for friendlier display.
   if (me.role === 'admin') {
-    const { data: labels } = await db
-      .from('app_users')
-      .select('email, admin_label');
+    // 1,000人超でもラベルが黙って欠落しないよう明示ページング。
+    const { rows: labels } = await fetchAllPages<{
+      email: string;
+      admin_label: string | null;
+    }>((from, to) =>
+      db
+        .from('app_users')
+        .select('email, admin_label')
+        .order('email', { ascending: true })
+        .range(from, to),
+    );
     const labelMap = new Map(
       (labels ?? []).map((l) => [l.email as string, l.admin_label as string | null]),
     );

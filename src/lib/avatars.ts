@@ -1,4 +1,5 @@
 import { storageBucket, supabaseAdmin } from './supabase';
+import { fetchAllPages } from './pageAll';
 
 /**
  * Permanently delete one or more avatars. Removes the storage files
@@ -17,10 +18,17 @@ export async function permanentlyDeleteAvatars(
     .from('avatars')
     .select('id, cover_image_path')
     .in('id', ids);
-  const { data: videos } = await db
-    .from('training_videos')
-    .select('storage_path')
-    .in('avatar_id', ids);
+  // 素材1,000件超のブレインでも Storage の実体を取り残さないよう
+  // 明示ページングで全行を集める。
+  const { rows: videos } = await fetchAllPages<{ storage_path: string | null }>(
+    (from, to) =>
+      db
+        .from('training_videos')
+        .select('storage_path')
+        .in('avatar_id', ids)
+        .order('id', { ascending: true })
+        .range(from, to),
+  );
 
   const paths: string[] = [];
   for (const a of avatars ?? []) {

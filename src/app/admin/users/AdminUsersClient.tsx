@@ -11,7 +11,7 @@ type User = {
   admin_label: string | null;
   created_at: string;
   suspended_at: string | null;
-  plan: 'free' | 'starter' | 'standard' | 'pro';
+  plan: 'free' | 'starter' | 'basic' | 'standard' | 'pro';
   company: string | null;
   /** エンタープライズ(組織テナント)の所属。個人アカウントは null。 */
   org_id?: string | null;

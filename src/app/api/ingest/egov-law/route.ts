@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { env } from '@/lib/env';
 import { supabaseAdmin } from '@/lib/supabase';
+import { kioskKeyMatches } from '@/lib/kioskAuth';
 import {
   IngestError,
   resolveBrain,
@@ -44,7 +45,8 @@ export async function POST(req: NextRequest) {
   }
   const auth = req.headers.get('authorization') || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
-  if (!token || token !== configuredKey) {
+  // タイミング攻撃に強い照合(kioskAuth と同じ流儀)。
+  if (!kioskKeyMatches(token, configuredKey)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 

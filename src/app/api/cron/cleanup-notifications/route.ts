@@ -106,8 +106,15 @@ export async function GET(req: NextRequest) {
         const { data: files } = await db.storage
           .from(storageBucket())
           .list('notifications', { limit: 1000 });
+        // アップロード直後(お知らせ本文の投稿前)の添付を消さないよう、
+        // 24時間以上前のオブジェクトだけを孤児掃除の対象にする。
+        const cutoff = Date.now() - 24 * 60 * 60 * 1000;
         const orphans = (files ?? [])
           .filter((f) => f.name)
+          .filter((f) => {
+            const t = f.created_at ? new Date(f.created_at).getTime() : 0;
+            return t > 0 && t < cutoff;
+          })
           .map((f) => `notifications/${f.name}`)
           .filter((p) => !referenced.has(p));
         if (orphans.length > 0) {

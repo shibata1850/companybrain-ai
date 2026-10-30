@@ -49,7 +49,7 @@ export async function POST(
     });
   }
 
-  const body = (await req.json()) as {
+  const body = (await req.json().catch(() => ({}))) as {
     question?: string;
     length?: AnswerLength;
   };

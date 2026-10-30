@@ -209,6 +209,9 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
   // get recreated when a session starts — that previously triggered the
   // unmount-cleanup effect and killed the session immediately).
   const sessionStartedAtRef = useRef<number | null>(null);
+  // サーバー側の通話記録ID(0032)。トークン発行時にサーバーが発行し、
+  // 終了報告に添えて秒数をサーバー実測でクランプしてもらう。
+  const voiceSessionIdRef = useRef<string | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
   // VAD bookkeeping for the "thinking" state.
   const userTalkingRef = useRef(false);
@@ -275,14 +278,6 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
   const playheadRef = useRef<number>(0);
   const rafRef = useRef<number | null>(null);
   const speakingRef = useRef(false);
-  // When `interrupted` fires we cancel the audio queue, but the server
-  // keeps streaming chunks from the in-flight generation for several
-  // more seconds. Those late chunks would re-open the speaker and
-  // re-close the half-duplex mic gate, so the next user question is
-  // swallowed and the session looks frozen. Block further audio
-  // playback after an interrupt until the user clearly starts a new
-  // turn (inputTranscription arrives, or text input is sent).
-  const audioBlockedRef = useRef(false);
   // turnComplete can arrive before the trailing outputTranscription
   // chunks (transcript lags its own audio in some Live API builds).
   // Flushing on the immediate turnComplete in that window truncates
@@ -355,6 +350,75 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
     }
   }, []);
 
+  /**
+   * ここまでの音声利用秒数をサーバーへ報告する(プラン上限の集計用)。
+   * fire-and-forget。テキスト専用モードでは音声を使っていないので送らない。
+   */
+  function reportVoiceSeconds() {
+    const startedAt = sessionStartedAtRef.current;
+    if (startedAt === null || textOnlyRef.current) return;
+    const seconds = Math.max(0, Math.round((Date.now() - startedAt) / 1000));
+    if (seconds <= 0) return;
+    const sessionId = voiceSessionIdRef.current ?? undefined;
+    voiceSessionIdRef.current = null;
+    try {
+      void fetch(kioskKey ? '/api/kiosk/end' : '/api/streaming/end', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          kioskKey
+            ? { key: kioskKey, seconds }
+            : { avatarId, seconds, sessionId },
+        ),
+        keepalive: true,
+      });
+    } catch {
+      // ignore
+    }
+  }
+
+  /**
+   * サーバー起因で接続が終端(もう繋ぎ直さない)に達した時の後始末。
+   * stop() と違い status は呼び出し側が決める。これを怠るとマイクと
+   * AudioContext が生き続け(録音中ランプが点きっぱなし)、切断後の
+   * 放置時間まで音声利用秒数に計上されてしまう。
+   */
+  async function teardownDeadSession() {
+    sessionOpenRef.current = false;
+    resumingRef.current = false;
+    resumeHandleRef.current = null;
+    if (resumeTimerRef.current) {
+      clearTimeout(resumeTimerRef.current);
+      resumeTimerRef.current = null;
+    }
+    if (thinkingTimerRef.current) {
+      clearTimeout(thinkingTimerRef.current);
+      thinkingTimerRef.current = null;
+    }
+    userTalkingRef.current = false;
+    speakingRef.current = false;
+    pendingFlushRef.current = false;
+    if (pendingFlushTimerRef.current) {
+      clearTimeout(pendingFlushTimerRef.current);
+      pendingFlushTimerRef.current = null;
+    }
+    // 送信途中(ターン未確定)の発話も記録へ流してから片付ける。
+    flushTranscripts();
+    try {
+      sessionRef.current?.close();
+    } catch {
+      // ignore
+    }
+    sessionRef.current = null;
+    await releaseAudio();
+    setLevel(0);
+    setAgentLevel(0);
+    reportVoiceSeconds();
+    sessionStartedAtRef.current = null;
+    setSessionStartedAt(null);
+    setElapsedSec(0);
+  }
+
   const stop = useCallback(async () => {
     manualStopRef.current = true;
     sessionOpenRef.current = false;
@@ -373,6 +437,9 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
       thinkingTimerRef.current = null;
     }
     userTalkingRef.current = false;
+    // 送信途中(ターン未確定)の発話を捨てずに記録へ流してから閉じる。
+    // (回答が来る前に終了した質問が監査ログから消えないように)
+    flushTranscripts();
     await releaseAudio();
     try {
       sessionRef.current?.close();
@@ -393,26 +460,8 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
     setCaptionAgent('');
     // Report how many seconds of voice were actually consumed so plan
     // enforcement can sum per-month usage. Fire-and-forget, must not
-    // block the cleanup or surface errors to the user. Text-only mode
-    // (/ask 経由) は音声を一切使っていないので記録しない。
-    const startedAt = sessionStartedAtRef.current;
-    if (startedAt !== null && !textOnlyRef.current) {
-      const seconds = Math.max(0, Math.round((Date.now() - startedAt) / 1000));
-      if (seconds > 0) {
-        try {
-          void fetch(kioskKey ? '/api/kiosk/end' : '/api/streaming/end', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(
-              kioskKey ? { key: kioskKey, seconds } : { avatarId, seconds },
-            ),
-            keepalive: true,
-          });
-        } catch {
-          // ignore
-        }
-      }
-    }
+    // block the cleanup or surface errors to the user.
+    reportVoiceSeconds();
     sessionStartedAtRef.current = null;
     setSessionStartedAt(null);
     setElapsedSec(0);
@@ -442,10 +491,6 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
 
   function playAudioChunk(base64: string) {
     lastActivityRef.current = Date.now();
-    // Drop chunks that arrive after an interrupt — they're ghost
-    // audio from the cancelled generation and would otherwise re-open
-    // the speaker and block the mic for the user's next question.
-    if (audioBlockedRef.current) return;
     const ctx = outputCtxRef.current;
     if (!ctx) return;
     const pcm = base64ToInt16(base64);
@@ -483,30 +528,6 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
       // tick (max 300ms later), so trailing transcript chunks have
       // time to land before the message is sealed. No flush here.
     };
-  }
-
-  /**
-   * Stop every queued / playing buffer source and reset the playhead.
-   * Called when Gemini reports the user barged in.
-   */
-  function stopAllPlayback() {
-    for (const src of activeSourcesRef.current) {
-      try {
-        src.stop();
-      } catch {
-        // already stopped
-      }
-      try {
-        src.disconnect();
-      } catch {
-        // ignore
-      }
-    }
-    activeSourcesRef.current.clear();
-    if (outputCtxRef.current) {
-      playheadRef.current = outputCtxRef.current.currentTime;
-    }
-    speakingRef.current = false;
   }
 
   /**
@@ -573,8 +594,7 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
       if (
         !endsCleanly &&
         continuationCountRef.current < MAX_CONTINUATIONS &&
-        sessionOpenRef.current &&
-        !audioBlockedRef.current
+        sessionOpenRef.current
       ) {
         continuationCountRef.current += 1;
         pendingFlushRef.current = false;
@@ -690,10 +710,9 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
     // instead of waiting for the turn to finish.
     const inputTx = sc?.inputTranscription?.text;
     if (inputTx) {
-      // User is starting a new turn — accept the next model response
-      // and reset the auto-continuation budget (this is real speech,
-      // not our silent continuation nudge, which is sent as text).
-      audioBlockedRef.current = false;
+      // User is starting a new turn — reset the auto-continuation
+      // budget (this is real speech, not our silent continuation
+      // nudge, which is sent as text).
       continuationCountRef.current = 0;
       lastActivityRef.current = Date.now();
       userBufRef.current += inputTx;
@@ -706,33 +725,14 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
       setCaptionAgent(cleanTranscript(agentBufRef.current));
     }
 
-    // Barge-in handling. This is the ROOT CAUSE of the long-standing
-    // "answer cut off mid-sentence" bug: on speaker setups the agent's
-    // own voice echoes back into the mic, the server reads it as the
-    // user talking over the agent, fires `interrupted`, and we react by
-    // killing playback + flushing the half-built transcript — chopping
-    // both the audio and the message in the middle of a sentence. It
-    // hits longer answers hardest (more echo exposure), which is
-    // exactly the observed pattern.
-    //
-    // The fix: when barge-in is OFF (the default), the mic is gated
-    // shut for the entire agent turn, so a *genuine* user interruption
-    // is impossible — any `interrupted` we receive is therefore
-    // spurious echo/noise and must be ignored. We only honor
-    // interruptions when the user has explicitly enabled 🎧 割り込みON
-    // (headphone mode), where talking over the agent is intended.
+    // Barge-in (`interrupted`) は無視する。スピーカー運用ではAI自身の
+    // 声がマイクへ回り込み、サーバーが「ユーザーの割り込み」と誤検知して
+    // 回答を文の途中で切る事故が長年のバグの根本原因だった。割り込み機能
+    // は提供していない(AIの発話中は sendFrame がマイク送信を止めている)
+    // ため、ここに届く interrupted はエコー・ノイズ起因の誤検知しかない。
+    // 受信済みの音声と字幕は最後まで流し切る。
     if (sc?.interrupted) {
-      // With automatic VAD disabled the server occasionally emits a
-      // spurious `interrupted` with nothing in flight (seen at session
-      // open). Only act when there's actually an agent turn to cut —
-      // otherwise we'd needlessly set the audio block and risk
-      // swallowing the next real answer.
-      if (agentBufRef.current || activeSourcesRef.current.size > 0) {
-        stopAllPlayback();
-        flushTranscripts();
-        audioBlockedRef.current = true;
-        setStatus('listening');
-      }
+      console.warn('[live] spurious `interrupted` ignored (no barge-in)');
     }
 
     // End of turn — push the completed transcripts as messages.
@@ -918,19 +918,26 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
       // ignore
     }
     sessionRef.current = null;
-    void start();
+    void start({ auto: true });
   }
 
-  async function start() {
+  async function start(opts?: { auto?: boolean }) {
     setError(null);
-    // Manual start (user clicked the button) — clear the reconnect
-    // counter so a future hiccup gets its own fresh budget. The
-    // reconnect path calls start() directly without resetting these.
     if (reconnectTimerRef.current) {
       clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
     }
     manualStopRef.current = false;
+    if (!opts?.auto) {
+      // 手動開始(ボタン・キオスク親から)= 新しい会話。モデル選択は
+      // サーバーの env を毎回権威とし、前の通話内の 1008 フォールバックで
+      // 選ばれたモデルや再接続カウントを持ち越さない。自動再接続・
+      // セッション再開からの呼び出し(auto: true)では維持する。
+      modelOverrideRef.current = null;
+      triedModelsRef.current.clear();
+      reconnectAttemptsRef.current = 0;
+      voiceSessionIdRef.current = null;
+    }
     // 前の接続の音声グラフが残っていれば解放する(再接続・セッション
     // 再開時のマイク二重取り込み防止。初回起動では何もしない)。
     await releaseAudio();
@@ -965,7 +972,13 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
           body: JSON.stringify(
             kioskKey
               ? { key: kioskKey, model: modelOverrideRef.current || undefined }
-              : { avatarId, model: modelOverrideRef.current || undefined },
+              : {
+                  avatarId,
+                  model: modelOverrideRef.current || undefined,
+                  // 同じ通話内の自動再接続・セッション再開では、サーバー側の
+                  // 通話記録(0032)を新しく作らせない。
+                  auto: !!opts?.auto,
+                },
           ),
         },
       );
@@ -976,15 +989,33 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
         textOnly?: boolean;
         voiceEnabled?: boolean;
         voiceDisabledReason?: 'plan' | 'quota' | null;
+        voiceSessionId?: string | null;
         error?: string;
       };
+      if (tokenJson.voiceSessionId) {
+        voiceSessionIdRef.current = tokenJson.voiceSessionId;
+      }
       // 音声なしプラン(または今月の音声上限到達): Live 接続は行わず、
       // テキスト質問を /ask(通常のHTTP API)に流すモードで開始する。
       // ネイティブ音声モデルは TEXT モダリティを受け付けないため、
       // Live 側でのテキスト専用セッションは成立しない(code 1007)。
       // 音声なしプラン・今月の音声上限到達: 接続せず、理由を表示して
       // 待機に戻る(テキスト質問のフォールバックはチャット再実装まで無し)。
+      if (manualStopRef.current) {
+        // トークン取得中に「終了」が押された — 接続せずに終わる。
+        return;
+      }
       if (tokenRes.ok && tokenJson.textOnly) {
+        // セッション再開の繋ぎ直し中に音声上限へ達した場合もここに来る。
+        // 再開状態を解き、ここまでの利用秒数を報告してから待機へ戻す
+        // (これを怠ると resumingRef が立ちっぱなしになり、旧接続の
+        // onclose が握り潰されて無言で固まる)。
+        resumingRef.current = false;
+        resumeHandleRef.current = null;
+        reportVoiceSeconds();
+        sessionStartedAtRef.current = null;
+        setSessionStartedAt(null);
+        setElapsedSec(0);
         textOnlyRef.current = true;
         setTextOnly(true);
         setVoiceDisabledReason(tokenJson.voiceDisabledReason ?? 'plan');
@@ -1085,6 +1116,9 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
                 void resumeReconnect();
                 return;
               }
+              // サーバー起因の正常終了(手動の stop() は自分で後始末済み)。
+              // マイク・音声グラフを解放し、利用秒数を確定させる。
+              if (!manualStopRef.current) void teardownDeadSession();
               setStatus((s) => (s === 'error' ? s : 'ended'));
               return;
             }
@@ -1104,7 +1138,7 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
               reconnectAttemptsRef.current += 1;
               setStatus('reconnecting');
               reconnectTimerRef.current = setTimeout(() => {
-                void start();
+                void start({ auto: true });
               }, 500);
               return;
             }
@@ -1124,7 +1158,7 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
                 modelOverrideRef.current = next;
                 setStatus('reconnecting');
                 reconnectTimerRef.current = setTimeout(() => {
-                  void start();
+                  void start({ auto: true });
                 }, 400);
                 return;
               }
@@ -1134,6 +1168,7 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
                   '.env.local の GEMINI_LIVE_MODEL を設定してください。' +
                   '(全候補がエラー code 1008 で拒否されました)',
               );
+              void teardownDeadSession();
               setStatus('error');
               return;
             }
@@ -1147,7 +1182,7 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
               setStatus('reconnecting');
               const delayMs = 800 * reconnectAttemptsRef.current;
               reconnectTimerRef.current = setTimeout(() => {
-                void start();
+                void start({ auto: true });
               }, delayMs);
               return;
             }
@@ -1158,10 +1193,21 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
                 reason ? `: ${reason}` : ''
               }${code ? ` (code ${code})` : ''}`,
             );
+            void teardownDeadSession();
             setStatus('error');
           },
         },
       });
+      if (manualStopRef.current) {
+        // 接続確立を待つ間に「終了」が押された。放置するとこの接続が
+        // onopen で通話を復活させてしまうので、即座に閉じて終わる。
+        try {
+          session.close();
+        } catch {
+          // ignore
+        }
+        return;
+      }
       sessionRef.current = session;
 
       // ---- output (Gemini → speakers) ----
@@ -1193,6 +1239,18 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
         },
       });
       micStreamRef.current = stream;
+      if (manualStopRef.current) {
+        // マイク許可ダイアログの間に「終了」が押された。取得したマイクと
+        // 音声グラフを解放し、セッションも閉じて終わる。
+        try {
+          sessionRef.current?.close();
+        } catch {
+          // ignore
+        }
+        sessionRef.current = null;
+        await releaseAudio();
+        return;
+      }
       const InputCtx = (
         (window as unknown as { webkitAudioContext?: typeof AudioContext })
           .webkitAudioContext || window.AudioContext
@@ -1214,6 +1272,10 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
       // に変換して送る。ターンの切れ目はサーバーの自動VADが検出する。
       const sendFrame = (input: Float32Array, inRate: number) => {
         if (!sessionOpenRef.current || !sessionRef.current) return;
+        // AIの音声を再生している間はマイク音声を送らない(半二重)。
+        // スピーカー運用でAIの声がマイクへ回り込み、サーバーが割り込みと
+        // 誤検知して回答を切る事故をここで元から断つ。
+        if (speakingRef.current || activeSourcesRef.current.size > 0) return;
         const pcm = floatTo16kPcm(input, inRate);
         const b64 = int16ToBase64(pcm);
         try {
@@ -1545,7 +1607,7 @@ const StreamingStage = forwardRef<StreamingStageHandle, StreamingStageProps>(
         </div>
         <button
           type="button"
-          onClick={start}
+          onClick={() => void start()}
           disabled={textOnly}
           className="inline-flex shrink-0 items-center gap-2 rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-500 active:scale-95 disabled:opacity-40"
         >
@@ -1582,11 +1644,6 @@ export default StreamingStage;
 
 // ---- helpers ----
 
-/** 字幕用: 長い発話は末尾 n 文字だけを追いかける。 */
-function tailText(s: string, n: number): string {
-  return s.length > n ? `…${s.slice(-n)}` : s;
-}
-
 function formatElapsed(totalSec: number): string {
   const s = Math.max(0, Math.floor(totalSec));
   const m = Math.floor(s / 60);
@@ -1598,8 +1655,10 @@ function base64ToInt16(b64: string): Int16Array {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  // PCM 16 little-endian.
-  return new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
+  // PCM 16 little-endian。奇数バイトのペイロードが来ても落ちないよう、
+  // 端数の1バイトは切り捨てる(Int16Array は奇数長で RangeError を投げ、
+  // onmessage ハンドラごと巻き込むため)。
+  return new Int16Array(bytes.buffer, 0, Math.floor(bytes.byteLength / 2));
 }
 
 function int16ToBase64(pcm: Int16Array): string {

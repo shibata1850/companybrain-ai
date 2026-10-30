@@ -78,14 +78,16 @@ describe('canAddMaterial', () => {
       ? null
       : starter.limits.materialMb * 1024 * 1024;
 
-  it('allows an addition that stays strictly under the cap', () => {
+  it('allows an addition up to and including the cap', () => {
     if (cap === null) return;
     expect(canAddMaterial(starter, cap - 1024, 512)).toBe(true);
+    expect(canAddMaterial(starter, cap - 1, 1)).toBe(true); // ちょうど上限はOK
+    expect(canAddMaterial(starter, 0, cap)).toBe(true); // 上限サイズ1ファイル
   });
-  it('blocks an addition that reaches or exceeds the cap', () => {
+  it('blocks an addition that exceeds the cap', () => {
     if (cap === null) return;
     expect(canAddMaterial(starter, cap, 1)).toBe(false);
-    expect(canAddMaterial(starter, cap - 1, 1)).toBe(false); // == cap
+    expect(canAddMaterial(starter, 0, cap + 1)).toBe(false);
   });
 });
 

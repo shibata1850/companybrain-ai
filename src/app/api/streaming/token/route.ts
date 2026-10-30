@@ -13,6 +13,7 @@ import {
 import type { PlanId } from '@/lib/plans';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { mintLiveToken, sanitizeModelOverride } from '@/lib/liveToken';
+import { supabaseAdmin } from '@/lib/supabase';
 import { reportError } from '@/lib/errorReport';
 
 export const runtime = 'nodejs';
@@ -28,7 +29,7 @@ export const dynamic = 'force-dynamic';
  * 責務は、本人認可・プラン制限・レート制限と応答の組み立て。
  */
 export async function POST(req: NextRequest) {
-  let body: { avatarId?: string; model?: string } = {};
+  let body: { avatarId?: string; model?: string; auto?: boolean } = {};
   try {
     body = await req.json();
   } catch {
@@ -117,12 +118,32 @@ export async function POST(req: NextRequest) {
         : env.geminiLiveModel();
 
     const minted = await mintLiveToken(avatarId, { modelOverride, baseModel });
+
+    // 0032: サーバー側で通話の開始を記録する(utilization の自己申告
+    // 依存を減らす)。auto=true は同じ通話内の自動再接続・セッション
+    // 再開なので新しい行を作らない(作ると1通話が多重計上される)。
+    let voiceSessionId: string | null = null;
+    if (!body.auto) {
+      const { data: vsRow } = await supabaseAdmin()
+        .from('voice_sessions')
+        .insert({
+          actor: auth.me.email,
+          avatar_id: avatarId,
+          seconds: 0,
+          started_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
+      voiceSessionId = (vsRow?.id as string | undefined) ?? null;
+    }
+
     return NextResponse.json({
       token: minted.token,
       model: minted.model,
       voice: minted.voice,
       voiceEnabled,
       voiceDisabledReason,
+      voiceSessionId,
       avatar: minted.avatar,
     });
   } catch (e) {

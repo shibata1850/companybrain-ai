@@ -36,7 +36,7 @@ export async function POST(
       { status: 403 },
     );
   }
-  const body = (await req.json()) as {
+  const body = (await req.json().catch(() => ({}))) as {
     text?: string;
     title?: string;
     folder?: string | null;

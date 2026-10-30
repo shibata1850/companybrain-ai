@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAppUser, supabaseRoute } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabase';
+import { findAuthUserByEmail } from '@/lib/authAdminLookup';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -51,11 +52,9 @@ export async function POST(req: NextRequest) {
   }
 
   // Apply the new password via the admin API (needs the user id).
+  // 全ページを探す(1ページ目だけだと51人目以降が永遠に 404 になる)。
   const db = supabaseAdmin();
-  const { data: list } = await db.auth.admin.listUsers();
-  const target = list?.users?.find(
-    (u) => u.email?.toLowerCase() === me.email.toLowerCase(),
-  );
+  const target = await findAuthUserByEmail(db, me.email).catch(() => null);
   if (!target) {
     return NextResponse.json(
       { error: 'アカウントが見つかりません' },

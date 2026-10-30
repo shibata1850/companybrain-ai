@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAppUser } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabase';
 import { fetchAllPages } from '@/lib/pageAll';
+import { findAuthUserByEmail } from '@/lib/authAdminLookup';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -195,12 +196,10 @@ export async function DELETE(req: NextRequest) {
 
   const db = supabaseAdmin();
   await db.from('app_users').delete().eq('email', cleanEmail);
-  // Best-effort auth account removal.
+  // Best-effort auth account removal(全ページ検索。allowlist 削除だけで
+  // ログインは塞がるので、失敗しても致命ではない)。
   try {
-    const { data: list } = await db.auth.admin.listUsers();
-    const target = list?.users?.find(
-      (u) => u.email?.toLowerCase() === cleanEmail,
-    );
+    const target = await findAuthUserByEmail(db, cleanEmail);
     if (target) await db.auth.admin.deleteUser(target.id);
   } catch {
     // allowlist removal already blocks login; auth cleanup is bonus
