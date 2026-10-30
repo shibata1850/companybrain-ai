@@ -1092,9 +1092,9 @@ function HowItWorks() {
       title: '質問する',
       body: (
         <>
-          チャットで聞いてもよし、
+          ボタンひとつで音声会話。
           <br className="hidden md:inline" />
-          ボタンで音声会話してもよし。
+          話しかけるだけで答えが返る。
         </>
       ),
       point: 'AI が社内の知識をもとに即回答',

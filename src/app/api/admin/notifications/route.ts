@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
     }
   } else {
     const email = target.trim().toLowerCase();
-    let q = db.from('app_users').select('email, org_id').eq('email', email);
+    const q = db.from('app_users').select('email, org_id').eq('email', email);
     const { data } = await q.single();
     if (!data) {
       return NextResponse.json(

@@ -51,6 +51,7 @@ export async function GET(req: NextRequest) {
           .createSignedUrl(path, 60 * 60);
         media_url = s?.signedUrl ?? null;
       }
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { media_path, ...rest } = n;
       return { ...rest, media_url };
     }),

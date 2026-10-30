@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 // `@ffmpeg-installer/ffmpeg` ships a static ffmpeg binary across platforms.
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// require のままにする(ESM import だとバンドラがバイナリパスを壊す)。
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg') as {
   path: string;
 };

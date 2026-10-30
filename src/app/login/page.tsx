@@ -2,11 +2,10 @@
 
 import Link from 'next/link';
 import { Suspense, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import LoginBackground from '@/components/LoginBackground';
 
 function LoginForm() {
-  const router = useRouter();
   const params = useSearchParams();
   const next = params.get('next') || '/dashboard';
   const [email, setEmail] = useState('');

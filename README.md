@@ -1,96 +1,62 @@
 # CompanyBrain AI
 
-人物の動画から「顔」「声」「知識」を学習し、その人として質問に答える動画を
-自動生成する社内ブレインアバターシステム。
+人物の動画・社内資料を学習し、その人の口調で **リアルタイム音声会話**
+(Gemini Live)ができる日本語の社内ナレッジ AI。
+
+本番: https://companybrain-ai-chi.vercel.app (Vercel / `main` ブランチ)
 
 ## 動作の流れ
 
-1. ユーザーが人物の話している動画をアップロードする。
-2. サーバーは:
-   - 動画から 1 フレーム抽出 → HeyGen に Talking Photo として登録
-   - 動画から音声抽出 → HeyGen Instant Voice Clone で声を学習
-   - Gemini で動画を文字起こし → チャンク分割 → ベクトル化 → Supabase に保存
-3. ユーザーが画面から質問を投げる。
-4. サーバーは:
-   - 質問をベクトル化 → pgvector で関連発言を検索（RAG）
-   - Gemini に「この人物として」回答させる
-   - HeyGen に Photo Avatar + Cloned Voice + 回答テキストを渡して動画生成
-5. 数十秒〜数分後、その人物が回答を喋っている動画がブラウザで再生できる。
+1. ユーザーが人物の動画・文書・テキストをアップロードする。
+2. サーバーは Gemini で文字起こし・要約 → チャンク分割 → 埋め込み
+   (pgvector)として Supabase に保存する。
+3. ユーザーは通話画面の「話す」ボタンひとつで音声会話を開始する。
+   - サーバーが短命トークン(ephemeral token)を発行し、ブラウザが
+     Gemini Live API へ直接 WebSocket 接続する(API キーは出さない)。
+   - 会話中、モデルは `search_knowledge` ツールで RAG 検索を行い、
+     学習素材に基づいて本人の口調で答える。
+   - セッション再開(sessionResumption)で接続の約10分上限を越えて
+     同じ会話を継げる。字幕・終話時の監査ログ保存つき。
+4. 会話の中身は監査ログ(audit_logs)にサーバー保存される。画面の
+   「最近の会話」スレッド表示は端末ごと(localStorage)——これは仕様。
 
-複数のブレインを作成でき、それぞれ追加動画でいつでも学習を上乗せできる
-（顔と声は最初の動画で確定）。
+## 主な機能
+
+- ブレイン(人格)ごとの素材管理・フォルダ・重複整理・読み方辞書
+  (固有名詞の発音登録)
+- 招待制+セルフ登録、プラン(free/starter/basic/standard/pro +
+  エンタープライズ組織テナント)と上限の実 enforce
+- ブレインは作成者本人のみ利用可。管理者は監査のみ(他人のブレインでは
+  会話できない)
+- 依頼(管理者が代理作成して譲渡)・ゴミ箱・お知らせ・監査ドリルダウン
+- キオスク(展示)モード: アクセスキー+1ブレイン限定の公開ディスプレイ。
+  収差オーブの待機画面、字幕、デモループ。管理画面 /admin/kiosk で URL 発行
+- メンテナンス画面 /admin/maintenance: 埋め込みの後追い生成、モデル死活確認
 
 ## 技術スタック
 
-- Next.js 14（App Router, TypeScript）
-- Supabase (Postgres + Storage + pgvector)
-- Google Gemini API（文字起こし・要約・埋め込み・回答生成）
-- HeyGen API（Photo Avatar + Instant Voice Clone + Video Generate）
-- ffmpeg-static（動画からフレーム/音声抽出）
-- Tailwind CSS
+- Next.js 15(App Router, TypeScript)+ Tailwind CSS
+- Supabase(Postgres + pgvector + Storage + Auth)
+- Google Gemini API(@google/genai): Live 音声対話・文字起こし・埋め込み
+- three.js(キオスクの収差オーブ演出)
+- Vitest(ユニット)+ Playwright(E2E スモーク)
 
-## セットアップ
-
-### 1. Supabase プロジェクトを作成
-
-1. <https://supabase.com> でプロジェクトを新規作成
-2. SQL Editor で `supabase/migrations/0001_initial.sql` を実行
-3. Storage で `companybrain` という名前のバケットを作成（Public でなくて OK）
-4. Project Settings → API から `Project URL` / `anon key` / `service_role key` を控える
-
-### 2. 環境変数を設定
-
-```bash
-cp .env.example .env.local
-```
-
-`.env.local` を開いて以下を埋める:
-
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `GEMINI_API_KEY` — <https://aistudio.google.com/apikey>
-- `HEYGEN_API_KEY` — <https://app.heygen.com/settings?nav=API>
-
-### 3. 起動
+## 開発
 
 ```bash
 npm install
+cp .env.example .env.local   # 値を記入
 npm run dev
 ```
 
-<http://localhost:3000> を開く。
+検証: `npx tsc --noEmit` → `npx next build --no-lint` →
+`npx vitest run` → `npx playwright test`。
 
-## ディレクトリ構成
+ブランチ運用・AI(Claude)の作業規約は `CLAUDE.md`、仕様の経緯は
+`docs/要件定義書.md` を参照。DB スキーマは `supabase/migrations/`。
 
-```
-src/
-├── app/
-│   ├── page.tsx                          # ブレイン一覧
-│   ├── avatars/new/page.tsx              # 新規作成 (動画アップロード)
-│   ├── avatars/[id]/AvatarDetail.tsx     # 質問 / 動画再生 UI
-│   └── api/
-│       ├── avatars/route.ts              # 作成 / 一覧
-│       ├── avatars/[id]/route.ts         # 詳細
-│       ├── avatars/[id]/train/route.ts   # 追加学習
-│       ├── avatars/[id]/ask/route.ts     # 質問 → 動画生成キック
-│       └── generations/[id]/route.ts     # 生成ステータスのポーリング
-└── lib/
-    ├── supabase.ts                       # Supabase 管理クライアント
-    ├── gemini.ts                         # 文字起こし / 埋め込み / 回答生成
-    ├── heygen.ts                         # Photo Avatar / Voice Clone / Generate
-    ├── media.ts                          # ffmpeg でフレーム+音声抽出
-    └── processing.ts                     # 学習パイプライン (transcribe→chunk→embed→DB)
+## 補足(履歴)
 
-supabase/migrations/
-└── 0001_initial.sql                      # avatars / training_videos / knowledge_chunks /
-                                          # generations + match_knowledge_chunks RPC
-```
-
-## 注意点
-
-- API キーはすべてサーバー側のみ。`NEXT_PUBLIC_*` 以外をクライアントに渡さない。
-- HeyGen の Photo Avatar / Instant Voice Clone は有料プラン機能。プランを確認のうえご利用ください。
-- 動画は Supabase Storage に保存されます。容量プランに注意。
-- HeyGen Live Avatar (Interactive / Streaming Avatar) は使用しません。回答動画は
-  非同期にレンダリングされ、完成すると UI に表示されます。
+旧アバター映像基盤(HeyGen / D-ID による回答動画の生成)は 2026-10 に
+全撤去し、リアルタイム音声会話へ一本化した。チャット UI も同時期に
+一時撤去(テキスト質問 API `/api/avatars/[id]/ask` は再実装に備えて温存)。
