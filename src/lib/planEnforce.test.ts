@@ -20,7 +20,6 @@ const usageFor = (
   plan: planById(id),
   brainsUsed: 0,
   questionsThisMonth: 0,
-  trialUntil: null,
   ...over,
 });
 
@@ -121,11 +120,10 @@ describe('model selection', () => {
   });
 });
 
-describe('体験(トライアル)のプラン解決', () => {
+describe('プラン解決(組織シート上限)', () => {
   /**
-   * 営業が付与する14日体験は課金に直結するため、適用条件を固定する:
-   * 期限内の個人 → trial_plan / 期限切れ → 本来のプラン /
-   * 組織所属者 → シート上限が優先(体験は効かない)。
+   * 組織所属者はエンタープライズの「1シートあたりの上限」で動作する。
+   * (体験トライアルは2026-10に撤去。関連テストも削除した)
    */
   function makeDb(userRow: Record<string, unknown>) {
     const builder = () => {
@@ -160,36 +158,8 @@ describe('体験(トライアル)のプラン解決', () => {
     vi.resetModules();
   });
 
-  it('期限内の体験は trial_plan の上限で動作する', async () => {
-    const until = new Date(Date.now() + 7 * 86_400_000).toISOString();
-    const usage = await usageWith({
-      plan: 'free',
-      trial_plan: 'standard',
-      trial_until: until,
-    });
-    expect(usage.plan.id).toBe('standard');
-    expect(usage.trialUntil).toBe(until);
-  });
-
-  it('期限切れの体験は無視され、本来のプランに戻る', async () => {
-    const usage = await usageWith({
-      plan: 'free',
-      trial_plan: 'standard',
-      trial_until: new Date(Date.now() - 86_400_000).toISOString(),
-    });
-    expect(usage.plan.id).toBe('free');
-    expect(usage.trialUntil).toBeNull();
-  });
-
-  it('組織所属者はシート上限が優先(体験は効かない)', async () => {
-    const usage = await usageWith(
-      {
-        plan: 'free',
-        trial_plan: 'standard',
-        trial_until: new Date(Date.now() + 7 * 86_400_000).toISOString(),
-      },
-      'org-1',
-    );
+  it('組織所属者はシート上限が優先される', async () => {
+    const usage = await usageWith({ plan: 'free' }, 'org-1');
     expect(usage.plan.id).toBe('enterprise');
     // 席上限の整備(2026-08 決定)が効いていることも固定する
     expect(usage.plan.limits.monthlyQuestions).toBe(1000);

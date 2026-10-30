@@ -292,12 +292,6 @@ export default function AppSidebar({ show }: { show: boolean }) {
                   監査ログ
                 </Link>
                 <Link
-                  href="/admin/report"
-                  className={linkCls(pathname.startsWith('/admin/report'))}
-                >
-                  利用実績レポート
-                </Link>
-                <Link
                   href="/admin/kiosk"
                   className={linkCls(pathname.startsWith('/admin/kiosk'))}
                 >

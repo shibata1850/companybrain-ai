@@ -12,8 +12,6 @@ type Usage = {
   brainsUsed: number;
   questionsThisMonth: number;
   role?: 'admin' | 'member';
-  /** 体験(トライアル)適用中なら期限。残り日数の表示に使う。 */
-  trialUntil?: string | null;
 };
 
 /**
@@ -52,18 +50,6 @@ export default function PlanBanner() {
           <span className="rounded-full bg-neutral-900 px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide text-white">
             {u.plan.name}
           </span>
-          {u.trialUntil && (
-            <span className="rounded-full bg-emerald-600 px-2.5 py-1 text-[10px] font-bold text-white">
-              体験中 残り
-              {Math.max(
-                1,
-                Math.ceil(
-                  (new Date(u.trialUntil).getTime() - Date.now()) / 86_400_000,
-                ),
-              )}
-              日
-            </span>
-          )}
         </span>
         <MotionButton
           onClick={() => setShowUpgrade(true)}
