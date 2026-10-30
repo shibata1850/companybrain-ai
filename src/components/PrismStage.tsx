@@ -24,44 +24,19 @@ import { digitizeKanaNumbers } from '@/lib/kanaDigits';
  * three.js はこの画面(キオスク)でだけ読み込まれる。
  */
 
-export type PrismGround = 'dark' | 'paper';
-
-type Ground = {
-  clear: number;
-  blend: THREE.Blending;
-  /** 3版の色。闇=加法混色(RGB)、紙=減法混色(CMY)。 */
-  ch: [number, number, number];
-  bg: string;
-  ink: string;
-  dim: string;
-  splitA: string;
-  splitB: string;
-  err: string;
-};
-
-const GROUNDS: Record<PrismGround, Ground> = {
-  dark: {
-    clear: 0x070709,
-    blend: THREE.AdditiveBlending,
-    ch: [0xff1e3c, 0x28ff78, 0x286eff],
-    bg: '#070709',
-    ink: '#f4f3ef',
-    dim: '#74747c',
-    splitA: 'rgba(255,20,70,.85)',
-    splitB: 'rgba(0,130,255,.85)',
-    err: '#ff6a7e',
-  },
-  paper: {
-    clear: 0xf5f3ee,
-    blend: THREE.MultiplyBlending,
-    ch: [0x00aec7, 0xe6007e, 0xffcd00],
-    bg: '#f5f3ee',
-    ink: '#1a191d',
-    dim: '#8e8c92',
-    splitA: 'rgba(230,0,126,.65)',
-    splitB: 'rgba(0,160,190,.65)',
-    err: '#b63a2c',
-  },
+// 仕上げは「収差・闇」のみ(2026-10 確定)。旧仕上げ「紙」(CMY減法混色)
+// は選択欄ごと撤去済みのため、定義もここから削除した。
+const DARK = {
+  clear: 0x070709,
+  blend: THREE.AdditiveBlending as THREE.Blending,
+  /** 3版の色。闇=加法混色(RGB)。 */
+  ch: [0xff1e3c, 0x28ff78, 0x286eff] as [number, number, number],
+  bg: '#070709',
+  ink: '#f4f3ef',
+  dim: '#74747c',
+  splitA: 'rgba(255,20,70,.85)',
+  splitB: 'rgba(0,130,255,.85)',
+  err: '#ff6a7e',
 };
 
 const STATE_LABELS: Partial<Record<StageState['status'], string>> = {
@@ -82,7 +57,6 @@ function tail(s: string, n: number): string {
 type Ripple = { k: number; sp: number; st: number };
 
 type PrismStageProps = {
-  ground: PrismGround;
   mode: 'attract' | 'conv';
   status: StageState['status'];
   /** マイク・AI音声の音量(毎フレーム変わるため ref 渡しで再描画を避ける)。 */
@@ -100,7 +74,6 @@ type PrismStageProps = {
 };
 
 export default function PrismStage({
-  ground,
   mode,
   status,
   levels,
@@ -114,7 +87,7 @@ export default function PrismStage({
   onEnd,
   simulateLevels,
 }: PrismStageProps) {
-  const G = GROUNDS[ground];
+  const G = DARK;
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [glFailed, setGlFailed] = useState(false);
@@ -152,7 +125,7 @@ export default function PrismStage({
     }
     setGlFailed(false);
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
-    const g = GROUNDS[ground];
+    const g = DARK;
     renderer.setClearColor(g.clear, 1);
 
     const scene = new THREE.Scene();
@@ -404,7 +377,7 @@ export default function PrismStage({
       circleGeo.dispose();
       renderer.dispose();
     };
-  }, [ground, simulateLevels, levels]);
+  }, [simulateLevels, levels]);
 
   // 待機中の問いかけのローテーション(切替時に身じろぎ)。
   const [qIndex, setQIndex] = useState(0);

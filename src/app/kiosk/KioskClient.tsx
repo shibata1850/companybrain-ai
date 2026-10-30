@@ -256,7 +256,6 @@ export default function KioskClient() {
       <FullScreen>
       <div className="fixed inset-0 z-[100] bg-black">
         <PrismStage
-          ground="dark"
           mode={demo.mode}
           status={demo.status}
           levels={levelsRef}
@@ -323,7 +322,6 @@ export default function KioskClient() {
         onStageState={handleStageState}
       />
       <PrismStage
-        ground="dark"
         mode={mode}
         status={stage.status}
         levels={levelsRef}
